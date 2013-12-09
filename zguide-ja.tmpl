@@ -1,0 +1,67 @@
+\documentclass[a4paper,12pt,uplatex]{jsbook}
+
+\usepackage{float}
+\usepackage[dvipdfm]{color}
+\usepackage[dvipdfm]{graphicx}
+\usepackage[dvipdfm]{hyperref}
+\usepackage{pxjahyper}
+\usepackage{here}
+
+% for e-pTeX
+%\usepackage[T1]{fontenc}
+%\usepackage[utf8]{inputenc}
+%\usepackage{lmodern}
+%\usepackage{otf}
+%\inhibitxspcode`Ø=2
+
+\hypersetup{
+  pdfstartview={FitV},
+  pdftitle={$pdf_title$},
+  pdfsubject={$pdf_subject$},
+  pdfauthor={$pdf_author$},
+  pdfkeywords={$pdf_keywords$},
+}
+
+\usepackage{ctable}
+\usepackage{enumerate}
+\usepackage{listings, jlisting}
+\usepackage{book}
+
+\let\cleardoublepage\clearpage
+
+% title
+\title{$title$}
+\author{$author$}
+\date{$date$}
+
+% document
+\begin{document}
+%\maketitle
+\begin{titlepage}
+\begin{flushright}
+{\sf 第$version$版}
+\end{flushright}
+\vspace*{3em}
+\begin{center}
+%{\Huge\bf $title$}
+\includegraphics{title.eps}
+\bigskip\\
+{\Large\bf $author$}
+\\
+{\Large\bf $date$}
+
+\vspace{8em}
+%\includegraphics{title.eps}
+\end{center}
+
+\end{titlepage}
+
+\clearpage
+
+$if(toc)$
+\tableofcontents
+\clearpage
+$endif$
+
+$body$
+\end{document}
