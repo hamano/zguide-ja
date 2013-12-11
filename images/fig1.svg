@@ -1,62 +1,172 @@
-<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" 
-  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Created with ASCIIToSVG (http://9vx.org/~dho/a2s/) -->
-<svg width="405px" height="256px" version="1.1"
-  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <defs>
-    <filter id="dsFilter" width="150%" height="150%">
-      <feOffset result="offOut" in="SourceGraphic" dx="3" dy="3"/>
-      <feColorMatrix result="matrixOut" in="offOut" type="matrix" values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"/>
-      <feBlend in="SourceGraphic" in2="matrixOut" mode="normal"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   version="1.1"
+   width="405"
+   height="256"
+   id="svg2">
+  <metadata
+     id="metadata46">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs4">
+    <filter
+       width="1.5"
+       height="1.5"
+       color-interpolation-filters="sRGB"
+       id="dsFilter">
+      <feOffset
+         id="feOffset7"
+         dy="3"
+         dx="3"
+         in="SourceGraphic"
+         result="offOut" />
+      <feColorMatrix
+         id="feColorMatrix9"
+         values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"
+         type="matrix"
+         in="offOut"
+         result="matrixOut" />
+      <feBlend
+         in2="matrixOut"
+         mode="normal"
+         in="SourceGraphic"
+         id="feBlend11" />
     </filter>
-    <marker id="iPointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 10 0 L 10 10 L 0 5 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="iPointer">
+      <path
+         d="M 10,0 10,10 0,5 z"
+         id="path14" />
     </marker>
-    <marker id="Pointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="Pointer">
+      <path
+         d="M 0,0 10,5 0,10 z"
+         id="path17" />
     </marker>
-  </defs><g id="boxes" stroke="black" stroke-width="2" fill="none" >
-<g id="group0">
-	<path id="path0" filter="url(#dsFilter)" fill="#fff" d="M 4.5 18 Q 4.5 8 14.5 8 L 111.5 8 Q 121.5 8 121.5 18 L 121.5 62 Q 121.5 72 111.5 72 L 14.5 72 Q 4.5 72 4.5 62 Z" />
-	<text x="17.1" y="44.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >TCP socket </text>
-
-</g>
-<g id="group2">
-	<path id="path2" filter="url(#dsFilter)" fill="#fff" d="M 202.5 18 Q 202.5 8 212.5 8 L 327.5 8 Q 337.5 8 337.5 18 L 337.5 94 Q 337.5 104 327.5 104 L 212.5 104 Q 202.5 104 202.5 94 Z" />
-	<text x="224.1" y="60.8" id="text2" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >0MQ socket </text>
-
-</g>
-</g>
-<g id="lines" stroke="black" stroke-width="2" fill="none" >
-<g id="group48">
-	<path id="path48" marker-start="url(#iPointer)" d="M 22.5 88 L 22.5 200 " />
-</g>
-<g id="group128">
-	<path id="path128" marker-start="url(#iPointer)" d="M 67.5 88 L 67.5 174 Q 67.5 184 77.5 184 L 202.5 184 " />
-</g>
-<g id="group208">
-	<path id="path208" marker-start="url(#iPointer)" d="M 112.5 88 L 112.5 142 Q 112.5 152 122.5 152 L 202.5 152 " />
-</g>
-<g id="group221">
-	<path id="path221" marker-end="url(#Pointer)" d="M 121.5 40 L 193.5 40 " />
-</g>
-</g>
-<g id="text" fill="black" style="font-family:LMMono10,monospace;font-size:15.2px" >
-<text x="350.1" y="44.8" id="text1" fill="#000" >ZAP!</text>
-<text x="134.1" y="60.8" id="text2" fill="#000" >BOOM! </text>
-<text x="359.1" y="76.8" id="text4" fill="#000" >POW!!</text>
-<text x="206.1" y="156.8" id="text5" fill="#000" >Spandex</text>
-<text x="206.1" y="188.8" id="text6" fill="#000" >Cosmic rays</text>
-<text x="8.1" y="220.8" id="text8" fill="#000" >Illegal radioisotopes from</text>
-<text x="8.1" y="236.8" id="text9" fill="#000" >secret Soviet atomic city</text>
-</g>
+  </defs>
+  <g
+     id="boxes"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group0">
+      <path
+         d="m 4.5,18 q 0,-10 10,-10 l 97,0 q 10,0 10,10 l 0,44 q 0,10 -10,10 l -97,0 q -10,0 -10,-10 z"
+         id="path0"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="17.1"
+         y="44.799999"
+         id="text0"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">TCPソケット</text>
+    </g>
+    <g
+       id="group2">
+      <path
+         d="m 202.5,18 q 0,-10 10,-10 l 115,0 q 10,0 10,10 l 0,76 q 0,10 -10,10 l -115,0 q -10,0 -10,-10 z"
+         id="path2"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="224.10001"
+         y="60.799999"
+         id="text2"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">0MQソケット</text>
+    </g>
+  </g>
+  <g
+     id="lines"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group48">
+      <path
+         d="m 22.5,88 0,112"
+         id="path48"
+         style="marker-start:url(#iPointer)" />
+    </g>
+    <g
+       id="group128">
+      <path
+         d="m 67.5,88 0,86 q 0,10 10,10 l 125,0"
+         id="path128"
+         style="marker-start:url(#iPointer)" />
+    </g>
+    <g
+       id="group208">
+      <path
+         d="m 112.5,88 0,54 q 0,10 10,10 l 80,0"
+         id="path208"
+         style="marker-start:url(#iPointer)" />
+    </g>
+    <g
+       id="group221">
+      <path
+         d="m 121.5,40 72,0"
+         id="path221"
+         style="marker-end:url(#Pointer)" />
+    </g>
+  </g>
+  <g
+     id="text"
+     style="font-size:15.19999981px;fill:#000000;font-family:'LMMono10, monospace'">
+    <text
+       x="350.10001"
+       y="44.799999"
+       id="text1"
+       style="fill:#000000">ZAP!</text>
+    <text
+       x="134.10001"
+       y="60.799999"
+       id="text37"
+       style="fill:#000000">BOOM!</text>
+    <text
+       x="359.10001"
+       y="76.800003"
+       id="text4"
+       style="fill:#000000">POW!!</text>
+    <text
+       x="206.10001"
+       y="156.8"
+       id="text5"
+       style="fill:#000000">全身タイツ</text>
+    <text
+       x="206.10001"
+       y="188.8"
+       id="text6"
+       style="fill:#000000">宇宙線</text>
+    <text
+       x="8.1000004"
+       y="220.8"
+       id="text8"
+       style="fill:#000000">ソビエトの放射性同位元素</text>
+  </g>
 </svg>

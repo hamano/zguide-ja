@@ -1,99 +1,261 @@
-<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" 
-  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Created with ASCIIToSVG (http://9vx.org/~dho/a2s/) -->
-<svg width="414px" height="368px" version="1.1"
-  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <defs>
-    <filter id="dsFilter" width="150%" height="150%">
-      <feOffset result="offOut" in="SourceGraphic" dx="3" dy="3"/>
-      <feColorMatrix result="matrixOut" in="offOut" type="matrix" values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"/>
-      <feBlend in="SourceGraphic" in2="matrixOut" mode="normal"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   version="1.1"
+   width="414"
+   height="368"
+   id="svg2">
+  <metadata
+     id="metadata73">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs4">
+    <filter
+       width="1.5"
+       height="1.5"
+       color-interpolation-filters="sRGB"
+       id="dsFilter">
+      <feOffset
+         id="feOffset7"
+         dy="3"
+         dx="3"
+         in="SourceGraphic"
+         result="offOut" />
+      <feColorMatrix
+         id="feColorMatrix9"
+         values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"
+         type="matrix"
+         in="offOut"
+         result="matrixOut" />
+      <feBlend
+         in2="matrixOut"
+         mode="normal"
+         in="SourceGraphic"
+         id="feBlend11" />
     </filter>
-    <marker id="iPointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 10 0 L 10 10 L 0 5 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="iPointer">
+      <path
+         d="M 10,0 10,10 0,5 z"
+         id="path14" />
     </marker>
-    <marker id="Pointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="Pointer">
+      <path
+         d="M 0,0 10,5 0,10 z"
+         id="path17" />
     </marker>
-  </defs><g id="boxes" stroke="black" stroke-width="2" fill="none" >
-<g id="group0">
-	<path id="path0" filter="url(#dsFilter)" fill="#fff" d="M 139.5 8 L 265.5 8 L 265.5 62 Q 265.5 72 255.5 72 L 149.5 72 Q 139.5 72 139.5 62 Z" />
-	<text x="161.1" y="28.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Publisher </text>
-
-	<text x="188.1" y="60.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >PUB </text>
-
-</g>
-<g id="group9">
-	<path id="path9" filter="url(#dsFilter)" fill="#fff" d="M 4.5 290 Q 4.5 280 14.5 280 L 111.5 280 Q 121.5 280 121.5 290 L 121.5 344 L 4.5 344 Z" />
-	<text x="44.1" y="300.8" id="text9" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >SUB </text>
-
-	<text x="17.1" y="332.8" id="text9" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Subscriber </text>
-
-</g>
-<g id="group11">
-	<path id="path11" filter="url(#dsFilter)" fill="#fff" d="M 148.5 290 Q 148.5 280 158.5 280 L 255.5 280 Q 265.5 280 265.5 290 L 265.5 344 L 148.5 344 Z" />
-	<text x="188.1" y="300.8" id="text11" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >SUB </text>
-
-	<text x="161.1" y="332.8" id="text11" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Subscriber </text>
-
-</g>
-<g id="group13">
-	<path id="path13" filter="url(#dsFilter)" fill="#fff" d="M 292.5 290 Q 292.5 280 302.5 280 L 399.5 280 Q 409.5 280 409.5 290 L 409.5 344 L 292.5 344 Z" />
-	<text x="332.1" y="300.8" id="text13" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >SUB </text>
-
-	<text x="305.1" y="332.8" id="text13" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Subscriber </text>
-
-</g>
-</g>
-<g id="lines" stroke="black" stroke-width="2" fill="none" >
-<g id="group46">
-	<path id="path46" d="M 4.5 312 L 121.5 312 " />
-</g>
-<g id="group177">
-	<path id="path177" d="M 58.5 184 L 58.5 178 Q 58.5 168 68.5 168 L 202.5 168 L 336.5 168 Q 346.5 168 346.5 178 L 346.5 200 " />
-</g>
-<g id="group179">
-	<path id="path179" marker-end="url(#Pointer)" d="M 58.5 216 L 58.5 248 " />
-</g>
-<g id="group375">
-	<path id="path375" d="M 139.5 40 L 265.5 40 " />
-</g>
-<g id="group416">
-	<path id="path416" d="M 148.5 312 L 265.5 312 " />
-</g>
-<g id="group542">
-	<path id="path542" d="M 202.5 104 L 202.5 136 " />
-</g>
-<g id="group545">
-	<path id="path545" d="M 202.5 152 L 202.5 168 L 202.5 200 " />
-</g>
-<g id="group549">
-	<path id="path549" marker-end="url(#Pointer)" d="M 202.5 216 L 202.5 248 " />
-</g>
-<g id="group785">
-	<path id="path785" d="M 292.5 312 L 409.5 312 " />
-</g>
-<g id="group918">
-	<path id="path918" marker-end="url(#Pointer)" d="M 346.5 216 L 346.5 248 " />
-</g>
-</g>
-<g id="text" fill="black" style="font-family:LMMono10,monospace;font-size:15.2px" >
-<text x="179.1" y="92.8" id="text2" fill="#000" >bind</text>
-<text x="170.1" y="140.8" id="text3" fill="#000" >updates</text>
-<text x="26.1" y="204.8" id="text4" fill="#000" >updates </text>
-<text x="170.1" y="204.8" id="text5" fill="#000" >updates </text>
-<text x="314.1" y="204.8" id="text6" fill="#000" >updates</text>
-<text x="26.1" y="268.8" id="text7" fill="#000" >connect </text>
-<text x="170.1" y="268.8" id="text8" fill="#000" >connect </text>
-<text x="314.1" y="268.8" id="text9" fill="#000" >connect</text>
-</g>
+  </defs>
+  <g
+     id="boxes"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group0">
+      <path
+         d="m 139.5,8 126,0 0,54 q 0,10 -10,10 l -106,0 q -10,0 -10,-10 z"
+         id="path0"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="150.96442"
+         y="28.799999"
+         id="text0"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">パブリッシャー</text>
+      <text
+         x="188.10001"
+         y="60.799999"
+         id="text23"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">PUB</text>
+    </g>
+    <g
+       id="group9">
+      <path
+         d="m 4.5,290 q 0,-10 10,-10 l 97,0 q 10,0 10,10 l 0,54 -117,0 z"
+         id="path9"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="44.099998"
+         y="300.79999"
+         id="text9"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">SUB</text>
+      <text
+         x="10.083052"
+         y="333.18982"
+         id="text28"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">サブスクライバ</text>
+    </g>
+    <g
+       id="group11">
+      <path
+         d="m 148.5,290 q 0,-10 10,-10 l 97,0 q 10,0 10,10 l 0,54 -117,0 z"
+         id="path11"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="188.10001"
+         y="300.79999"
+         id="text11"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">SUB</text>
+      <text
+         x="154.47289"
+         y="333.18982"
+         id="text33"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">サブスクライバ</text>
+    </g>
+    <g
+       id="group13">
+      <path
+         d="m 292.5,290 q 0,-10 10,-10 l 97,0 q 10,0 10,10 l 0,54 -117,0 z"
+         id="path13"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="332.10001"
+         y="300.79999"
+         id="text13"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">SUB</text>
+      <text
+         x="298.86273"
+         y="333.18982"
+         id="text38"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">サブスクライバ</text>
+    </g>
+  </g>
+  <g
+     id="lines"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group46">
+      <path
+         d="m 4.5,312 117,0"
+         id="path46" />
+    </g>
+    <g
+       id="group177">
+      <path
+         d="m 58.5,184 0,-6 q 0,-10 10,-10 l 134,0 134,0 q 10,0 10,10 l 0,22"
+         id="path177" />
+    </g>
+    <g
+       id="group179">
+      <path
+         d="m 58.5,216 0,32"
+         id="path179"
+         style="marker-end:url(#Pointer)" />
+    </g>
+    <g
+       id="group375">
+      <path
+         d="m 139.5,40 126,0"
+         id="path375" />
+    </g>
+    <g
+       id="group416">
+      <path
+         d="m 148.5,312 117,0"
+         id="path416" />
+    </g>
+    <g
+       id="group542">
+      <path
+         d="m 202.5,104 0,32"
+         id="path542" />
+    </g>
+    <g
+       id="group545">
+      <path
+         d="m 202.5,152 0,16 0,32"
+         id="path545" />
+    </g>
+    <g
+       id="group549">
+      <path
+         d="m 202.5,216 0,32"
+         id="path549"
+         style="marker-end:url(#Pointer)" />
+    </g>
+    <g
+       id="group785">
+      <path
+         d="m 292.5,312 117,0"
+         id="path785" />
+    </g>
+    <g
+       id="group918">
+      <path
+         d="m 346.5,216 0,32"
+         id="path918"
+         style="marker-end:url(#Pointer)" />
+    </g>
+  </g>
+  <g
+     id="text"
+     style="font-size:15.19999981px;fill:#000000;font-family:'LMMono10, monospace'">
+    <text
+       x="179.10001"
+       y="92.800003"
+       id="text2"
+       style="fill:#000000">bind</text>
+    <text
+       x="172.04916"
+       y="148.98645"
+       id="text3"
+       style="fill:#000000">更新情報</text>
+    <text
+       x="28.828814"
+       y="204.8"
+       id="text4"
+       style="fill:#000000">更新情報</text>
+    <text
+       x="172.82883"
+       y="212.98645"
+       id="text5"
+       style="fill:#000000">更新情報</text>
+    <text
+       x="316.04916"
+       y="212.98645"
+       id="text6"
+       style="fill:#000000">更新情報</text>
+    <text
+       x="42.862713"
+       y="271.52881"
+       id="text7"
+       style="fill:#000000">接続</text>
+    <text
+       x="188.03221"
+       y="270.74915"
+       id="text8"
+       style="fill:#000000">接続</text>
+    <text
+       x="331.64236"
+       y="271.13898"
+       id="text69"
+       style="fill:#000000">接続</text>
+  </g>
 </svg>
