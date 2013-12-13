@@ -4,12 +4,15 @@ include meta.mk
 LATEX=uplatex
 #PANDOC=pandoc
 PANDOC=~/.cabal/bin/pandoc
-PANDOC_OPT=--toc --listings --chapters
+PANDOC_OPT=--toc --toc-depth=3 --listings --chapters
+DVIPDFMX=dvipdfmx
+DVIPDFMX_OPT=-f uptex-hiragino
 
 NAME=zguide-ja
 TEMPLATE=$(NAME).tmpl
 
-SRCS=preface.md chapter1.md chapter2.md postface.md
+SRCS=meta.md preface.md chapter1.md chapter2.md chapter3.md postface.md
+#SRCS=meta.md chapter2.md
 MD=$(NAME).md
 TEX=$(NAME).tex
 DVI=$(NAME).dvi
@@ -22,7 +25,7 @@ HTML=$(NAME).html
 	$(LATEX) $<
 
 %.pdf: %.dvi
-	dvipdfmx $^
+	$(DVIPDFMX) $(DVIPDFMX_OPT) $^
 
 all: $(PDF)
 
