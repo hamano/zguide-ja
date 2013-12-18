@@ -31,17 +31,17 @@
        color-interpolation-filters="sRGB"
        id="dsFilter">
       <feOffset
-         id="feOffset7"
-         dy="3"
-         dx="3"
+         result="offOut"
          in="SourceGraphic"
-         result="offOut" />
+         dx="3"
+         dy="3"
+         id="feOffset7" />
       <feColorMatrix
-         id="feColorMatrix9"
-         values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"
-         type="matrix"
+         result="matrixOut"
          in="offOut"
-         result="matrixOut" />
+         type="matrix"
+         values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"
+         id="feColorMatrix9" />
       <feBlend
          in2="matrixOut"
          mode="normal"
@@ -141,10 +141,10 @@
          id="text21"
          style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">XSUB</text>
       <text
-         x="188.10001"
+         x="182.10001"
          y="220.8"
          id="text38"
-         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">Proxy</text>
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">プロキシー</text>
       <text
          x="197.10001"
          y="252.8"

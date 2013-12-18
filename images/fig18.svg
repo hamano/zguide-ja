@@ -1,125 +1,315 @@
-<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" 
-  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Created with ASCIIToSVG (http://9vx.org/~dho/a2s/) -->
-<svg width="450px" height="496px" version="1.1"
-  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <defs>
-    <filter id="dsFilter" width="150%" height="150%">
-      <feOffset result="offOut" in="SourceGraphic" dx="3" dy="3"/>
-      <feColorMatrix result="matrixOut" in="offOut" type="matrix" values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"/>
-      <feBlend in="SourceGraphic" in2="matrixOut" mode="normal"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   version="1.1"
+   width="450"
+   height="496"
+   id="svg2">
+  <metadata
+     id="metadata95">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs4">
+    <filter
+       width="1.5"
+       height="1.5"
+       color-interpolation-filters="sRGB"
+       id="dsFilter">
+      <feOffset
+         id="feOffset7"
+         dy="3"
+         dx="3"
+         in="SourceGraphic"
+         result="offOut" />
+      <feColorMatrix
+         id="feColorMatrix9"
+         values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"
+         type="matrix"
+         in="offOut"
+         result="matrixOut" />
+      <feBlend
+         in2="matrixOut"
+         mode="normal"
+         in="SourceGraphic"
+         id="feBlend11" />
     </filter>
-    <marker id="iPointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 10 0 L 10 10 L 0 5 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="iPointer">
+      <path
+         d="M 10,0 10,10 0,5 z"
+         id="path14" />
     </marker>
-    <marker id="Pointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="Pointer">
+      <path
+         d="M 0,0 10,5 0,10 z"
+         id="path17" />
     </marker>
-  </defs><g id="boxes" stroke="black" stroke-width="2" fill="none" >
-<g id="group0">
-	<path id="path0" filter="url(#dsFilter)" fill="#fff" d="M 139.5 8 L 247.5 8 L 247.5 62 Q 247.5 72 237.5 72 L 149.5 72 Q 139.5 72 139.5 62 Z" />
-	<text x="152.1" y="28.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Publisher </text>
-
-	<text x="179.1" y="60.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >PUB </text>
-
-</g>
-<g id="group12">
-	<path id="path12" filter="url(#dsFilter)" fill="#fff" d="M 4.5 194 Q 4.5 184 14.5 184 L 93.5 184 Q 103.5 184 103.5 194 L 103.5 248 L 4.5 248 Z" />
-	<text x="35.1" y="204.8" id="text12" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >SUB </text>
-
-	<text x="8.1" y="236.8" id="text12" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Subscriber </text>
-
-</g>
-<g id="group14">
-	<path id="path14" filter="url(#dsFilter)" fill="#fff" d="M 139.5 194 Q 139.5 184 149.5 184 L 228.5 184 Q 238.5 184 238.5 194 L 238.5 248 L 139.5 248 Z" />
-	<text x="170.1" y="204.8" id="text14" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >SUB </text>
-
-	<text x="143.1" y="236.8" id="text14" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Subscriber </text>
-
-</g>
-<g id="group16">
-	<path id="path16" filter="url(#dsFilter)" fill="#fff" d="M 274.5 194 Q 274.5 184 284.5 184 L 363.5 184 Q 373.5 184 373.5 194 L 373.5 270 Q 373.5 280 363.5 280 L 284.5 280 Q 274.5 280 274.5 270 Z" />
-	<text x="305.1" y="204.8" id="text16" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >XSUB </text>
-
-	<text x="296.1" y="236.8" id="text16" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Proxy </text>
-
-	<text x="305.1" y="268.8" id="text16" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >XPUB </text>
-
-</g>
-<g id="group39">
-	<path id="path39" filter="url(#dsFilter)" fill="#fff" d="M 211.5 418 Q 211.5 408 221.5 408 L 300.5 408 Q 310.5 408 310.5 418 L 310.5 472 L 211.5 472 Z" />
-	<text x="242.1" y="428.8" id="text39" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >SUB </text>
-
-	<text x="215.1" y="460.8" id="text39" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Subscriber </text>
-
-</g>
-<g id="group41">
-	<path id="path41" filter="url(#dsFilter)" fill="#fff" d="M 346.5 418 Q 346.5 408 356.5 408 L 435.5 408 Q 445.5 408 445.5 418 L 445.5 472 L 346.5 472 Z" />
-	<text x="377.1" y="428.8" id="text41" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >SUB </text>
-
-	<text x="350.1" y="460.8" id="text41" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Subscriber </text>
-
-</g>
-</g>
-<g id="lines" stroke="black" stroke-width="2" fill="none" >
-<g id="group64">
-	<path id="path64" d="M 4.5 216 L 103.5 216 " />
-</g>
-<g id="group70">
-	<path id="path70" stroke-dasharray="5 5" d="M 4.5 296 L 319.5 296 " />
-</g>
-<g id="group217">
-	<path id="path217" marker-start="url(#iPointer)" marker-end="url(#Pointer)" d="M 49.5 168 L 49.5 146 Q 49.5 136 59.5 136 L 184.5 136 L 309.5 136 Q 319.5 136 319.5 146 L 319.5 168 " />
-</g>
-<g id="group519">
-	<path id="path519" d="M 139.5 40 L 247.5 40 " />
-</g>
-<g id="group531">
-	<path id="path531" d="M 139.5 216 L 238.5 216 " />
-</g>
-<g id="group681">
-	<path id="path681" marker-end="url(#Pointer)" d="M 184.5 120 L 184.5 136 L 184.5 168 " />
-</g>
-<g id="group794">
-	<path id="path794" d="M 211.5 440 L 310.5 440 " />
-</g>
-<g id="group947">
-	<path id="path947" marker-start="url(#iPointer)" marker-end="url(#Pointer)" d="M 256.5 392 L 256.5 370 Q 256.5 360 266.5 360 L 328.5 360 L 390.5 360 Q 400.5 360 400.5 370 L 400.5 392 " />
-</g>
-<g id="group998">
-	<path id="path998" d="M 274.5 216 L 373.5 216 " />
-</g>
-<g id="group1001">
-	<path id="path1001" d="M 274.5 248 L 373.5 248 " />
-</g>
-<g id="group1190">
-	<path id="path1190" d="M 328.5 280 L 328.5 312 " />
-</g>
-<g id="group1195">
-	<path id="path1195" d="M 328.5 344 L 328.5 360 " />
-</g>
-<g id="group1254">
-	<path id="path1254" d="M 346.5 296 L 445.5 296 " />
-</g>
-<g id="group1263">
-	<path id="path1263" d="M 346.5 440 L 445.5 440 " />
-</g>
-</g>
-<g id="text" fill="black" style="font-family:LMMono10,monospace;font-size:15.2px" >
-<text x="170.1" y="92.8" id="text2" fill="#000" >bind</text>
-<text x="71.1" y="108.8" id="text3" fill="#000" >tcp://192.168.55.210:5556</text>
-<text x="8.1" y="284.8" id="text11" fill="#000" >Internal network </text>
-<text x="8.1" y="316.8" id="text12" fill="#000" >External network </text>
-<text x="314.1" y="316.8" id="text13" fill="#000" >bind</text>
-<text x="242.1" y="332.8" id="text14" fill="#000" >tcp://10.1.1.0:8100</text>
-</g>
+  </defs>
+  <g
+     id="boxes"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group0">
+      <path
+         d="m 139.5,8 108,0 0,54 q 0,10 -10,10 l -88,0 q -10,0 -10,-10 z"
+         id="path0"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="146.10001"
+         y="28.799999"
+         id="text0"
+         style="font-size:14px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">パブリッシャー</text>
+      <text
+         x="179.10001"
+         y="60.799999"
+         id="text23"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">PUB</text>
+    </g>
+    <g
+       id="group12">
+      <path
+         d="m 4.5,194 q 0,-10 10,-10 l 79,0 q 10,0 10,10 l 0,54 -99,0 z"
+         id="path12"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="35.099998"
+         y="204.8"
+         id="text12"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">SUB</text>
+      <text
+         x="8.1000004"
+         y="236.8"
+         id="text28"
+         style="font-size:12px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">サブスクライバー</text>
+    </g>
+    <g
+       id="group14">
+      <path
+         d="m 139.5,194 q 0,-10 10,-10 l 79,0 q 10,0 10,10 l 0,54 -99,0 z"
+         id="path31"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="170.10001"
+         y="204.8"
+         id="text14"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">SUB</text>
+      <text
+         x="143.10001"
+         y="236.8"
+         id="text34"
+         style="font-size:12px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">サブスクライバー</text>
+    </g>
+    <g
+       id="group16">
+      <path
+         d="m 274.5,194 q 0,-10 10,-10 l 79,0 q 10,0 10,10 l 0,76 q 0,10 -10,10 l -79,0 q -10,0 -10,-10 z"
+         id="path16"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="305.10001"
+         y="204.8"
+         id="text16"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">XSUB</text>
+      <text
+         x="290.10001"
+         y="236.8"
+         id="text39"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">プロキシー</text>
+      <text
+         x="305.10001"
+         y="268.79999"
+         id="text41"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">XPUB</text>
+    </g>
+    <g
+       id="group39">
+      <path
+         d="m 211.5,418 q 0,-10 10,-10 l 79,0 q 10,0 10,10 l 0,54 -99,0 z"
+         id="path39"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="242.10001"
+         y="428.79999"
+         id="text45"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">SUB</text>
+      <text
+         x="213.10001"
+         y="460.79999"
+         id="text47"
+         style="font-size:12px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">サブスクライバー</text>
+    </g>
+    <g
+       id="group41">
+      <path
+         d="m 346.5,418 q 0,-10 10,-10 l 79,0 q 10,0 10,10 l 0,54 -99,0 z"
+         id="path41"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="377.10001"
+         y="428.79999"
+         id="text51"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">SUB</text>
+      <text
+         x="348.10001"
+         y="460.79999"
+         id="text53"
+         style="font-size:12px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">サブスクライバー</text>
+    </g>
+  </g>
+  <g
+     id="lines"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group64">
+      <path
+         d="m 4.5,216 99,0"
+         id="path64" />
+    </g>
+    <g
+       id="group70">
+      <path
+         d="m 4.5,296 315,0"
+         id="path70"
+         style="stroke-dasharray:5, 5" />
+    </g>
+    <g
+       id="group217">
+      <path
+         d="m 49.5,168 0,-22 q 0,-10 10,-10 l 125,0 125,0 q 10,0 10,10 l 0,22"
+         id="path217"
+         style="marker-start:url(#iPointer);marker-end:url(#Pointer)" />
+    </g>
+    <g
+       id="group519">
+      <path
+         d="m 139.5,40 108,0"
+         id="path519" />
+    </g>
+    <g
+       id="group531">
+      <path
+         d="m 139.5,216 99,0"
+         id="path531" />
+    </g>
+    <g
+       id="group681">
+      <path
+         d="m 184.5,120 0,16 0,32"
+         id="path681"
+         style="marker-end:url(#Pointer)" />
+    </g>
+    <g
+       id="group794">
+      <path
+         d="m 211.5,440 99,0"
+         id="path794" />
+    </g>
+    <g
+       id="group947">
+      <path
+         d="m 256.5,392 0,-22 q 0,-10 10,-10 l 62,0 62,0 q 10,0 10,10 l 0,22"
+         id="path947"
+         style="marker-start:url(#iPointer);marker-end:url(#Pointer)" />
+    </g>
+    <g
+       id="group998">
+      <path
+         d="m 274.5,216 99,0"
+         id="path998" />
+    </g>
+    <g
+       id="group1001">
+      <path
+         d="m 274.5,248 99,0"
+         id="path1001" />
+    </g>
+    <g
+       id="group1190">
+      <path
+         d="m 328.5,280 0,32"
+         id="path1190" />
+    </g>
+    <g
+       id="group1195">
+      <path
+         d="m 328.5,344 0,16"
+         id="path1195" />
+    </g>
+    <g
+       id="group1254">
+      <path
+         d="m 346.5,296 99,0"
+         id="path1254" />
+    </g>
+    <g
+       id="group1263">
+      <path
+         d="m 346.5,440 99,0"
+         id="path1263" />
+    </g>
+  </g>
+  <g
+     id="text"
+     style="font-size:15.19999981px;fill:#000000;font-family:'LMMono10, monospace'">
+    <text
+       x="170.10001"
+       y="92.800003"
+       id="text2"
+       style="fill:#000000">bind</text>
+    <text
+       x="71.099998"
+       y="108.8"
+       id="text3"
+       style="fill:#000000">tcp://192.168.55.210:5556</text>
+    <text
+       x="8.1000004"
+       y="284.79999"
+       id="text11"
+       style="fill:#000000">内部ネットワーク</text>
+    <text
+       x="8.1000004"
+       y="316.79999"
+       id="text88"
+       style="fill:#000000">外部ネットワーク</text>
+    <text
+       x="314.10001"
+       y="322.79999"
+       id="text13"
+       style="fill:#000000">bind</text>
+    <text
+       x="242.10001"
+       y="338.79999"
+       id="text91"
+       style="fill:#000000">tcp://10.1.1.0:8100</text>
+  </g>
 </svg>
