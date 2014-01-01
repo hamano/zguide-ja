@@ -1,8 +1,8 @@
 # まえがき {-}
 ## ØMQとは {-}
-ØMQ(ZeroMQ, 0MQ, zmq などとも呼ばれます)は組み込みネットワークライブラリの様にも見えますが、並行フレームワークの様に機能します。
-それは、プロセス内通信、プロセス間通信、TCPやマルチキャストの様な幅広い通信手段を用いてアトミックにメッセージを転送する通信ソケットを提供します。
-ソケットをファンアウト、pub-sub、タスク分散、リクエスト・応答の様なパターンでN対Nで接続できます。
+ØMQ(ZeroMQ, 0MQ, zmq などとも呼ばれます)は組み込みネットワークライブラリの様にも見ることもできますが、並行フレームワークの様に機能します。
+それはプロセス内通信、プロセス間通信、TCPやマルチキャストの様な幅広い通信手段を用いてアトミックにメッセージを転送する通信ソケットを提供します。
+ソケットをファンアウト、Pub-Sub、タスク分散、リクエスト・応答の様なパターンでN対Nで接続できます。
 これは製品クラスタを構成する上で十分高速です。
 非同期I/Oモデルによりアプリケーションはマルチコアスケーラブルな非同期メッセージ処理タスクとして構成されます。
 ØMQは多くのプログラミング言語向けのAPIを持ち、ほとんどのOSで動作します。
@@ -37,4 +37,8 @@
 
 以下の方々の貢献に感謝します:
 Bill Desmarais, Brian Dorsey, Daniel Lin, Eric Desgranges, Gonzalo Diethelm, Guido Goldstein, Hunter Ford, Kamil Shakirov, Martin Sustrik, Mike Castleman, Naveen Chawla, Nicola Peduzzi, Oliver Smith, Olivier Chamoux, Peter Alexander, Pierre Rouleau, Randy Dryburgh, John Unwin, Alex Thomas, Mihail Minkov, Jeremy Avnet, Michael Compton, Kamil Kisiel, Mark Kharitonov, Guillaume Aubert, Ian Barber, Mike Sheridan, Faruk Akgul, Oleg Sidorov, Lev Givon, Allister MacLeod, Alexander D'Archangel, Andreas Hoelzlwimmer, Han Holl, Robert G. Jakabosky, Felipe Cruz, Marcus McCurdy, Mikhail Kulemin, Dr. Gergő Érdi, Pavel Zhukov, Alexander Else, Giovanni Ruggiero, Rick "Technoweenie", Daniel Lundin, Dave Hoover, Simon Jefford, Benjamin Peterson, Justin Case, Devon Weller, Richard Smith, Alexander Morland, Wadim Grasza, Michael Jakl, Uwe Dauernheim, Sebastian Nowicki, Simone Deponti, Aaron Raddon, Dan Colish, Markus Schirp, Benoit Larroque, Jonathan Palardy, Isaiah Peng, Arkadiusz Orzechowski, Umut Aydin, Matthew Horsfall, Jeremy W. Sherman, Eric Pugh, Tyler Sellon, John E. Vincent, Pavel Mitin, Min RK, Igor Wiedler, Olof Åkesson, Patrick Lucas, Heow Goodman, Senthil Palanisami, John Gallagher, Tomas Roos, Stephen McQuay, Erik Allik, Arnaud Cogoluègnes, Rob Gagnon, Dan Williams, Edward Smith, James Tucker, Kristian Kristensen, Vadim Shalts, Martin Trojer, Tom van Leeuwen, Hiten Pandya, Harm Aarts, Marc Harter, Iskren Ivov Chernev, Jay Han, Sonia Hamilton, Nathan Stocks, Naveen Palli, Zed Shaw
+
+## 訳者より {-}
+現在翻訳作業中です。誤字・誤訳等ありましたら[\@hamano](https://twitter.com/hamano)まで連絡下さい。
+校正を手伝ってくれた亀井亜佐夫さんに感謝します。
 

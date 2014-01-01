@@ -1,6 +1,6 @@
-VERSION=0.1
+VERSION=0.1.3
 PDF_TITLE=ØMQガイドブック
 PDF_SUBJECT=ØMQ - The Guide
 PDF_AUTHOR=Pieter Hintjens 著 / HAMANO Tsukasa 訳
-PDF_KEYWORDS=ZeroMQ 0MQ ZMQ The Guide 日本語
+PDF_KEYWORDS=ZeroMQ 0MQ ZMQ ØMQ The Guide 日本語 和訳
 

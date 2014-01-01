@@ -26,7 +26,7 @@ The ØMQ reply envelope formally consists of zero or more reply addresses, follo
 
 We'll start by sending "Hello" through a REQ socket. The REQ socket creates the simplest possible reply envelope, which has no addresses, just an empty delimiter frame and the message frame containing the "Hello" string. This is a two-frame message.
 
-![Request with Minimal Envelope](images/fig26.svg)
+![Request with Minimal Envelope](images/fig26.eps)
 
 The REP socket does the matching work: it strips off the envelope, up to and including the delimiter frame, saves the whole envelope, and passes the "Hello" string up the application. Thus our original Hello World example used request-reply envelopes internally, but the application never saw them.
 
