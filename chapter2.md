@@ -56,7 +56,7 @@ It turns "Message Oriented Middleware", a phrase guaranteed to send the whole ro
 ソケットAPIはネットワークプログラミングの事実上の標準というだけでなく、目が飛び出るほど便利です。
 開発者にとってØMQの特に魅力的なところは、他の別の概念の代わりにソケットとメッセージを利用したという所です。
 これについてはMartin Sustrikに賞賛を送りたいと思います。
-***TODO***
+[TODO]
 
 Like a favorite dish, ØMQ sockets are easy to digest. Sockets have a life in four parts, just like BSD sockets:
 
@@ -1000,7 +1000,7 @@ The two (or three sockets, if we want to capture data) must be properly connecte
 この関数は3つの引数をとります(3つ目の引き数はデータの採取が必要であれば)。
 `zmq_proxy()`関数を呼び出すと、まさにrrbrokerのメインループを実行します。
 それではzmq_proxyを利用して、リクエスト・応答ブローカーを書きなおしてみましょう。
-***[TODO]***
+[TODO]
 
 ~~~ {caption="msgqueue: Message queue broker in C"}
 // Simple message queuing broker
@@ -2083,18 +2083,25 @@ What are the answers? One is to pass the problem upstream. A is getting the mess
 
 解決方法のひとつは問題を上流に伝えることです。
 プロセスAに対して「送信を止めろ」というようなメッセージを何らかの方法で伝えてやります。
+[TODO]
 これはフロー制御と呼ばれています。
 この方法はもっともらしく見えますが、例えばTwitterのタイムラインで全世界に対して「つぶやきを止めろ」という事は妥当でしょうか?
 
 Flow control works in some cases, but not in others. The transport layer can't tell the application layer to "stop" any more than a subway system can tell a large business, "please keep your staff at work for another half an hour. I'm too busy". The answer for messaging is to set limits on the size of buffers, and then when we reach those limits, to take some sensible action. In some cases (not for a subway system, though), the answer is to throw away messages. In others, the best strategy is to wait.
 
 フロー制御は場合によっては上手く行きますが、そうでない時もあります。
-
+通信レイヤはアプリケーションレイヤに対して「止めろ」というようなことは出来ません。
+地下鉄はよく「仕事を始めるのを30分送らせてくれ」といった事を行ってきますが、迷惑な話です。
+[TODO]
+メッセージングでの解決方法はバッファのサイズに上限を設定し、この上限に達した場合に合理的な動作を行います。
+あるケースではメッセージを投げ捨ててしまう方が良い場合もあるし、ある時は待つことが最良の戦略である場合もあります。
 
 ØMQ uses the concept of HWM (high-water mark) to define the capacity of its internal pipes. Each connection out of a socket or into a socket has its own pipe, and HWM for sending, and/or receiving, depending on the socket type. Some sockets (PUB, PUSH) only have send buffers. Some (SUB, PULL, REQ, REP) only have receive buffers. Some (DEALER, ROUTER, PAIR) have both send and receive buffers.
 
 ØMQはHWM(high-waterという)概念を用いてパイプの容量を定義します。
-
+各コネクションはソケットの外部か内部に個別のパイプを持っていて、HWMは送信時と受信時にソケット種別に応じて制限を掛けます。
+PUB, PUSHなどのソケットは送信バッファのみを持っていて、SUB, PULL, REQ, REPなどのバッファは受信バッファを持っています。
+DEALER, ROUTER, PAIRなどのバッファに関しては送信と受信の両方バッファを持っています。
 
 In ØMQ v2.x, the HWM was infinite by default. This was easy but also typically fatal for high-volume publishers. In ØMQ v3.x, it's set to 1,000 by default, which is more sensible. If you're still using ØMQ v2.x, you should always set a HWM on your sockets, be it 1,000 to match ØMQ v3.x or another figure that takes into account your message sizes and expected subscriber performance.
 
@@ -2106,11 +2113,13 @@ In ØMQ v2.x, the HWM was infinite by default. This was easy but also typically 
 
 When your socket reaches its HWM, it will either block or drop data depending on the socket type. PUB and ROUTER sockets will drop data if they reach their HWM, while other socket types will block. Over the inproc transport, the sender and receiver share the same buffers, so the real HWM is the sum of the HWM set by both sides.
 
-
+ソケットがHWMの上限に達した場合ソケット種別に応じてメッセージをブロックするか捨てるかが決まります。
+HWMの上限に達した際、PUBとROUTERソケットはメッセージを捨て、その他のソケット種別の場合ブロックします。
+プロセス内通信を行う場合、送信側と受信側で同じバッファを共有していますので両サイドで設定したHWMの合計が実際のHWMの上限となります。
 
 Lastly, the HWMs are not exact; while you may get up to 1,000 messages by default, the real buffer size may be much lower (as little as half), due to the way libzmq implements its queues.
 
 最後に、HWMは正確ではありません。
-デフォルトでは1,000個までのメッセージを受け取るはずですが、libzmqはキューとして実装されているので実際のバッファーサイズがこれよりもっと小さいことがあります。
+デフォルトでは1,000個までのメッセージを受け取るはずですが、libzmqはキューとして実装されているので実際のバッファーサイズはこれより半分程度小さいことがあります。
 
 ## メッセージ喪失問題の解決方法
