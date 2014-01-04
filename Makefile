@@ -20,6 +20,10 @@ PDF=$(NAME).pdf
 EPUB=$(NAME).epub
 HTML=$(NAME).html
 
+# filter original text
+ORIGINAL_FILTER=|sed -e 's/^;.*//'
+#ORIGINAL_FILTER=|sed -e 's/^;\(.*\)/\1/'
+
 %.dvi: %.tex
 	$(LATEX) $<
 	$(LATEX) $<
@@ -33,7 +37,7 @@ clean:
 	rm -rf *.log *.out *.aux *.toc $(MD) $(TEX) $(DVI) $(PDF) $(EPUB) $(HTML)
 
 $(MD): $(SRCS)
-	cat $^ > $@
+	cat $^ ${ORIGINAL_FILTER} > $@
 
 $(EPUB): $(MD)
 	$(PANDOC) -o $@ $<
