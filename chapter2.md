@@ -2123,3 +2123,49 @@ Lastly, the HWMs are not exact; while you may get up to 1,000 messages by defaul
 デフォルトでは1,000個までのメッセージを受け取るはずですが、libzmqはキューとして実装されているので実際のバッファーサイズはこれより半分程度小さいことがあります。
 
 ## メッセージ喪失問題の解決方法
+As you build applications with ØMQ, you will come across this problem more than once: losing messages that you expect to receive. We have put together a diagram that walks through the most common causes for this.
+
+ØMQでアプリケーションを開発していると、受信するはずメッセージが喪失してしまうという問題に遭遇するでしょう。
+そこで私達はよくあるメッセージ喪失問題の解決フローをまとめました。
+
+![Missing Message Problem Solver](images/fig25.eps)
+
+Here's a summary of what the graphic says:
+
+この図は以下のことを表しています。
+
+* On SUB sockets, set a subscription using zmq_setsockopt() with ZMQ_SUBSCRIBE, or you won't get messages. Because you subscribe to messages by prefix, if you subscribe to "" (an empty subscription), you will get everything.
+
+* If you start the SUB socket (i.e., establish a connection to a PUB socket) after the PUB socket has started sending out data, you will lose whatever it published before the connection was made. If this is a problem, set up your architecture so the SUB socket starts first, then the PUB socket starts publishing.
+
+* Even if you synchronize a SUB and PUB socket, you may still lose messages. It's due to the fact that internal queues aren't created until a connection is actually created. If you can switch the bind/connect direction so the SUB socket binds, and the PUB socket connects, you may find it works more as you'd expect.
+
+* If you're using REP and REQ sockets, and you're not sticking to the synchronous send/recv/send/recv order, ØMQ will report errors, which you might ignore. Then, it would look like you're losing messages. If you use REQ or REP, stick to the send/recv order, and always, in real code, check for errors on ØMQ calls.
+
+* If you're using PUSH sockets, you'll find that the first PULL socket to connect will grab an unfair share of messages. The accurate rotation of messages only happens when all PULL sockets are successfully connected, which can take some milliseconds. As an alternative to PUSH/PULL, for lower data rates, consider using ROUTER/DEALER and the load balancing pattern.
+
+* If you're sharing sockets across threads, don't. It will lead to random weirdness, and crashes.
+
+* If you're using inproc, make sure both sockets are in the same context. Otherwise the connecting side will in fact fail. Also, bind first, then connect. inproc is not a disconnected transport like tcp.
+
+* If you're using ROUTER sockets, it's remarkably easy to lose messages by accident, by sending malformed identity frames (or forgetting to send an identity frame). In general setting the ZMQ_ROUTER_MANDATORY option on ROUTER sockets is a good idea, but do also check the return code on every send call.
+
+* Lastly, if you really can't figure out what's going wrong, make a minimal test case that reproduces the problem, and ask for help from the ØMQ community.
+
+* SUBソケットは、`zmq_setsockopt()`でZMQ_SUBSCRIBEを設定しなければ更新メッセージを受信できません。これは意図的な仕様です、理由は更新メッセージはプレフィックスでフィルタリングを行なっているため、既定のフィルタ「」(空文字列)では全てを受信してしまうからです。
+
+* SUBソケットがPUBソケットに対して接続を確立した後に、PUBソケットがメッセージを送信を開始した場合でもメッセージを失ってしまいます。これが問題になる場合、まず最初にSUBソケットを開始して、その後、PUBソケットで配信するようなアーキテクチャを構成しなければなりません。
+
+* SUBソケットとPUBソケットを同期させる場合でもメッセージを喪失してしまう可能性があります。これは、実際に接続が行われるまで内部キューが作成されていないという事実によるものです。bindと接続の方向性は切り替えることができますのでPUBソケットから接続を行った場合、さらに幾つかの期待通りに動作しない場合があるでしょう。
+
+* REPソケットとREQソケットを利用していて、送信、受信、送信、受信という順番で同期が行われていない場合、ØMQはメッセージを無視ししてエラーを報告するでしょう。この場合でも、メッセージの喪失した様に見えます。REQやREPソケットを利用する場合は、送信/受信の順番を常にコードの中で固定し、エラーを確認するようにしてください。
+
+* PUSHソケットを利用してメッセージを分配する場合、最初に接続したPULLソケットは不公平な数のメッセージを受け取るかもしれません。メッセージの分配は正確にはPULLソケットが接続に成功して数ミリ秒掛かってしまうからです。少ない配信頻度でもっと正確な分配を行いたい場合はROUTER/DEALERのロードバランシングパターンを利用して下さい。
+
+* 複数のスレッドでソケットを共有している場合…、そんなことをしてはいけません、これをやるとランダムで奇妙なクラッシュを引き起こしてしまうでしょう。
+
+* プロセス内通信を行なっている場合、共有したひとつのコンテキストで両方のソケットを作成してください。そうしないと接続側は常に失敗します。またプロセス内通信はTCPのような非接続通信方式と異なりますので最初にbindを行なってから接続してください。
+
+* ROUTERソケットで不正な形式のidentityフレームを送信してしまったり、identityフレームを送信し忘れたりしてしまうようなアクシデントによりメッセージを喪失しやすくなります。一般的に、ZMQ_ROUTER_MANDATORYオプションをROUTERソケットに設定することは良いアイディアですが、送信API呼び出しの返り値を確認するようにしてください。
+
+* 最後に、なぜうまく行かないのか判断できない場合、問題を再現させる小さなテストコードを書いてコミュニティで質問してみるとよいでしょう。
