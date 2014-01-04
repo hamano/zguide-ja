@@ -26,7 +26,7 @@
 ネットワークのエンドポイントは幾つかのレベルで人間の動と同じだからです。
 
 もしあなたがスレッドやプロトコル、ネットワークを駆使してこれを自分で実装しようとした場合、到底不可能であることに気がつくでしょう。それは夢物語です。
-現実的に、コネクション毎に複数のソケットを扱うプログラムは地味に厄介です。
+複数のプログラムが複数の複数のソケットを利用して接続するプログラムは現実的には地味に厄介です。
 想像を絶するコストが掛かります。
 数十億ドル規模のビジネスでコンピューターを接続するソフトウェアやサービスを行うことは非常に困難です。
 
@@ -67,13 +67,15 @@ SkypeやBittorrentとデータを交換するアプリケーションがどれ�
 あなたが最新のØMQ バージョン 3.2を利用している事を想定しています。
 また、あなたがLinuxマシンまたは類似の何かを利用していることを想定します。
 サンプルコードの既定の言語はC言語ですので、あなたが多かれ少なかれC言語が読めることを想定しています。
-私が`PUSH`や`SUBSCRIBE`といった定数を書いた時、実際には`ZMQ_PUSH` や `ZMQ_SUBSCRIBE` という様にプログラミング言語で使われる記述に読み替えてくれる事を想定しています。
+私が`PUSH`や`SUBSCRIBE`といった定数を書いた時、実際には`ZMQ_PUSH` や `ZMQ_SUBSCRIBE` という様にプログラミング言語で使われる記述に読み替えて読んでください。
 
 ## サンプルコードの取得
 サンプルコードはGitHubの公開レポジトリから取得できます。
 全てのサンプルコードを取得する最も簡単な方法はレポジトリをcloneすることです。
 
-    git clone --depth=1 git://github.com/imatix/zguide.git
+~~~
+git clone --depth=1 git://github.com/imatix/zguide.git
+~~~
 
 続いて、examplesサブディレクトリを参照します。
 プログラミング言語毎のディレクトリ見つけるでしょう。
@@ -109,7 +111,7 @@ int main (void)
         char buffer [10];
         zmq_recv (responder, buffer, 10, 0);
         printf ("Received Hello\n");
-        sleep (1); // Do some 'work'
+        sleep (1); // 何らかの処理
         zmq_send (responder, "World", 5, 0);
     }
     return 0;
@@ -267,7 +269,7 @@ int main (void)
 そしてこの意味を少し考えてみて下さい。
 
 これら2つのプログラムが実際に何をしているか簡潔に説明しましょう。
-これらはまずØMQコンテキストとソケットを作成します。言葉の意味についてはまだ心配しないで下さい。それらは後で説明します。サーバーはREP(応答)ソケットをポート5555番でbindします。サーバーはループの中でリクエストを待ち、リクエスト毎に応答します。
+これらはまずØMQコンテキストとソケットを作成します。言葉の意味については後で説明しますのでまだ心配しなくて大丈夫です。サーバーはREP(応答)ソケットをポート5555番でbindします。サーバーはループの中でリクエストを待ち、リクエスト毎に応答します。
 クライアントは、リクエストを送信し、サーバーからの応答を受け取ります。
 
 サーバーをCtrl-Cで終了して再起動した場合、クライアントは適切に復旧しません。
@@ -382,7 +384,7 @@ int main (void)
     // 乱数生成器の初期化
     srandom ((unsigned) time (NULL));
     while (1) {
-        // Get values that will fool the boss
+        // インチキな気象観測データ
         int zipcode, temperature, relhumidity;
         zipcode = randof (100000);
         temperature = randof (215) - 80;
@@ -448,7 +450,7 @@ int main (int argc, char *argv [])
 
 ![パブリッシュ・サブスクライブ](images/fig4.eps)
 
-SUBソケットを利用する際、このコードの様に`zmq_setsockopt()`で`SUBSCRIBE`を*設定しなければならない*ことに注意して下さい。もし設定しなかった場合メッセージを受信できません。これはよくある初歩的なミスです。サブスクライバーは複数のサブスクリプションを設定できます。その際サブスクリプションにマッチした更新のみ受信します。
+SUBソケットを利用する際、このコードの様に`zmq_setsockopt()`で`SUBSCRIBE`を*設定しなければならない*ことに注意して下さい。もし設定しなかった場合メッセージを受信できません。これはよくある初歩的なミスです。サブスクライバーは複数のサブスクリプションを設定できます。その際サブスクリプションに一致した更新のみ受信します。
 サブスクライバーは特定のサブスクリプションをキャンセルすることも出来ます。
 サブスクリプションは必ずしも印字可能な文字とは限りません。
 これがどの様に動作するかは`zmq_setsockopt()`を読んで下さい。
@@ -518,8 +520,8 @@ sys     0m0.008s
 
 ![並行パイプライン](images/fig5.eps)
 
-最後の例は小さなスパコンで計算してみましょう。そして沢山のコードばかりを見てきて疲れたでしょうからコーヒーでも飲んで休憩してください。
-スパコンのアプリケーションは典型的な並行処理モデルです。
+最後の例は小さなスパコンを作って計算してみましょう。そして沢山のコードばかりを見てきて疲れたでしょうからコーヒーでも飲んで休憩してください。
+スパコンのアプリケーションは典型的な並行分散処理モデルです。
 
  * ベンチレーターは並行に処理できるタスクを生成します。
  * ワーカー群はタスクを処理します。
@@ -540,11 +542,11 @@ int main (void)
 {
     void *context = zmq_ctx_new ();
 
-    // Socket to send messages on
+    // メッセージの送信用ソケット
     void *sender = zmq_socket (context, ZMQ_PUSH);
     zmq_bind (sender, "tcp://*:5557");
 
-    // Socket to send start of batch message on
+    // シンクに処理の開始を通知するソケット
     void *sink = zmq_socket (context, ZMQ_PUSH);
     zmq_connect (sink, "tcp://localhost:5558");
 
@@ -552,18 +554,18 @@ int main (void)
     getchar ();
     printf ("Sending tasks to workers…\n");
 
-    // The first message is "0" and signals start of batch
+    // 処理の開始を示す「0」というメッセージを送信
     s_send (sink, "0");
 
-    // Initialize random number generator
+    // 乱数生成器の初期化
     srandom ((unsigned) time (NULL));
 
-    // Send 100 tasks
+    // 100個のタスクを送信
     int task_nbr;
-    int total_msec = 0; // Total expected cost in msecs
+    int total_msec = 0; // 期待する合計処理時間(ミリ秒)
     for (task_nbr = 0; task_nbr < 100; task_nbr++) {
         int workload;
-        // Random workload from 1 to 100msecs
+        // 1〜100ミリ秒かかるランダムな仕事
         workload = randof (100) + 1;
         total_msec += workload;
         char string [10];
@@ -584,32 +586,32 @@ int main (void)
 
 ~~~ {caption="taskwork: 並行タスクワーカー(C言語)"}
 // タスクワーカー
-// Connects PULL socket to tcp://localhost:5557
-// Collects workloads from ventilator via that socket
-// Connects PUSH socket to tcp://localhost:5558
-// Sends results to sink via that socket
+// PULLソケットでtcp://localhost:5557に接続
+// ベンチレーターから仕事を貰う
+// PUSHソケットでtcp://localhost:5558に接続
+// シンクに対して処理結果を送信
 
 #include "zhelpers.h"
 
 int main (void)
 {
-    // Socket to receive messages on
+    // メッセージ受信用ソケット
     void *context = zmq_ctx_new ();
     void *receiver = zmq_socket (context, ZMQ_PULL);
     zmq_connect (receiver, "tcp://localhost:5557");
 
-    // Socket to send messages to
+    // メッセージ送信用ソケット
     void *sender = zmq_socket (context, ZMQ_PUSH);
     zmq_connect (sender, "tcp://localhost:5558");
 
-    // Process tasks forever
+    // タスクを処理し続ける
     while (1) {
         char *string = s_recv (receiver);
-        printf ("%s.", string); // Show progress
+        printf ("%s.", string); // 進行状況を表示
         fflush (stdout);
-        s_sleep (atoi (string)); // Do the work
+        s_sleep (atoi (string)); // なんらかの仕事
         free (string);
-        s_send (sender, ""); // Send results to sink
+        s_send (sender, ""); // シンクに処理結果を送信
     }
     zmq_close (receiver);
     zmq_close (sender);
@@ -623,27 +625,28 @@ int main (void)
 これにより、本当に並行処理が行われたどうかを確認できます。
 
 ~~~ {caption="tasksink: Parallel task sink in C"}
-// Task sink
+// シンクタスク
 // Binds PULL socket to tcp://localhost:5558
-// Collects results from workers via that socket
+// PULLソケットをtcp://localhost:5558でbindします
+// ソケット経由で処理結果を収集
 
 #include "zhelpers.h"
 
 int main (void)
 {
-    // Prepare our context and socket
+    // コンテキストとソケットの準備
     void *context = zmq_ctx_new ();
     void *receiver = zmq_socket (context, ZMQ_PULL);
     zmq_bind (receiver, "tcp://*:5558");
 
-    // Wait for start of batch
+    // 処理の開始まで待機
     char *string = s_recv (receiver);
     free (string);
 
-    // Start our clock now
+    // 計測の開始
     int64_t start_time = s_clock ();
 
-    // Process 100 confirmations
+    // 100個の処理結果を確認
     int task_nbr;
     for (task_nbr = 0; task_nbr < 100; task_nbr++) {
     char *string = s_recv (receiver);
@@ -654,7 +657,7 @@ int main (void)
             printf (".");
         fflush (stdout);
     }
-    // Calculate and report duration of batch
+    // 処理時間を計測して表示
     printf ("Total elapsed time: %d msec\n",
     (int) (s_clock () - start_time));
 
@@ -673,7 +676,7 @@ int main (void)
 
 それでは、もっと詳しくコードの性質を見ていきましょう。
 
- * ワーカーは上流のベンチレーターと下流のシンクに接続します。これは自由にワーカーを追加できる機能を持っているという事です。もしもワーカーがbindを行ったとすると、ワーカーを追加する度にベンチレーターとシンクの動作を変更しなければなりません。ベンチレーターとシンクがアーキテクチャの固定部品であり、ワーカーは動的な部品であると言えます。
+ * ワーカーは上流のベンチレーターと下流のシンクに接続します。これは自由にワーカーを追加できる機能を持っているという事を意味しています。もしワーカーがbindを行ったとすると、ワーカーを追加する度にベンチレーターとシンクの動作を変更しなければなりません。ベンチレーターとシンクがアーキテクチャの固定部品であり、ワーカーは動的な部品であると言えます。
 
  * 全てのワーカーが起動するまで、処理の開始を同期させる必要があります。これはØMQのよくある落とし穴であり、簡単な解決方法はありません。どうしてもzmq_connectメソッドはある程度の時間がかかってしまいます。複数のワーカーがベンチレーターに接続する際、最初のワーカーが正常に接続してメッセージを受信しても、他のワーカーはまだ接続中の状態になります。何らかの方法で、処理の開始を同期しなければシステムは並行に動作しません。試しにgetcharによる一時停止を削除して、何が起こるか確認してみましょう。
 
@@ -737,13 +740,13 @@ C言語では`zmq_ctx_new()`を呼び出します。
 
 最後のケースはC言語で開発する場合です。
 多くの言語では、スコープが外れた時にソケットやコンテキストなどのオブジェクトは自動的に開放されます。
-もし例外を利用する場合は"final"ブロックでこれらのリソースを開放すると良いでしょう。
+もし例外を利用する場合は「final」ブロックでこれらのリソースを開放すると良いでしょう。
 
 マルチスレッドを利用している場合、これはもっと複雑になります。
 マルチスレッドに関しては次の章で扱いますが、警告を無視しして試して見る人もいるでしょう。
 以下は、マルチスレッドのØMQアプリケーションで正しく終了するための急しのぎのガイドです。
 
-まず、複数のスレッドから同一のソケットを使わないで下さい。
+まず、複数のスレッドから同一のソケットを扱わないで下さい。
 冗談ではありません、やらないで下さい。
 次に、リクエスト中のソケットを接続を切る時はLINGERに小さい値(1秒程度)を設定し、それから接続を閉じて下さい。
 もしあなたの利用している言語バインディングがこれを行わない場合、修正してパッチを送ることを推奨します。
@@ -783,7 +786,7 @@ C言語では`zmq_ctx_new()`を呼び出します。
 
  * どの様にメッセージをルーティングする? 同じメッセージを複数の相手に送れる? 元のリクエスト送信者に返信出来る?
 
- * どうやってAPIをいろんな言語で実装する? ネットワークレベルのプロトコルを再実装する? ライブラリを再実装する? 前者ならどうやって安定したスタックを保証しますか? 後者ならどうやって相互運用性を保証しますか?
+ * どうやってAPIをいろんな言語で実装する? ネットワークレベルのプロトコルを再実装する? ライブラリを再パッケージする? 前者ならどうやって安定したスタックを保証しますか? 後者ならどうやって相互運用性を保証しますか?
 
  * 異なるアーキテクチャでどの様にデータを表現しますか? 特定のデータエンコーディングに統一しますか? 何処までがメッセージングシステムの仕事で何処からが上位アプリケーションレイヤの仕事でしょうか?
 
@@ -801,7 +804,7 @@ Zookeeperはもっと一般的なメッセージングレイヤを利用し、�
 AMQPはその他の設計より上手く動作していましたが比較的複雑で高価で不安定でした。
 数週間掛けて使い方を学び、数ヶ月掛けて安定したアーキテクチャを作り上げた結果、恐ろしいクラッシュが発生しなくなりました。
 
-![Messaging as it Starts](images/fig7.eps)
+![メッセージングのはじまり](images/fig7.eps)
 
 多くのメッセージングプロジェクトと同様に、AMQPも先ほど挙げた問題をアドレッシング、ルーティング、キューングを行う「ブローカー」という新しい概念を用いて解決しようとしました。
 その結果、アプリケーションはブローカーに対して、クライアント/サーバープロトコルや、APIを利用してドキュメント化されていないプロトコルをやり取りするようになりました。
@@ -946,7 +949,7 @@ PID  USER  PR  NI  VIRT  RES  SHR S %CPU %MEM   TIME+  COMMAND
 
 ## 警告: 不安定なパラダイム!
 従来のネットワークプログラミングは一般的に1ソケットに対して1つの接続、1ピアと会話することを前提にして構築されています。
-マルチキャストプロトコルがありますが、しかしこれらはエキゾチックです。
+マルチキャストプロトコルがありますが、これらはちょっと風変わりです。
 私達は「1ソケット = 1コネクション」を前提としたアーキテクチャを有る意味で拡張しました。
 論理的なスレッドを作成しそれぞれのスレッドが1ソケット, 1ピアとして機能します。
 これらのスレッドに情報や状態を格納します。
