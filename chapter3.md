@@ -1,16 +1,29 @@
 # リクエスト・応答パターンの応用
-In Chapter 2 - Sockets and Patterns we worked through the basics of using ØMQ by developing a series of small applications, each time exploring new aspects of ØMQ. We'll continue this approach in this chapter as we explore advanced patterns built on top of ØMQ's core request-reply pattern.
+;In Chapter 2 - Sockets and Patterns we worked through the basics of using ØMQ by developing a series of small applications, each time exploring new aspects of ØMQ. We'll continue this approach in this chapter as we explore advanced patterns built on top of ØMQ's core request-reply pattern.
 
-We'll cover:
+「第2章 - ソケットとパターン」ではØMQを使った一連の小さなアプリケーションを開発する事でØMQの新しい側面を探って来ました。
+この章では引き続き同様の方法で、ØMQのコアとなるリクエスト・応答パターンの応用方法について探っていきます。
 
- * How the request-reply mechanisms work
- * How to combine REQ, REP, DEALER, and ROUTER sockets
- * How ROUTER sockets work, in detail
- * The load balancing pattern
- * Building a simple load balancing message broker
- * Designing a high-level API for ØMQ
- * Building an asynchronous request-reply server
- * A detailed inter-broker routing example
+;We'll cover:
+この章では、
+
+;* How the request-reply mechanisms work
+;* How to combine REQ, REP, DEALER, and ROUTER sockets
+;* How ROUTER sockets work, in detail
+;* The load balancing pattern
+;* Building a simple load balancing message broker
+;* Designing a high-level API for ØMQ
+;* Building an asynchronous request-reply server
+;* A detailed inter-broker routing example
+
+* どの様にリクエスト・応答のメカニズムが動作するか
+* REQ、REP、DEALER、ROUTERなどのソケットを組み合わせる方法
+* どの様にROUTERソケットが動作するか、とその詳細
+* 負荷分散パターン
+* 負荷分散メッセージブローカーを構築する
+* 高レベルリクエスト・応答サーバーの設計
+* 非同期なルリクエスト・応答サーバーの構築
+* 内部ブローカーのルーティング例
 
 ## リクエスト・応答のメカニズム
 We already looked briefly at multipart messages. Let's now look at a major use case, which is reply message envelopes. An envelope is a way of safely packaging up data with an address, without touching the data itself. By separating reply addresses into an envelope we make it possible to write general purpose intermediaries such as APIs and proxies that create, read, and remove addresses no matter what the message payload or structure is.
