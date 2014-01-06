@@ -180,7 +180,7 @@ IPC通信方式ではこれを行うことができますが、最初にbindを�
 ;* ØMQ sockets do their I/O in a background thread. This means that messages arrive in local input queues and are sent from local output queues, no matter what your application is busy doing.
 ;* ØMQ sockets have one-to-N routing behavior built-in, according to the socket type.
 
-;* ØMQはTCPのデータストリームというよりも、UDPの様にメッセージを転送します。ØMQメッセージはサイズが指定されたバイナリデータです。メッセージが即座に転送されるよう、パフォーマンスに最適した設計を行なっているため若干トリッキーです。
+;* ØMQはTCPのデータストリームというよりも、UDPの様にメッセージを転送します。ØMQメッセージはサイズが指定されたバイナリデータです。メッセージが即座に転送されるよう、パフォーマンスに最適した設計を行っているため若干トリッキーです。
 ;* ØMQソケットはバックグラウンドスレッドでI/O処理を行います。これはアプリケーションがビジー状態であるかどうかに関わらず、ローカルキューのメッセージが処理されるという事を意味します。
 ;* ØMQソケットはソケット種別に応じたN対1のルーティング機能が組み込まれています。
 
@@ -218,7 +218,7 @@ UNIXファイルシステムでは、IPCエンドポイントに適切なパー�
 この通信方式はTCPやIPCと比べて特別な制限があります。
 サーバーはクライアントが接続しにくるより前にbindしていなければなりません。
 これは、将来のバージョンで改善されるかもしれませんが、現時点ではこういう制限があります。
-まず、ソケットをbindしてから子スレッドを作成し接続を行なって下さい。
+まず、ソケットをbindしてから子スレッドを作成し接続を行って下さい。
 
 ### ØMQは中立キャリアではありません
 ;A common question that newcomers to ØMQ ask (it's one I've asked myself) is, "how do I write an XYZ server in ØMQ?" For example, "how do I write an HTTP server in ØMQ?" The implication is that if we use normal sockets to carry HTTP requests and responses, we should be able to use ØMQ sockets to do the same, only much faster and better.
@@ -500,7 +500,7 @@ libzmqのコアライブラリは、送受信を行う2つのAPIを持ってい�
 ### 複数のソケットを処理する(Handling Multiple Sockets)
 ;In all the examples so far, the main loop of most examples has been:
 
-これまでのサンプルコードでは、全てメインループで以下の処理を行なっていました。
+これまでのサンプルコードでは、全てメインループで以下の処理を行っていました。
 
 ;1. Wait for message on socket.
 ;2. Process message.
@@ -662,7 +662,7 @@ typedef struct {
 
 マルチパートメッセージを扱うには、zmq_msgオブジェクトをそれぞれ処理する必要があります。
 例えば、5つのフレームを送信するには、5つのメッセージを生成し、それぞれのzmq_msgオブジェクトを開放する必要があります。
-その時zmq_msgオブジェクトを配列で持つなどして、まとめて行なっても構いませんし、一つずつ生成して送信しても構いません。
+その時zmq_msgオブジェクトを配列で持つなどして、まとめて行っても構いませんし、一つずつ生成して送信しても構いません。
 
 ;Here is how we send the frames in a multipart message (we receive each frame into a message object):
 
@@ -1112,9 +1112,9 @@ C/C++ではアサーションはアプリケーションを直ちに停止させ
 
 ;In most of the C examples we've seen so far there's been no error handling. Real code should do error handling on every single ØMQ call. If you're using a language binding other than C, the binding may handle errors for you. In C, you do need to do this yourself. There are some simple rules, starting with POSIX conventions:
 
-これまで見てきたC言語のサンプルコードではエラー処理を行なっていませんでした。
+これまで見てきたC言語のサンプルコードではエラー処理を行っていませんでした。
 実際のコードでは、ØMQ APIの呼び出し毎にエラー処理を行う必要があります。
-もしあなたがC言語でなくその他の言語のバインディングを利用している場合はバインディングがエラー処理を行なってくれるでしょう。
+もしあなたがC言語でなくその他の言語のバインディングを利用している場合はバインディングがエラー処理を行ってくれるでしょう。
 C言語ではそれを自分でやる必要があります。
 そのルールはPOSIXの決まりごと似たような感じで単純です。
 
@@ -1154,7 +1154,7 @@ if (rc == -1) {
 
 * `ZMQ_DONTWAIT`を指定してメッセージを受信しようとして実際に受信するデータが無かった場合、ØMQは-1を返してerrnoにEAGAINをセットします。
 
-* あるスレッドが`zmq_ctx_destroy()`を呼び出した際に、まだ別のスレッドがブロッキング処理中であった場合。`zmq_ctx_destroy()`はコンテキストを正しく開放し、ブロッキング処理を行なっている関数は-1を返してerrnoに`ETERM`をセットします。
+* あるスレッドが`zmq_ctx_destroy()`を呼び出した際に、まだ別のスレッドがブロッキング処理中であった場合。`zmq_ctx_destroy()`はコンテキストを正しく開放し、ブロッキング処理を行っている関数は-1を返してerrnoに`ETERM`をセットします。
 
 ;In C/C++, asserts can be removed entirely in optimized code, so don't make the mistake of wrapping the whole ØMQ call in an assert(). It looks neat; then the optimizer removes all the asserts and the calls you want to make, and your application breaks in impressive ways.
 
@@ -1739,7 +1739,7 @@ PAIRソケットを利用したサンプルコードはこれが初めてです�
 ;The second significant difference between threads and nodes is that you typically have a fixed number of threads but a more variable number of nodes. Let's take one of our earlier scenarios (the weather server and clients) and use node coordination to ensure that subscribers don't lose data when starting up.
 
 スレッドとノードで異なる2つ目の重要な点は、一般的にスレッドの数は固定であるのに対してノードの数は可変である事です。
-以前見た気象情報サーバーとクライアントのシナリオで、起動時にデータを喪失しないよう確実に配信を行えるようノードの連携を行なってみましょう。
+以前見た気象情報サーバーとクライアントのシナリオで、起動時にデータを喪失しないよう確実に配信を行えるようノードの連携を行ってみましょう。
 
 ;This is how the application will work:
 
@@ -1889,7 +1889,7 @@ Received 1000000 updates
 
 REQ/REPのやり取りが完了した時点ではSUBソケットの接続が完了しているとは限りません。
 転送方式にプロセス内通信を利用している場合を除き、接続完了の順序は保証されていません。
-そのため、SUBソケットの接続後、REQ/REP同期を行うまでの間に1秒間の強制的なsleepを行なっています。
+そのため、SUBソケットの接続後、REQ/REP同期を行うまでの間に1秒間の強制的なsleepを行っています。
 
 ;A more robust model could be:
 
@@ -1945,7 +1945,7 @@ libzmqはメッセージを送信した後は自動的にこれを行います�
 ゼロコピーはØMQのマルチパートメッセージの送信時に適しています。
 従来のメッセージングでは複数のバッファを一つのバッファーにまとめて送信する必要がありました。これはデータをコピーしなければならないことを意味しています。
 ØMQでは個別のメッセージフレームを元にしたマルチパートメッセージを送信することが可能です。
-アプリケーションから見ると一連の送受信呼び出しを行なっているように見えますが、
+アプリケーションから見ると一連の送受信呼び出しを行っているように見えますが、
 内部的には1度のシステムコール呼び出しでマルチパートメッセージを呼び出してネットワークに送信するため、非常に効率的です。
 
 ## Pub-Subメッセージエンベロープ
@@ -1961,7 +1961,7 @@ pub-subエンベロープを利用するには、ちょっとしたコードを�
 
 ;Recall that subscriptions do a prefix match. That is, they look for "all messages starting with XYZ". The obvious question is: how to delimit keys from data so that the prefix match doesn't accidentally match data. The best answer is to use an envelope because the match won't cross a frame boundary. Here is a minimalist example of how pub-sub envelopes look in code. This publisher sends messages of two types, A and B.
 
-サブスクライバーは前方一致でフィルタリングを行なっている事を思い出して下さい。
+サブスクライバーは前方一致でフィルタリングを行っている事を思い出して下さい。
 誤ってデータと一致しないようにキーとデータをどうやって区切るのか、という疑問を抱くのは当然のことです。
 最適な解決方法はエンベロープを使うことです。フレーム境界を超えて一致することはありません。
 以下はpub-subエンベロープを利用する最小のサンプルコードです。
@@ -2045,7 +2045,7 @@ int main (void)
 
 ;This example shows that the subscription filter rejects or accepts the entire multipart message (key plus data). You won't get part of a multipart message, ever. If you subscribe to multiple publishers and you want to know their address so that you can send them data via another socket (and this is a typical use case), create a three-part message.
 
-このサンプルコードではキーとデータを含むマルチパートメッセージの取捨選択を行なっています。
+このサンプルコードではキーとデータを含むマルチパートメッセージの取捨選択を行っています。
 マルチパートメッセージの一部を取得する必要はありません。
 複数のパブリッシャーから更新情報を受け取っている場合、メッセージの送信元を識別したいと思うかもしれません。そんな時は3つで構成されるマルチパートメッセージを作成しください。
 
@@ -2146,7 +2146,7 @@ HWMの上限に達した際、PUBとROUTERソケットはメッセージを捨�
 
 ;* Lastly, if you really can't figure out what's going wrong, make a minimal test case that reproduces the problem, and ask for help from the ØMQ community.
 
-* SUBソケットは、`zmq_setsockopt()`でZMQ_SUBSCRIBEを設定しなければ更新メッセージを受信できません。これは意図的な仕様です、理由は更新メッセージはプレフィックスでフィルタリングを行なっているため、既定のフィルタ「」(空文字列)では全てを受信してしまうからです。
+* SUBソケットは、`zmq_setsockopt()`でZMQ_SUBSCRIBEを設定しなければ更新メッセージを受信できません。これは意図的な仕様です、理由は更新メッセージはプレフィックスでフィルタリングを行っているため、既定のフィルタ「」(空文字列)では全てを受信してしまうからです。
 
 * SUBソケットがPUBソケットに対して接続を確立した後に、PUBソケットがメッセージを送信を開始した場合でもメッセージを失ってしまいます。これが問題になる場合、まず最初にSUBソケットを開始して、その後、PUBソケットで配信するようなアーキテクチャを構成しなければなりません。
 
@@ -2158,7 +2158,7 @@ HWMの上限に達した際、PUBとROUTERソケットはメッセージを捨�
 
 * 複数のスレッドでソケットを共有している場合…、そんなことをしてはいけません、これをやるとランダムで奇妙なクラッシュを引き起こしてしまうでしょう。
 
-* プロセス内通信を行なっている場合、共有したひとつのコンテキストで両方のソケットを作成してください。そうしないと接続側は常に失敗します。またプロセス内通信はTCPのような非接続通信方式と異なりますので最初にbindを行なってから接続してください。
+* プロセス内通信を行っている場合、共有したひとつのコンテキストで両方のソケットを作成してください。そうしないと接続側は常に失敗します。またプロセス内通信はTCPのような非接続通信方式と異なりますので最初にbindを行なってから接続してください。
 
 * ROUTERソケットで不正な形式のidentityフレームを送信してしまったり、identityフレームを送信し忘れたりしてしまうようなアクシデントによりメッセージを喪失しやすくなります。一般的に、ZMQ_ROUTER_MANDATORYオプションをROUTERソケットに設定することは良いアイディアですが、送信API呼び出しの返り値を確認するようにしてください。
 
