@@ -11,8 +11,8 @@ DVIPDFMX_OPT=-f uptex-hiragino
 NAME=zguide-ja
 TEMPLATE=$(NAME).tmpl
 
-SRCS=meta.md preface.md chapter1.md chapter2.md postface.md
-#SRCS=meta.md chapter2.md
+#SRCS=meta.md preface.md chapter1.md chapter2.md postface.md
+SRCS=meta.md chapter3.md
 MD=$(NAME).md
 TEX=$(NAME).tex
 DVI=$(NAME).dvi

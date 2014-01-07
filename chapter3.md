@@ -28,9 +28,21 @@
 ## リクエスト・応答のメカニズム
 We already looked briefly at multipart messages. Let's now look at a major use case, which is reply message envelopes. An envelope is a way of safely packaging up data with an address, without touching the data itself. By separating reply addresses into an envelope we make it possible to write general purpose intermediaries such as APIs and proxies that create, read, and remove addresses no matter what the message payload or structure is.
 
+これまでマルチパートメッセージについて簡単に学んできました。
+ここでは応答メッセージエンベローブという主要なユースケースについて見ていきます。
+エンベロープはデータ本体に触れること無くデータに宛先を付けてパッケージ化する方法です。
+宛先をエンベロープに分離することで、メッセージ本体の構造に関わらず宛先を読み書き、削除を行うことの出来る汎用的なAPIや仲介者を構築することが可能になります。
+
 In the request-reply pattern, the envelope holds the return address for replies. It is how a ØMQ network with no state can create round-trip request-reply dialogs.
 
+リクエスト・応答パターンでは、応答する際の返信アドレスをエンベロープに記述します。
+これによりØMQネットワークは状態を持たずにリクエスト・応答の一連のやりとり実現出来ます。
+
 When you use REQ and REP sockets you don't even see envelopes; these sockets deal with them automatically. But for most of the interesting request-reply patterns, you'll want to understand envelopes and particularly ROUTER sockets. We'll work through this step-by-step.
+
+REQ、REPソケットを利用する際、わざわざエンベロープを参照する必要はありません。これらはソケットが自動的に行なってくれます。
+しかしここはリクエスト・応答パターンの面白い所ですし、とりわけROUTERソケットのエンベロープついて学んでおいて損は無いでしょう。
+これからそれらを一歩一歩学んでいきます。
 
 ### 単純な応答パケット
 A request-reply exchange consists of a request message, and an eventual reply message. In the simple request-reply pattern, there's one reply for each request. In more advanced patterns, requests and replies can flow asynchronously. However, the reply envelope always works the same way.
