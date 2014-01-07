@@ -77,7 +77,11 @@ hwclientとhwserverの間を流れるネットワークデータを監視して�
 この様に単純なリクエスト・応答のやり取りではエンベロープは付加されていません。
 しかし、ROUTERとDEALERソケットの処理を監視すると、エンベロープに宛先が付加されているのを確認できるはずです。
 
-### The Extended Reply Envelope
+### 拡張された応答エンベロープ
+;Now let's extend the REQ-REP pair with a ROUTER-DEALER proxy in the middle and see how this affects the reply envelope. This is the extended request-reply pattern we already saw in Chapter 2 - Sockets and Patterns. We can, in fact, insert any number of proxy steps. The mechanics are the same.
+
+![拡張されたリクエスト・応答パターン](images/fig27.eps)
+
 
 ### What's This Good For?
 ### Recap of Request-Reply Sockets
