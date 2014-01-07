@@ -1,84 +1,220 @@
-<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" 
-  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Created with ASCIIToSVG (http://9vx.org/~dho/a2s/) -->
-<svg width="126px" height="240px" version="1.1"
-  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <defs>
-    <filter id="dsFilter" width="150%" height="150%">
-      <feOffset result="offOut" in="SourceGraphic" dx="3" dy="3"/>
-      <feColorMatrix result="matrixOut" in="offOut" type="matrix" values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"/>
-      <feBlend in="SourceGraphic" in2="matrixOut" mode="normal"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   version="1.1"
+   width="126"
+   height="240"
+   id="svg2">
+  <metadata
+     id="metadata61">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs4">
+    <filter
+       width="1.5"
+       height="1.5"
+       color-interpolation-filters="sRGB"
+       id="dsFilter">
+      <feOffset
+         id="feOffset7"
+         dy="3"
+         dx="3"
+         in="SourceGraphic"
+         result="offOut" />
+      <feColorMatrix
+         id="feColorMatrix9"
+         values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"
+         type="matrix"
+         in="offOut"
+         result="matrixOut" />
+      <feBlend
+         in2="matrixOut"
+         mode="normal"
+         in="SourceGraphic"
+         id="feBlend11" />
     </filter>
-    <marker id="iPointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 10 0 L 10 10 L 0 5 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="iPointer">
+      <path
+         d="M 10,0 10,10 0,5 z"
+         id="path14" />
     </marker>
-    <marker id="Pointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="Pointer">
+      <path
+         d="M 0,0 10,5 0,10 z"
+         id="path17" />
     </marker>
-  </defs><g id="boxes" stroke="black" stroke-width="2" fill="none" >
-<g id="group0">
-	<path id="path0" filter="url(#dsFilter)" fill="#fff" d="M 4.5 8 L 121.5 8 L 121.5 62 Q 121.5 72 111.5 72 L 14.5 72 Q 4.5 72 4.5 62 Z" />
-	<text x="17.1" y="28.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Publisher </text>
-
-	<text x="17.1" y="60.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >PUB </text>
-
-	<text x="71.1" y="60.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >REP </text>
-
-</g>
-<g id="group10">
-	<path id="path10" filter="url(#dsFilter)" fill="#fff" d="M 4.5 162 Q 4.5 152 14.5 152 L 111.5 152 Q 121.5 152 121.5 162 L 121.5 216 L 4.5 216 Z" />
-	<text x="17.1" y="172.8" id="text10" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >SUB </text>
-
-	<text x="71.1" y="172.8" id="text10" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >REQ </text>
-
-	<text x="17.1" y="204.8" id="text10" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Subscriber </text>
-
-</g>
-</g>
-<g id="lines" stroke="black" stroke-width="2" fill="none" >
-<g id="group21">
-	<path id="path21" d="M 4.5 40 L 58.5 40 L 121.5 40 " />
-</g>
-<g id="group31">
-	<path id="path31" d="M 4.5 184 L 58.5 184 L 121.5 184 " />
-</g>
-<g id="group70">
-	<path id="path70" d="M 31.5 72 L 31.5 104 " />
-</g>
-<g id="group75">
-	<path id="path75" marker-start="url(#iPointer)" d="M 31.5 136 L 31.5 104 " />
-</g>
-<g id="group114">
-	<path id="path114" d="M 58.5 40 L 58.5 72 " />
-</g>
-<g id="group122">
-	<path id="path122" d="M 58.5 152 L 58.5 184 " />
-</g>
-<g id="group149">
-	<path id="path149" marker-start="url(#iPointer)" d="M 76.5 88 L 76.5 120 " />
-</g>
-<g id="group152">
-	<path id="path152" d="M 76.5 136 L 76.5 152 " />
-</g>
-<g id="group193">
-	<path id="path193" d="M 103.5 72 L 103.5 104 " />
-</g>
-<g id="group198">
-	<path id="path198" marker-start="url(#iPointer)" d="M 103.5 136 L 103.5 104 " />
-</g>
-</g>
-<g id="text" fill="black" style="font-family:LMMono10,monospace;font-size:15.2px" >
-<text x="17.1" y="108.8" id="text3" fill="#000" >(3) </text>
-<text x="89.1" y="108.8" id="text4" fill="#000" >(2)</text>
-<text x="62.1" y="124.8" id="text5" fill="#000" >(1) </text>
-</g>
+  </defs>
+  <g
+     id="boxes"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group0">
+      <path
+         d="m 4.5,8 117,0 0,54 q 0,10 -10,10 l -97,0 q -10,0 -10,-10 z"
+         id="path0"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="11.1"
+         y="28.799999"
+         id="text0"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">
+        <tspan
+           id="tspan3040"
+           style="font-size:14px">パブリッシャー</tspan>
+      </text>
+      <text
+         x="17.1"
+         y="60.799999"
+         id="text23"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">PUB</text>
+      <text
+         x="71.099998"
+         y="60.799999"
+         id="text25"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">REP</text>
+    </g>
+    <g
+       id="group10">
+      <path
+         d="m 4.5,162 q 0,-10 10,-10 l 97,0 q 10,0 10,10 l 0,54 -117,0 z"
+         id="path10"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="17.1"
+         y="172.8"
+         id="text10"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">SUB</text>
+      <text
+         x="71.099998"
+         y="172.8"
+         id="text30"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">REQ</text>
+      <text
+         x="7.1000004"
+         y="204.8"
+         id="text32"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">
+        <tspan
+           id="tspan3038"
+           style="font-size:14px">サブスクライバー</tspan>
+      </text>
+    </g>
+  </g>
+  <g
+     id="lines"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group21">
+      <path
+         d="m 4.5,40 54,0 63,0"
+         id="path21" />
+    </g>
+    <g
+       id="group31">
+      <path
+         d="m 4.5,184 54,0 63,0"
+         id="path31" />
+    </g>
+    <g
+       id="group70">
+      <path
+         d="m 31.5,72 0,32"
+         id="path70" />
+    </g>
+    <g
+       id="group75">
+      <path
+         d="m 31.5,136 0,-32"
+         id="path75"
+         style="marker-start:url(#iPointer)" />
+    </g>
+    <g
+       id="group114">
+      <path
+         d="m 58.5,40 0,32"
+         id="path114" />
+    </g>
+    <g
+       id="group122">
+      <path
+         d="m 58.5,152 0,32"
+         id="path122" />
+    </g>
+    <g
+       id="group149">
+      <path
+         d="m 76.5,88 0,32"
+         id="path149"
+         style="marker-start:url(#iPointer)" />
+    </g>
+    <g
+       id="group152">
+      <path
+         d="m 76.5,136 0,16"
+         id="path152" />
+    </g>
+    <g
+       id="group193">
+      <path
+         d="m 103.5,72 0,32"
+         id="path193" />
+    </g>
+    <g
+       id="group198">
+      <path
+         d="m 103.5,136 0,-32"
+         id="path198"
+         style="marker-start:url(#iPointer)" />
+    </g>
+  </g>
+  <g
+     id="text"
+     style="font-size:15.19999981px;fill:#000000;font-family:'LMMono10, monospace'">
+    <text
+       x="17.1"
+       y="108.8"
+       id="text3"
+       style="fill:#000000">(3)</text>
+    <text
+       x="89.099998"
+       y="108.8"
+       id="text4"
+       style="fill:#000000">(2)</text>
+    <text
+       x="64.099998"
+       y="130.8"
+       id="text5"
+       style="fill:#000000">(1)</text>
+  </g>
 </svg>

@@ -1,47 +1,133 @@
-<?xml version="1.0" standalone="no"?>
-<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" 
-  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
-<!-- Created with ASCIIToSVG (http://9vx.org/~dho/a2s/) -->
-<svg width="378px" height="96px" version="1.1"
-  xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-  <defs>
-    <filter id="dsFilter" width="150%" height="150%">
-      <feOffset result="offOut" in="SourceGraphic" dx="3" dy="3"/>
-      <feColorMatrix result="matrixOut" in="offOut" type="matrix" values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"/>
-      <feBlend in="SourceGraphic" in2="matrixOut" mode="normal"/>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   version="1.1"
+   width="378"
+   height="96"
+   id="svg2">
+  <metadata
+     id="metadata36">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <defs
+     id="defs4">
+    <filter
+       width="1.5"
+       height="1.5"
+       color-interpolation-filters="sRGB"
+       id="dsFilter">
+      <feOffset
+         id="feOffset7"
+         dy="3"
+         dx="3"
+         in="SourceGraphic"
+         result="offOut" />
+      <feColorMatrix
+         id="feColorMatrix9"
+         values="0.2 0 0 0 0 0 0.2 0 0 0 0 0 0.2 0 0 0 0 0 1 0"
+         type="matrix"
+         in="offOut"
+         result="matrixOut" />
+      <feBlend
+         in2="matrixOut"
+         mode="normal"
+         in="SourceGraphic"
+         id="feBlend11" />
     </filter>
-    <marker id="iPointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 10 0 L 10 10 L 0 5 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="iPointer">
+      <path
+         d="M 10,0 10,10 0,5 z"
+         id="path14" />
     </marker>
-    <marker id="Pointer"
-      viewBox="0 0 10 10" refX="5" refY="5" 
-      markerUnits="strokeWidth"
-      markerWidth="8" markerHeight="7"
-      orient="auto">
-      <path d="M 0 0 L 10 5 L 0 10 z" />
+    <marker
+       markerUnits="strokeWidth"
+       refX="5"
+       refY="5"
+       markerWidth="8"
+       markerHeight="7"
+       orient="auto"
+       viewBox="0 0 10 10"
+       id="Pointer">
+      <path
+         d="M 0,0 10,5 0,10 z"
+         id="path17" />
     </marker>
-  </defs><g id="boxes" stroke="black" stroke-width="2" fill="none" >
-<g id="group0">
-	<path id="path0" filter="url(#dsFilter)" fill="#fff" d="M 94.5 8 L 175.5 8 L 175.5 72 L 94.5 72 Z" />
-	<text x="107.1" y="28.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Key </text>
-
-	<text x="107.1" y="60.8" id="text0" fill="#000" stroke="none" style="font-family:LMMono10,monospace;font-size:15.2px" >Data </text>
-
-</g>
-</g>
-<g id="lines" stroke="black" stroke-width="2" fill="none" >
-<g id="group68">
-	<path id="path68" d="M 94.5 40 L 175.5 40 " />
-</g>
-</g>
-<g id="text" fill="black" style="font-family:LMMono10,monospace;font-size:15.2px" >
-<text x="-0.9" y="28.8" id="text0" fill="#000" >Frame 1 </text>
-<text x="206.1" y="28.8" id="text2" fill="#000" >Message envelope</text>
-<text x="-0.9" y="60.8" id="text3" fill="#000" >Frame 2 </text>
-<text x="206.1" y="60.8" id="text5" fill="#000" >Actual message body</text>
-</g>
+  </defs>
+  <g
+     id="boxes"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group0">
+      <path
+         d="m 94.5,8 81,0 0,64 -81,0 z"
+         id="path0"
+         style="fill:#ffffff;filter:url(#dsFilter)" />
+      <text
+         x="107.1"
+         y="28.799999"
+         id="text0"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">キー</text>
+      <text
+         x="107.1"
+         y="60.799999"
+         id="text23"
+         style="font-size:15.19999981px;fill:#000000;stroke:none;font-family:'LMMono10, monospace'">データ</text>
+    </g>
+  </g>
+  <g
+     id="lines"
+     style="fill:none;stroke:#000000;stroke-width:2">
+    <g
+       id="group68">
+      <path
+         d="m 94.5,40 81,0"
+         id="path68" />
+    </g>
+  </g>
+  <g
+     id="text"
+     style="font-size:15.19999981px;fill:#000000;font-family:'LMMono10, monospace'">
+    <text
+       x="-0.89999998"
+       y="28.799999"
+       id="text29"
+       style="fill:#000000">フレーム1</text>
+    <text
+       x="202.10001"
+       y="28.799999"
+       id="text2"
+       style="fill:#000000">メッセージ エンベロープ</text>
+    <text
+       x="-0.89999998"
+       y="60.799999"
+       id="text3"
+       style="fill:#000000">フレーム2</text>
+    <text
+       x="202.10001"
+       y="60.799999"
+       id="text5"
+       style="fill:#000000">メッセージ本文</text>
+  </g>
 </svg>
