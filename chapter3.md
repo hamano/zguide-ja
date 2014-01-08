@@ -80,10 +80,99 @@ hwclientとhwserverの間を流れるネットワークデータを監視して�
 ### 拡張された応答エンベロープ
 ;Now let's extend the REQ-REP pair with a ROUTER-DEALER proxy in the middle and see how this affects the reply envelope. This is the extended request-reply pattern we already saw in Chapter 2 - Sockets and Patterns. We can, in fact, insert any number of proxy steps. The mechanics are the same.
 
+それでは、REQ-REPソケットペアを拡張したROUTER-DEALERプロキシーで応答エンベロープにどの様な影響があるか見て行きましょう。
+これは第2章の「ソケットとパターン」で既に見た、拡張されたリクエスト・応答パターンと同じ仕組みで、プロキシーを幾つでも挿入することが出来ます。
+
 ![拡張されたリクエスト・応答パターン](images/fig27.eps)
 
+;The proxy does this, in pseudo-code:
+
+プロキシーは擬似コードで以下の様に動作します。
+
+~~~
+prepare context, frontend and backend sockets
+while true:
+    poll on both sockets
+    if frontend had input:
+        read all frames from frontend
+        send to backend
+    if backend had input:
+        read all frames from backend
+        send to frontend
+~~~
+
+;The ROUTER socket, unlike other sockets, tracks every connection it has, and tells the caller about these. The way it tells the caller is to stick the connection identity in front of each message received. An identity, sometimes called an address, is just a binary string with no meaning except "this is a unique handle to the connection". Then, when you send a message via a ROUTER socket, you first send an identity frame.
+
+ROUTERソケットは他のソケットとは異なり、全ての接続をトラッキングして接続元を通知します。
+メッセージを受信すると、メッセージの頭に接続IDを頭に付与する事で接続元を通知します。
+このIDはアドレスとも言われ、コネクションに対するユニークなIDになります。。
+ROUTERソケット経由でメッセージを送信すると、まずこのIDフレームが送信されます。
+
+;The zmq_socket() man page describes it thus:
+
+`zmq_socket()`のmanページには以下のように書かれています。
+
+;> When receiving messages a ZMQ_ROUTER socket shall prepend a message part containing the identity of the originating peer to the message before passing it to the application. Messages received are fair-queued from among all connected peers. When sending messages a ZMQ_ROUTER socket shall remove the first part of the message and use it to determine the identity of the peer the message shall be routed to.
+
+> ZMQ_ROUTERソケットがメッセージを受信すると、メッセージフレームの先頭に元々の接続IDを追加します。
+> 受信したメッセージは全ての接続相手の中から均等にキューイングします。
+> ZMQ_ROUTERソケットから送信を行う時、最初のメッセージフレームのIDをを削除してメッセージをルーティングします。
+
+;As a historical note, ØMQ v2.2 and earlier use UUIDs as identities, and ØMQ v3.0 and later use short integers. There's some impact on network performance, but only when you use multiple proxy hops, which is rare. Mostly the change was to simplify building libzmq by removing the dependency on a UUID library.
+
+歴史的な情報ですが、ØMQ v2.2以前はこのIDにUUIDを利用していましたが、ØMQ 3.0以降からは短い整数を利用しています。
+これはネットワークパフォーマンスに少なからず影響を与えますが、多段のプロキシーを利用している場合は影響は微々たるものでしょう。
+最も大きな影響はlibzmqがUUIDライブラリに依存しなくなったことくらいです。
+
+;Identies are a difficult concept to understand, but it's essential if you want to become a ØMQ expert. The ROUTER socket invents a random identity for each connection with which it works. If there are three REQ sockets connected to a ROUTER socket, it will invent three random identities, one for each REQ socket.
+
+IDは理解しにくい概念ですが、ØMQのエキスパートになる為には不可欠です。
+ROUTERソケットはコネクション毎にランダムなIDを生成します。
+ROUTERソケットに対して3つのREQソケットが接続したとすると、それぞれ異なる3つのIDが生成されるでしょう。
+
+;So if we continue our worked example, let's say the REQ socket has a 3-byte identity ABC. Internally, this means the ROUTER socket keeps a hash table where it can search for ABC and find the TCP connection for the REQ socket.
+
+引き続き動作の説明を続けると、REQソケットが3バイトのID「ABC」を持っていたとすると、内部的には、ROUTERソケットは「ABC」というキーワードで検索してTCPコネクションを得ることのできるハッシュテーブルを持っていることを意味します。
+
+;When we receive the message off the ROUTER socket, we get three frames.
+
+ROUTERソケットからメッセージを受信すると3つのフレームを受け取ることになります。
+
+![アドレス付きのリクエスト](images/fig28.eps)
+
+;The core of the proxy loop is "read from one socket, write to the other", so we literally send these three frames out on the DEALER socket. If you now sniffed the network traffic, you would see these three frames flying from the DEALER socket to the REP socket. The REP socket does as before, strips off the whole envelope including the new reply address, and once again delivers the "Hello" to the caller.
+
+プロキシーのメインループでは「ソケットから読み取ったメッセージを他の相手に転送する処理」を繰り返していますので、DEALERソケットからは3つのフレームが出ていく事になります。
+ネットワークトラフィックを監視すると、DEALERソケットからREPソケットに向けて3つのフレームが飛び出してくるのを確認できるでしょう。
+REPソケットは新しい応答アドレスを含むエンベロープ全体を取り除き、「Hello」というメッセージをアプリケーションに返します。
+
+;Incidentally the REP socket can only deal with one request-reply exchange at a time, which is why if you try to read multiple requests or send multiple replies without sticking to a strict recv-send cycle, it gives an error.
+
+繰り返しになりますが、REPソケットは同時にに1回のリクエスト・応答のやりとりしか行うことが出来ません。
+複数のリクエストや応答をいっぺんに送ってしまうと、エラーが発生しますので、送受信の順序を守って1つずつ行なって下さい。
+
+;You should now be able to visualize the return path. When hwserver sends "World" back, the REP socket wraps that with the envelope it saved, and sends a three-frame reply message across the wire to the DEALER socket.
+
+これで、応答経路をイメージできるようになったはずです。
+hwserverが「World」というメッセージを返信する時、REPソケットは退避していた、エンベロープを再び付加して3フレームのメッセージをDEALERソケットに対して送信します。
+
+![アドレス付きの応答](images/fig29.eps)
+
+;Now the DEALER reads these three frames, and sends all three out via the ROUTER socket. The ROUTER takes the first frame for the message, which is the ABC identity, and looks up the connection for this. If it finds that, it then pumps the next two frames out onto the wire.
+
+ここで、DEALERは3つのフレームを受信し、全てのフレームはROUTERソケットに渡されます。
+ROUTERは最初のメッセージフレームを読み取り、ABCというIDに対応する接続を検索します。接続が見つかったら、残りの2フレームをネットワークに送り出します。
+
+![最小の応答エンベロープ](images/fig30.eps)
+
+;The REQ socket picks this message up, and checks that the first frame is the empty delimiter, which it is. The REQ socket discards that frame and passes "World" to the calling application, which prints it out to the amazement of the younger us looking at ØMQ for the first time.
+
+REQソケットはメッセージを受信し、最初のフレームが空の区切りフレームであることを確認し、これを破棄します。
+そして、「World」というメッセーがアプリケーションに渡され、ØMQを始めてみた時の驚きとともに表示されます。
 
 ### What's This Good For?
+
+
 ### Recap of Request-Reply Sockets
 
 ## リクエスト・応答の組み合わせ
