@@ -171,7 +171,28 @@ REQソケットはメッセージを受信し、最初のフレームが空の�
 そして、「World」というメッセーがアプリケーションに渡され、ØMQを始めてみた時の驚きとともに表示されます。
 
 ### What's This Good For?
+;To be honest, the use cases for strict request-reply or extended request-reply are somewhat limited. For one thing, there's no easy way to recover from common failures like the server crashing due to buggy application code. We'll see more about this in Chapter 4 - Reliable Request-Reply Patterns. However once you grasp the way these four sockets deal with envelopes, and how they talk to each other, you can do very useful things. We saw how ROUTER uses the reply envelope to decide which client REQ socket to route a reply back to. Now let's express this another way:
 
+正直に言うと、素のリクエスト・応答パターンや拡張したリクエスト・応答パターンには幾つかの制限があります。
+ひとつ例を挙げると、サーバー側のアプリケーションのバグに起因したクラッシュなどの一般的な障害から回復する簡単な方法がありません。
+これは第4章の「Reliable Request-Reply Patterns」で詳しく見ていきます。
+
+さておき、4つのソケットがどの様な方法でエンベロープを扱い、お互いに会話するかを理解しておくことは大変有用です。
+これまで、ROUTERがどの様に応答エンベロープを利用してクライアントのREQソケットに応答するかを見てきましたので、簡単にまとめておきます。
+
+;* Each time ROUTER gives you a message, it tells you what peer that came from, as an identity.
+;* You can use this with a hash table (with the identity as key) to track new peers as they arrive.
+;* ROUTER will route messages asynchronously to any peer connected to it, if you prefix the identity as the first frame of the message.
+
+* ROUTERがメッセージを受け取ると、接続元である相手をIDとして記録します。
+* 接続相手は、IDをキーとしたハッシュテーブルで保持します。
+* ROUTERはメッセージの最初のフレームをIDとして非同期でルーティングします。
+
+;ROUTER sockets don't care about the whole envelope. They don't know anything about the empty delimiter. All they care about is that one identity frame that lets them figure out which connection to send a message to.
+
+ROUTERソケットはエンベロープ全体については関知しません。
+例えば区切りフレームについては何も知りません。
+メッセージを送信する為の接続先を知るためにIDフレームのみを参照します。
 
 ### Recap of Request-Reply Sockets
 
