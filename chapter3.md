@@ -226,28 +226,53 @@ ROUTERソケットはエンベロープ全体については関知しません�
 
 正しいソケットの組み合わせは以下の通りです。
 
-* REQ と REP
-* DEALER と REP
-* REQ と ROUTER
-* DEALER と ROUTER
-* DEALER と DEALER
-* ROUTER と ROUTER
+* REQからREP
+* DEALERからREP
+* REQからROUTER
+* DEALERからROUTER
+* DEALERからDEALER
+* ROUTERからROUTER
 
 And these combinations are invalid (and I'll explain why):
 そして以下の組み合わせは不正です。(理由は後ほど説明します)
 
-* REQ と REQ
-* REQ と DEALER
-* REP と REP
-* REP と ROUTER
+* REQからREQ
+* REQからDEALER
+* REPからREP
+* REPからROUTER
 
-### REQとREPの組み合わせ
-### The DEALER to REP Combination
-### The REQ to ROUTER Combination
-### The DEALER to ROUTER Combination
-### The DEALER to DEALER Combination
-### The ROUTER to ROUTER Combination
-### Invalid Combinations
+;Here are some tips for remembering the semantics. DEALER is like an asynchronous REQ socket, and ROUTER is like an asynchronous REP socket. Where we use a REQ socket, we can use a DEALER; we just have to read and write the envelope ourselves. Where we use a REP socket, we can stick a ROUTER; we just need to manage the identities ourselves.
+
+ここでは、意味を覚えるためのヒントを幾つか紹介します。
+DEALERは非同期になったREQソケットの様なもので、ROUTERはREPソケットの非同期版と言えます。
+REQソケットを使う場合のみDEALERソケットを使うことが出来、メッセージのエンベロープを読み書きする必要があります。
+REPソケットを利用する場合のみ、ROUTERを配置することが出来、IDを管理する必要があります。
+
+;Think of REQ and DEALER sockets as "clients" and REP and ROUTER sockets as "servers". Mostly, you'll want to bind REP and ROUTER sockets, and connect REQ and DEALER sockets to them. It's not always going to be this simple, but it is a clean and memorable place to start.
+
+REQソケットとDEALERソケット側の事を「クライアント」、REPソケットとROUTERソケット側の事を「サーバー」として見ることができます。多くの場合、REPソケットとROUTERソケットでbindを行うでしょうし、REQソケットとDEALERソケットが接続を行います。
+いつもこの様に単純だとは限りませんが、大体こんな風に覚えておけば良いでしょう。
+
+### REQからREPへの組み合わせ
+;We've already covered a REQ client talking to a REP server but let's take one aspect: the REQ client must initiate the message flow. A REP server cannot talk to a REQ client that hasn't first sent it a request. Technically, it's not even possible, and the API also returns an EFSM error if you try it.
+
+既に私達はREQクライアントがREPサーバーと通信する仕組みについて見てきましたが,
+ここでは、ちょっと別の側面を見て行きましょう。
+メッセージフローはREQクライアントが開始する必要があります。
+REPサーバーまずリクエストを受け取らなければ、REQクライアントに対して通信を行うことは出来ません。
+技術的にそれは不可能であり、もしこれをやろうとすると、APIはEFSMエラーを返します。
+
+### DEALERからREPへの組み合わせ
+
+### REQからROUTERへの組み合わせ
+
+### DEALERからROUTERへの組み合わせ
+
+### DEALERからDEALERへの組み合わせ
+
+### ROUTERからROUTERへの組み合わせ
+
+### 不正な組み合わせ
 
 ## Exploring ROUTER Sockets
 ### Identities and Addresses
