@@ -197,7 +197,7 @@ ROUTERソケットはエンベロープ全体については関知しません�
 ### リクエスト・応答ソケットのまとめ
 ;Let's recap this:
 
-まとめます。
+まとめると、
 
 ;* The REQ socket sends, to the network, an empty delimiter frame in front of the message data. REQ sockets are synchronous. REQ sockets always send one request and then wait for one reply. REQ sockets talk to one peer at a time. If you connect a REQ socket to multiple peers, requests are distributed to and replies expected from each peer one turn at a time.
 
@@ -216,6 +216,31 @@ ROUTERソケットはエンベロープ全体については関知しません�
 * ROUTERソケットはDEALERソケットと同様に、応答エンベロープに関しては無関心です。このソケットはメッセージを受信すると、接続元を特定するIDを最初のフレームに追加します。逆に、このソケットから送信する際、最初のフレームのIDを参照して送信先を決定します。ROUTERSソケットも非同期です。
 
 ## リクエスト・応答の組み合わせ
+;We have four request-reply sockets, each with a certain behavior. We've seen how they connect in simple and extended request-reply patterns. But these sockets are building blocks that you can use to solve many problems.
+
+リクエスト・応答ソケットにはそれぞれ異なる振る舞いをする4つのソケットがあり、
+これらの簡単な利用方法や、拡張されたリクエスト・応答パターンの利用方法を見てきました。
+これらのソケットを活用することで、多くの問題を解決するブロックを構築できるでしょう。
+
+;*These are the legal combinations:
+
+正しいソケットの組み合わせは以下の通りです。
+
+* REQ と REP
+* DEALER と REP
+* REQ と ROUTER
+* DEALER と ROUTER
+* DEALER と DEALER
+* ROUTER と ROUTER
+
+And these combinations are invalid (and I'll explain why):
+そして以下の組み合わせは不正です。(理由は後ほど説明します)
+
+* REQ と REQ
+* REQ と DEALER
+* REP と REP
+* REP と ROUTER
+
 ### REQとREPの組み合わせ
 ### The DEALER to REP Combination
 ### The REQ to ROUTER Combination
