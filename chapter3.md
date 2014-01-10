@@ -253,7 +253,7 @@ REPソケットを利用する場合のみ、ROUTERを配置することが出�
 REQソケットとDEALERソケット側の事を「クライアント」、REPソケットとROUTERソケット側の事を「サーバー」として見ることができます。多くの場合、REPソケットとROUTERソケットでbindを行うでしょうし、REQソケットとDEALERソケットが接続を行います。
 いつもこの様に単純だとは限りませんが、大体こんな風に覚えておけば良いでしょう。
 
-### REQからREPへの組み合わせ
+### REQとREPの組み合わせ
 ;We've already covered a REQ client talking to a REP server but let's take one aspect: the REQ client must initiate the message flow. A REP server cannot talk to a REQ client that hasn't first sent it a request. Technically, it's not even possible, and the API also returns an EFSM error if you try it.
 
 既に私達はREQクライアントがREPサーバーと通信する仕組みについて見てきましたが,
@@ -262,15 +262,89 @@ REQソケットとDEALERソケット側の事を「クライアント」、REP�
 REPサーバーまずリクエストを受け取らなければ、REQクライアントに対して通信を行うことは出来ません。
 技術的にそれは不可能であり、もしこれをやろうとすると、APIはEFSMエラーを返します。
 
-### DEALERからREPへの組み合わせ
+### DEALERとREPの組み合わせ
+;Now, let's replace the REQ client with a DEALER. This gives us an asynchronous client that can talk to multiple REP servers. If we rewrote the "Hello World" client using DEALER, we'd be able to send off any number of "Hello" requests without waiting for replies.
 
-### REQからROUTERへの組み合わせ
+それではREQクライアントをDEALERソケットに置き換えてみましょう。
+これは複数のREPサーバーと通信可能な非同期なクライアントを実現できます。
+例えば「Hello World」クライアントをDEALERで書き直した場合、応答を待たずに複数の「Hello」リクエストを送信可能です。
 
-### DEALERからROUTERへの組み合わせ
+;When we use a DEALER to talk to a REP socket, we must accurately emulate the envelope that the REQ socket would have sent, or the REP socket will discard the message as invalid. So, to send a message, we:
 
-### DEALERからDEALERへの組み合わせ
+DEALERソケットからREPソケットに対して通信行う場合、REQソケットから送信が行われたように正確にエミュレートしする必要があります。
+そうしなければREPソケットは不正なメッセージとみなして破棄してしまうでしょう。
+すなわち、以下のように送信する必要があります。
 
-### ROUTERからROUTERへの組み合わせ
+;* Send an empty message frame with the MORE flag set; then
+;* Send the message body.
+
+* MOREフラグをセットして、空のフレームを送信
+* 続いてメッセージ本体を送信
+
+;And when we receive a message, we:
+
+そして受信時は、
+
+;* Receive the first frame and if it's not empty, discard the whole message;
+;* Receive the next frame and pass that to the application.
+
+* 受信した最初のフレームが空でなければ、メッセージ全体を破棄します。
+* 空フレームに続くフレームをアプリケーションに渡します。
+
+### REQとROUTERの組み合わせ
+;In the same way that we can replace REQ with DEALER, we can replace REP with ROUTER. This gives us an asynchronous server that can talk to multiple REQ clients at the same time. If we rewrote the "Hello World" server using ROUTER, we'd be able to process any number of "Hello" requests in parallel. We saw this in the Chapter 2 - Sockets and Patterns mtserver example.
+
+REQソケットをDEALERソケットに置き換えたのと同様に、REPソケットをROUTERソケットに置き換える事が出来ます。
+これは複数のREQクライアントに対して同時に通信可能な非同期なサーバーを実現できます。
+例えば「Hello World」サーバーをROUTERソケットで書き直した場合、複数の「Hello」リクエストを並行に処理することが可能です。
+これは既に第2章の「Sockets and Patterns mtserver」の例で見てきました。
+
+;We can use ROUTER in two distinct ways:
+
+ROUTERソケットは明確に2つの用途で利用できます。
+
+;* As a proxy that switches messages between frontend and backend sockets.
+;* As an application that reads the message and acts on it.
+
+* フロントエンドとバックエンドソケットの間でメッセージを中継するプロキシーとして
+* メッセージ受信するアプリケーションとして
+
+;In the first case, the ROUTER simply reads all frames, including the artificial identity frame, and passes them on blindly. In the second case the ROUTER must know the format of the reply envelope it's being sent. As the other peer is a REQ socket, the ROUTER gets the identity frame, an empty frame, and then the data frame.
+
+最初のケースではROUTERソケットはIDフレームを含む全てのフレームを受信し、盲目的にメッセージを通過させます。
+2番目のケースではROUTERソケットは応答エンベロープの形式を意識する必要があります。
+相手がREQソケットだとすると、ROUTERソケットはまずIDフレームと空フレームを受信し、それからデータフレームを受け取ります。
+
+### DEALERとROUTERの組み合わせ
+;Now we can switch out both REQ and REP with DEALER and ROUTER to get the most powerful socket combination, which is DEALER talking to ROUTER. It gives us asynchronous clients talking to asynchronous servers, where both sides have full control over the message formats.
+
+そして、REQソケットとREPソケットの組み合わせをDEALERソケットとROUTERソケットという強力な組み合わせに置き換えることが可能です。
+これは非同期なクライアントと、非同期なサーバーを実現可能で、両側でメッセージエンべロープの形式を意識する必要があります。
+
+;Because both DEALER and ROUTER can work with arbitrary message formats, if you hope to use these safely, you have to become a little bit of a protocol designer. At the very least you must decide whether you wish to emulate the REQ/REP reply envelope. It depends on whether you actually need to send replies or not.
+
+なぜなら、DEALERソケットとROUTERソケットの両側で自由なメッセージフォーマットを利用できるので、これらを安全に扱いたい場合は少し慎重にプロトコル設計を行う必要があります。
+最低限、あなたはREQ/REPソケットの応答エンベロープをエミュレートするかどうかを決める必要があります。
+この決定は、応答を必ず返す必要があるかどうかに関わってきます。
+
+### DEALERとDEALERの組み合わせ
+;You can swap a REP with a ROUTER, but you can also swap a REP with a DEALER, if the DEALER is talking to one and only one peer.
+
+REPソケットをROUTERソケットに置き換える事が可能ですが、通信相手が1つの場合に限り、REPソケットをDEALERソケットに置き換えることも可能です。
+
+;When you replace a REP with a DEALER, your worker can suddenly go full asynchronous, sending any number of replies back. The cost is that you have to manage the reply envelopes yourself, and get them right, or nothing at all will work. We'll see a worked example later. Let's just say for now that DEALER to DEALER is one of the trickier patterns to get right, and happily it's rare that we need it.
+
+REPソケットをDEALERソケットで置き換えた場合、ワーカーは完全に非同期に応答を返すようになるでしょう。
+対価として、応答エンベロープを自分で管理して正しく取得する必要がする必要があります。そうしなければまったく動作しません。
+後ほど実際に動作する例を見ていきますが、このDEALERソケットとDEALERソケットの組み合わせはトリッキーなパターンの一つであり、これが必要となるケースは稀でしょう。
+
+### ROUTERとROUTERの組み合わせ
+;This sounds perfect for N-to-N connections, but it's the most difficult combination to use. You should avoid it until you are well advanced with ØMQ. We'll see one example it in the Freelance pattern in Chapter 4 - Reliable Request-Reply Patterns, and an alternative DEALER to ROUTER design for peer-to-peer work in Chapter 8 - A Framework for Distributed Computing.
+
+これは完全なN対N接続のように思うかもしれませんが、これは最も扱いにくい組み合わせです。
+ØMQを使いこなせる様になるまで、この使い方は避けたほうが無難です。
+第4章「Reliable Request-Reply Patterns」ではこれを利用したフリーランス・パターンをという例を見ていきます。
+また、第8章「A Framework for Distributed Computing」ではP2P機能を設計するする為のDEALER対ROUTER通信の代替としてとして紹介します。
 
 ### 不正な組み合わせ
 
