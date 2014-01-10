@@ -347,6 +347,33 @@ REPソケットをDEALERソケットで置き換えた場合、ワーカーは�
 また、第8章「A Framework for Distributed Computing」ではP2P機能を設計するする為のDEALER対ROUTER通信の代替としてとして紹介します。
 
 ### 不正な組み合わせ
+;Mostly, trying to connect clients to clients, or servers to servers is a bad idea and won't work. However, rather than give general vague warnings, I'll explain in detail:
+
+クライアントとクライアント、サーバーとサーバーで接続しようとする試みは、ほとんどの場合上手く動作しません。
+しかし、ここでは曖昧な警告で終わらせるのではなく具体的に説明しておきます。
+
+;* REQ to REQ: both sides want to start by sending messages to each other, and this could only work if you timed things so that both peers exchanged messages at the same time. It hurts my brain to even think about it.
+
+;* REQ to DEALER: you could in theory do this, but it would break if you added a second REQ because DEALER has no way of sending a reply to the original peer. Thus the REQ socket would get confused, and/or return messages meant for another client.
+
+;* REP to REP: both sides would wait for the other to send the first message.
+
+;* REP to ROUTER: the ROUTER socket can in theory initiate the dialog and send a properly-formatted request, if it knows the REP socket has connected and it knows the identity of that connection. It's messy and adds nothing over DEALER to ROUTER.
+
+* REQとREQの組み合わせ: 両者ともメッセージの送信を開始しようとします。そしてこれが正しく動作するのは、両者がぴったり同時にリクエストを送信した場合のみです。これについて考えると頭痛がします。
+
+* REQとDEALERの組み合わせ: 理論上これを行うことは可能ですが、2つ目のREQを追加した時に破綻します。なぜならDEALERには元々の相手に応答を送信する機能が存在しないからです。従って、REQソケットは混乱してしまい誤ったクライアントにメッセージを返してしまう可能性があります。
+
+* REPとREPの組み合わせ: お互いに最初のメッセージを待ち続けるでしょう。
+
+* REPとROUTERの組み合わせ: 相手がREPソケットだという事が判っている場合、ROUTERソケットは理論上対話を開始することが可能であり、正しい形式のリクエストを送信することが出来ます。それはDEALERとROUTERの組み合わせと比べてややこしいだけで良いことは一つもありません。
+
+;The common thread in this valid versus invalid breakdown is that a ØMQ socket connection is always biased towards one peer that binds to an endpoint, and another that connects to that. Further, that which side binds and which side connects is not arbitrary, but follows natural patterns. The side which we expect to "be there" binds: it'll be a server, a broker, a publisher, a collector. The side that "comes and goes" connects: it'll be clients and workers. Remembering this will help you design better ØMQ architectures.
+
+ØMQの正しいソケットの組み合わせについて一貫して言えることは、常にどちらかがエンドポイントとしてbindし、もう片方が接続してくるという事です。
+なお、どちらがbindを行いどちらが接続を行っても構わないのですが、自然なパターンに従うのが良いでしょう。
+「存在が確か」である事を期待される側がbindを行い、サーバーやブローカー、パブリッシャーとなるでしょう。一方、「現れたり消えたり」する側が接続を行い、クライアントやワーカーとなるでしょう。
+これを覚えておくと、より良いØMQアーキテクチャを設計するのに役立ちます。
 
 ## Exploring ROUTER Sockets
 ### Identities and Addresses
