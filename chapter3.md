@@ -370,13 +370,21 @@ REPソケットをDEALERソケットで置き換えた場合、ワーカーは�
 
 ;The common thread in this valid versus invalid breakdown is that a ØMQ socket connection is always biased towards one peer that binds to an endpoint, and another that connects to that. Further, that which side binds and which side connects is not arbitrary, but follows natural patterns. The side which we expect to "be there" binds: it'll be a server, a broker, a publisher, a collector. The side that "comes and goes" connects: it'll be clients and workers. Remembering this will help you design better ØMQ architectures.
 
-ØMQの正しいソケットの組み合わせについて一貫して言えることは、常にどちらかがエンドポイントとしてbindし、もう片方が接続してくるという事です。
+ØMQの正しいソケットの組み合わせについて一貫して言えることは、常にどちらかがエンドポイントとしてbindし、もう片方が接続を行うという事です。
 なお、どちらがbindを行いどちらが接続を行っても構わないのですが、自然なパターンに従うのが良いでしょう。
 「存在が確か」である事を期待される側がbindを行い、サーバーやブローカー、パブリッシャーとなるでしょう。一方、「現れたり消えたり」する側が接続を行い、クライアントやワーカーとなるでしょう。
 これを覚えておくと、より良いØMQアーキテクチャを設計するのに役立ちます。
 
-## Exploring ROUTER Sockets
-### Identities and Addresses
+## ROUTERソケットの詳細
+;Let's look at ROUTER sockets a little closer. We've already seen how they work by routing individual messages to specific connections. I'll explain in more detail how we identify those connections, and what a ROUTER socket does when it can't send a message.
+
+ROUTERソケットについてもう少し詳しく見ていきましょう。
+これまでに、個別のメッセージを特定の接続にルーティングする機能について見てきました。
+ここでは、コネクションの識別方法についての詳細と、ROUTERが何を行い、どんな時にメッセージを送信できないかについて説明します。
+
+### IDとアドレス
+
+
 ### ROUTER Error Handling
 
 ## The Load Balancing Pattern
