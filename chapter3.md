@@ -400,9 +400,8 @@ ROUTERソケットについてもう少し詳しく見ていきましょう。
 
 ;This is true even if you flip the rules and make the ROUTER connect to the peer rather than wait for the peer to connect to the ROUTER. However you can force the ROUTER socket to use a logical address in place of its identity. The zmq_setsockopt reference page calls this setting the socket identity. It works as follows:
 
-ルールをひっくり返して、ROUTER側から接続を行う場合も同様です。
-ただし、
-このIDの代わりに論理的なIDを強制的に利用する事も可能です。
+これとは逆に、ROUTER側から接続を行う場合も同様です。
+そして、このIDの代わりに論理的なIDを強制的に利用する事も可能です。
 zmq_setsockoptのmanページではこれを「ソケットIDの設定」と呼んでいます。
 これは以下の様に動作します。
 
@@ -422,7 +421,7 @@ zmq_setsockoptのmanページではこれを「ソケットIDの設定」と呼�
 
 ;Here is a simple example of two peers that connect to a ROUTER socket, one that imposes a logical address "PEER2":
 
-これは2つの接続相手がルーターソケットに対して接続を行い、片方の相手に「PEER2」という論理アドレスを設定する単純な例です。
+以下のサンプルコードは、2つのソケットでルーターソケットに対して接続を行い、片方のソケットに「PEER2」という論理アドレスを設定する単純な例です。
 
 ~~~ {caption="identity: Identity check in C"}
 // Demonstrate request-reply identities
@@ -470,6 +469,17 @@ int main (void)
 ~~~
 
 ### ROUTERのエラー処理
+;ROUTER sockets do have a somewhat brutal way of dealing with messages they can't send anywhere: they drop them silently. It's an attitude that makes sense in working code, but it makes debugging hard. The "send identity as first frame" approach is tricky enough that we often get this wrong when we're learning, and the ROUTER's stony silence when we mess up isn't very constructive.
+
+ROUTERソケットはメッセージを送信できない場合に黙って捨てるという荒っぽい挙動を行います。
+これは実際のコードでは合理的な動作ですがデバッグが難しくなるのが難点です。
+
+この最初のフレームにIDを含めて送信する方式は、注意しなければ誤った結果が得られたり、ROUTERは黙ってメッセージを捨てるので混乱してしまうかもしれません。
+
+;Since ØMQ v3.2 there's a socket option you can set to catch this error: ZMQ_ROUTER_MANDATORY. Set that on the ROUTER socket and then when you provide an unroutable identity on a send call, the socket will signal an EHOSTUNREACH error.
+
+ØMQ v3.2以降、このエラーを検知できるZMQ_ROUTER_MANDATORYソケットオプションが追加されました。
+ROUTERソケットにこれを設定すると、ルーティング出来ないIDに対して送信した場合にソケットがEHOSTUNREACHエラーを通知します。
 
 ## The Load Balancing Pattern
 ### ROUTER Broker and REQ Workers
