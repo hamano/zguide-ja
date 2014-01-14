@@ -383,9 +383,93 @@ ROUTERソケットについてもう少し詳しく見ていきましょう。
 ここでは、コネクションの識別方法についての詳細と、ROUTERが何を行い、どんな時にメッセージを送信できないかについて説明します。
 
 ### IDとアドレス
+;The identity concept in ØMQ refers specifically to ROUTER sockets and how they identify the connections they have to other sockets. More broadly, identities are used as addresses in the reply envelope. In most cases, the identity is arbitrary and local to the ROUTER socket: it's a lookup key in a hash table. Independently, a peer can have an address that is physical (a network endpoint like "tcp://192.168.55.117:5670") or logical (a UUID or email address or other unique key).
+
+ØMQにおけるIDはROUTERソケットが他のソケットへのコネクションを識別するための概念です。
+もっと大ざっぱに言うと、IDは応答エンベロープのアドレスとして利用されます。
+多くの場合、このIDはROUTERがハッシュテーブルの検索に利用するための局所的なものです。
+[TODO]
+ところで、アドレスにはネットワークのエンドポイント「tcp://192.168.55.117:5670」の様な物理的なものとUUID、メールアドレスやユニークなキーの様に論理的なものがあります。
+
+;An application that uses a ROUTER socket to talk to specific peers can convert a logical address to an identity if it has built the necessary hash table. Because ROUTER sockets only announce the identity of a connection (to a specific peer) when that peer sends a message, you can only really reply to a message, not spontaneously talk to a peer.
 
 
-### ROUTER Error Handling
+アプリケーションがROUTERソケットを利用して特定の相手に対して通信を行う際、ハッシュテーブルを構築することで、論理的なアドレスをIDに変換することが出来ます。
+なぜなら、ROUTERソケットだけがメッセージを送信する際に接続IDを知ることができるからです。
+[TODO]
+
+;This is true even if you flip the rules and make the ROUTER connect to the peer rather than wait for the peer to connect to the ROUTER. However you can force the ROUTER socket to use a logical address in place of its identity. The zmq_setsockopt reference page calls this setting the socket identity. It works as follows:
+
+ルールをひっくり返して、ROUTER側から接続を行う場合も同様です。
+ただし、
+このIDの代わりに論理的なIDを強制的に利用する事も可能です。
+zmq_setsockoptのmanページではこれを「ソケットIDの設定」と呼んでいます。
+これは以下の様に動作します。
+
+;* The peer application sets the ZMQ_IDENTITY option of its peer socket (DEALER or REQ) before binding or connecting.
+;* Usually the peer then connects to the already-bound ROUTER socket. But the ROUTER can also connect to the peer.
+;* At connection time, the peer socket tells the router socket, "please use this identity for this connection".
+;* If the peer socket doesn't say that, the router generates its usual arbitrary random identity for the connection.
+;* The ROUTER socket now provides this logical address to the application as a prefix identity frame for any messages coming in from that peer.
+;* The ROUTER also expects the logical address as the prefix identity frame for any outgoing messages.
+
+* アプリケーションはbindや接続を行う前にソケット(DEALER、もしくはREQ)に対してZMQ_IDENTITYオプションを設定します。
+* 通常、bind済みのROUTERソケットに対して接続が行われます。しかし、ROUTERソケットは接続しに行く事も可能です。
+* 接続時、接続相手はROUTERソケットに対して「この接続IDを利用してね」と伝えます。
+* 接続相手がこれを伝えなかった場合、ROUTER側でランダムな接続IDを生成します。
+* ROUTERソケットは受け取ったメッセージに対して論理アドレスを付加します。
+* そしてROUTERソケットから出ていくメッセージにはIDフレームが付加されていることを期待します。
+
+;Here is a simple example of two peers that connect to a ROUTER socket, one that imposes a logical address "PEER2":
+
+これは2つの接続相手がルーターソケットに対して接続を行い、片方の相手に「PEER2」という論理アドレスを設定する単純な例です。
+
+~~~ {caption="identity: Identity check in C"}
+// Demonstrate request-reply identities
+
+#include "zhelpers.h"
+
+int main (void)
+{
+   void *context = zmq_ctx_new ();
+   void *sink = zmq_socket (context, ZMQ_ROUTER);
+   zmq_bind (sink, "inproc://example");
+
+   // First allow 0MQ to set the identity
+   void *anonymous = zmq_socket (context, ZMQ_REQ);
+   zmq_connect (anonymous, "inproc://example");
+   s_send (anonymous, "ROUTER uses a generated UUID");
+   s_dump (sink);
+
+   // Then set the identity ourselves
+   void *identified = zmq_socket (context, ZMQ_REQ);
+   zmq_setsockopt (identified, ZMQ_IDENTITY, "PEER2", 5);
+   zmq_connect (identified, "inproc://example");
+   s_send (identified, "ROUTER socket uses REQ's socket identity");
+   s_dump (sink);
+
+   zmq_close (sink);
+   zmq_close (anonymous);
+   zmq_close (identified);
+   zmq_ctx_destroy (context);
+   return 0;
+}
+~~~
+
+このプログラムは以下の出力を行います。
+
+~~~
+----------------------------------------
+[005] 006B8B4567
+[000]
+[026] ROUTER uses a generated UUID
+----------------------------------------
+[005] PEER2
+[000]
+[038] ROUTER uses REQ's socket identity
+~~~
+
+### ROUTERのエラー処理
 
 ## The Load Balancing Pattern
 ### ROUTER Broker and REQ Workers
