@@ -481,9 +481,177 @@ ROUTERソケットはメッセージを送信できない場合に黙って捨�
 ØMQ v3.2以降、このエラーを検知できるZMQ_ROUTER_MANDATORYソケットオプションが追加されました。
 ROUTERソケットにこれを設定すると、ルーティング出来ないIDに対して送信した場合にソケットがEHOSTUNREACHエラーを通知します。
 
-## The Load Balancing Pattern
-### ROUTER Broker and REQ Workers
-### ROUTER Broker and DEALER Workers
+## 負荷分散パターン
+;Now let's look at some code. We'll see how to connect a ROUTER socket to a REQ socket, and then to a DEALER socket. These two examples follow the same logic, which is a load balancing pattern. This pattern is our first exposure to using the ROUTER socket for deliberate routing, rather than simply acting as a reply channel.
+
+それではコードを見て行きましょう。
+これからREQソケットやDEALERソケットでROUTERソケットに接続する方法を見ていきます。
+この2つのパターンは同じく負荷分散パターンというロジックに従っています。
+単純な応答を行うのではなく、意図的にルーティングを行う例としてこのパターンは初めて紹介することになります。
+
+;The load balancing pattern is very common and we'll see it several times in this book. It solves the main problem with simple round robin routing (as PUSH and DEALER offer) which is that round robin becomes inefficient if tasks do not all roughly take the same time.
+
+負荷分散パターンは極めて一般的であり、この本の中で何度か出てくるでしょう。
+PUSHとDEALERソケットとは異なり、負荷分散は単純なラウンドロビンを利用しますが、ラウンドロビンはタスクの処理時間が均等でない場合に非効率になる事があります。
+
+;It's the post office analogy. If you have one queue per counter, and you have some people buying stamps (a fast, simple transaction), and some people opening new accounts (a very slow transaction), then you will find stamp buyers getting unfairly stuck in queues. Just as in a post office, if your messaging architecture is unfair, people will get annoyed.
+
+郵便局で例えてみましょう。、
+郵便局の同じ窓口に切手を買いに来た人々(速いトランザクション)と新規口座を開設しに来た人々(非常に遅いトランザクション)が並んでいるとしましょう。
+そうすると、切手を買いに来た人が不当に待たされてしまうことに気がつくでしょう。
+あなたのメッセージングアーキテクチャがこの様な郵便局と同じだった場合、人々はイライラしてしまいます。
+
+;The solution in the post office is to create a single queue so that even if one or two counters get stuck with slow work, other counters will continue to serve clients on a first-come, first-serve basis.
+
+この郵便局の問題の解決方法は、行列が混雑してきた際に、遅い手続きの窓口を別に開設し、速い手続きの窓口は引き続き先着順で処理する事です。
+
+;One reason PUSH and DEALER use the simplistic approach is sheer performance. If you arrive in any major US airport, you'll find long queues of people waiting at immigration. The border patrol officials will send people in advance to queue up at each counter, rather than using a single queue. Having people walk fifty yards in advance saves a minute or two per passenger. And because every passport check takes roughly the same time, it's more or less fair. This is the strategy for PUSH and DEALER: send work loads ahead of time so that there is less travel distance.
+
+PUSHとDEALERソケットがこの様な単純な方式を利用するのは単にパフォーマンスが理由です。
+米国の主要な空港に到着すると、入国管理の所で長い行列をが出来ていることがよくあるでしょう。
+警備の人は人々をあらかじめ1つではなく複数に分けて行列を作ります。
+人々は1,2分程度時間をかけて50ヤードほどの行列を歩きます。
+これは公平な方法です。なぜなら全てのパスポートチェックは大体同じ時間で完了するからです。
+この様に前もってキューを分ける事で、移動距離を短くすることがPUSHとDEALERソケットの戦略です。
+
+;This is a recurring theme with ØMQ: the world's problems are diverse and you can benefit from solving different problems each in the right way. The airport isn't the post office and one size fits no one, really well.
+
+これは、ØMで繰り返し議論されてきたテーマです。
+現実世界の問題は多様化しており、異なる問題にはそれぞれ正しい解決方法があります。
+空港は郵便局と異なるように、問題の規模はそれぞれ異なるのです。
+
+;Let's return to the scenario of a worker (DEALER or REQ) connected to a broker (ROUTER). The broker has to know when the worker is ready, and keep a list of workers so that it can take the least recently used worker each time.
+
+それでは、ブローカー(ROUTERソケット)に対してワーカー(DEALERやREQソケット)が接続する例に戻りましょう。
+ブローカーはワーカーの準備が完了したことを知っていて、ワーカーの一覧を保持する必要があります。
+
+;The solution is really simple, in fact: workers send a "ready" message when they start, and after they finish each task. The broker reads these messages one-by-one. Each time it reads a message, it is from the last used worker. And because we're using a ROUTER socket, we get an identity that we can then use to send a task back to the worker.
+
+これを行う方法は簡単です。
+ワーカーは起動時に「準備完了」メッセージを送信し、その後仕事を行います。
+ブローカーは最も古いものから順にメッセージを1つずつ読み込んでいきます。
+そして、今回はROUTERソケットを利用しているので、ワーカーに返信するためのIDを取得しています。
+
+;It's a twist on request-reply because the task is sent with the reply, and any response for the task is sent as a new request. The following code examples should make it clearer.
+
+これはリクエストに対して応答を返していることから、リクエスト・応答パターンの応用と言えます。
+これらを理解する為のサンプルコードを示します。
+
+### ROUTERブローカーとREQワーカー
+
+;Here is an example of the load balancing pattern using a ROUTER broker talking to a set of REQ workers:
+
+これはROUTERブローカーを利用してREQワーカー群と通信を行う負荷分散パターンのサンプルコードです。
+
+~~~ {caption="rtreq: ROUTER-to-REQ in C"}
+// ROUTER-to-REQ example
+
+#include "zhelpers.h"
+#include <pthread.h>
+#define NBR_WORKERS 10
+
+static void *
+worker_task (void *args)
+{
+    void *context = zmq_ctx_new ();
+    void *worker = zmq_socket (context, ZMQ_REQ);
+    s_set_id (worker); // Set a printable identity
+    zmq_connect (worker, "tcp://localhost:5671");
+
+    int total = 0;
+    while (1) {
+        // Tell the broker we're ready for work
+        s_send (worker, "Hi Boss");
+
+        // Get workload from broker, until finished
+        char *workload = s_recv (worker);
+        int finished = (strcmp (workload, "Fired!") == 0);
+        free (workload);
+        if (finished) {
+            printf ("Completed: %d tasks\n", total);
+            break;
+        }
+        total++;
+
+        // Do some random work
+        s_sleep (randof (500) + 1);
+    }
+    zmq_close (worker);
+    zmq_ctx_destroy (context);
+    return NULL;
+}
+
+// While this example runs in a single process, that is only to make
+// it easier to start and stop the example. Each thread has its own
+// context and conceptually acts as a separate process.
+
+int main (void)
+{
+    void *context = zmq_ctx_new ();
+    void *broker = zmq_socket (context, ZMQ_ROUTER);
+
+    zmq_bind (broker, "tcp://*:5671");
+    srandom ((unsigned) time (NULL));
+
+    int worker_nbr;
+    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++) {
+        pthread_t worker;
+        pthread_create (&worker, NULL, worker_task, NULL);
+    }
+    // Run for five seconds and then tell workers to end
+    int64_t end_time = s_clock () + 5000;
+    int workers_fired = 0;
+    while (1) {
+        // Next message gives us least recently used worker
+        char *identity = s_recv (broker);
+        s_sendmore (broker, identity);
+        free (identity);
+        free (s_recv (broker)); // Envelope delimiter
+        free (s_recv (broker)); // Response from worker
+        s_sendmore (broker, "");
+
+        // Encourage workers until it's time to fire them
+        if (s_clock () < end_time)
+            s_send (broker, "Work harder");
+        else {
+            s_send (broker, "Fired!");
+        if (++workers_fired == NBR_WORKERS)
+            break;
+        }
+    }
+    zmq_close (broker);
+    zmq_ctx_destroy (context);
+    return 0;
+}
+~~~
+
+;The example runs for five seconds and then each worker prints how many tasks they handled. If the routing worked, we'd expect a fair distribution of work:
+
+このサンプルコードを実行して5秒程度待つと、各ワーカーが処理したタスクの数を出力します。
+ルーティングが機能していれば、タスクは均等に分散されているはずです。
+
+~~~
+Completed: 20 tasks
+Completed: 18 tasks
+Completed: 21 tasks
+Completed: 23 tasks
+Completed: 19 tasks
+Completed: 21 tasks
+Completed: 17 tasks
+Completed: 17 tasks
+Completed: 25 tasks
+Completed: 19 tasks
+~~~
+
+;To talk to the workers in this example, we have to create a REQ-friendly envelope consisting of an identity plus an empty envelope delimiter frame.
+
+この例では、REQソケットと通信を行うために、
+IDフレームと空のエンベロープフレームを加えたメッセージを作成する必要があります。
+
+![REQソケットと通信するためのルーティングエンベロープ](images/fig31.eps)
+
+### ROUTERブローカーとDEALERワーカー
+
 ### A Load Balancing Message Broker
 
 ## A High-Level API for ØMQ
