@@ -651,14 +651,134 @@ IDフレームと空のエンベロープフレームを加えたメッセージ
 ![REQソケットと通信するためのルーティングエンベロープ](images/fig31.eps)
 
 ### ROUTERブローカーとDEALERワーカー
+;Anywhere you can use REQ, you can use DEALER. There are two specific differences:
 
-### A Load Balancing Message Broker
+REQソケットの代わりにDEALERソケットを利用することも可能です。
+これらには2つの明確な違いあがあります。
 
-## A High-Level API for ØMQ
-### Features of a Higher-Level API
-### The CZMQ High-Level API
+;* The REQ socket always sends an empty delimiter frame before any data frames; the DEALER does not.
+;* The REQ socket will send only one message before it receives a reply; the DEALER is fully asynchronous.
 
-## The Asynchronous Client/Server Pattern
+* REQソケットは常にデータフレームの前に空の区切りフレームを付けて送信していましたがDEALERソケットはこれを行いません。
+* REQソケットは受信を行うまでに1つのメッセージしか送信できません。しかしDEALER完全に非同期ですのでこれが可能です。
+
+;The synchronous versus asynchronous behavior has no effect on our example because we're doing strict request-reply. It is more relevant when we address recovering from failures, which we'll come to in Chapter 4 - Reliable Request-Reply Patterns.
+
+同期から非同期に切り替える場合でも、リクエスト・応答パターンという事に変わりありませんのでサンプルコードに大きな影響を与えません。
+この組み合わせはエラーからの復旧に関連していますので、後ほどの「Chapter 4 - Reliable Request-Reply Patterns」でも出てきます。
+
+;Now let's look at exactly the same example but with the REQ socket replaced by a DEALER socket:
+
+それでは、REQソケットをDEALERソケットに置き換えたまったく同じ動作を行うサンプルコードを見てみましょう。
+
+~~~ {caption="rtdealer: ROUTER-to-DEALER in C"}
+// ROUTER-to-DEALER example
+
+#include "zhelpers.h"
+#include <pthread.h>
+#define NBR_WORKERS 10
+
+static void *
+worker_task (void *args)
+{
+    void *context = zmq_ctx_new ();
+    void *worker = zmq_socket (context, ZMQ_DEALER);
+    s_set_id (worker); // Set a printable identity
+    zmq_connect (worker, "tcp://localhost:5671");
+
+    int total = 0;
+    while (1) {
+        // Tell the broker we're ready for work
+        s_sendmore (worker, "");
+        s_send (worker, "Hi Boss");
+
+        // Get workload from broker, until finished
+        free (s_recv (worker)); // Envelope delimiter
+        char *workload = s_recv (worker);
+        int finished = (strcmp (workload, "Fired!") == 0);
+        free (workload);
+        if (finished) {
+            printf ("Completed: %d tasks\n", total);
+            break;
+        }
+        total++;
+
+        // Do some random work
+        s_sleep (randof (500) + 1);
+    }
+    zmq_close (worker);
+    zmq_ctx_destroy (context);
+    return NULL;
+}
+
+// While this example runs in a single process, that is just to make
+// it easier to start and stop the example. Each thread has its own
+// context and conceptually acts as a separate process.
+
+int main (void)
+{
+    void *context = zmq_ctx_new ();
+    void *broker = zmq_socket (context, ZMQ_ROUTER);
+
+    zmq_bind (broker, "tcp://*:5671");
+    srandom ((unsigned) time (NULL));
+
+    int worker_nbr;
+    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++) {
+        pthread_t worker;
+        pthread_create (&worker, NULL, worker_task, NULL);
+    }
+    // Run for five seconds and then tell workers to end
+    int64_t end_time = s_clock () + 5000;
+    int workers_fired = 0;
+    while (1) {
+        // Next message gives us least recently used worker
+        char *identity = s_recv (broker);
+        s_sendmore (broker, identity);
+        free (identity);
+        free (s_recv (broker)); // Envelope delimiter
+        free (s_recv (broker)); // Response from worker
+        s_sendmore (broker, "");
+
+        // Encourage workers until it's time to fire them
+        if (s_clock () < end_time)
+            s_send (broker, "Work harder");
+        else {
+            s_send (broker, "Fired!");
+        if (++workers_fired == NBR_WORKERS)
+            break;
+        }
+    }
+    zmq_close (broker);
+    zmq_ctx_destroy (context);
+    return 0;
+}
+~~~
+
+;The code is almost identical except that the worker uses a DEALER socket, and reads and writes that empty frame before the data frame. This is the approach I use when I want to keep compatibility with REQ workers.
+
+このコードはワーカーがDEALERソケットを利用して、データフレームの前に空フレームを付けて送信していることを除いて殆ど同じです。
+この方法はREQワーカーと互換性を保ちたい場合に役立ちます。
+
+;However, remember the reason for that empty delimiter frame: it's to allow multihop extended requests that terminate in a REP socket, which uses that delimiter to split off the reply envelope so it can hand the data frames to its application.
+
+一方で、空の区切りフレームの存在意義を忘れないで下さい。
+それは終端にあるREPソケットが応答エンベロープとデータフレームを区別するためのものです。
+
+;If we never need to pass the message along to a REP socket, we can simply drop the empty delimiter frame at both sides, which makes things simpler. This is usually the design I use for pure DEALER to ROUTER protocols.
+
+もし、メッセージがREPソケットを経由しないのであれば、両側でこの区切り文字を省略する事が可能で、こうする事でより単純になります。
+純粋なDEALERとROUTERプロトコルの場合で、私はこの設計を利用します。
+
+### 負荷分散メッセージブローカー
+
+## ØMQの高級API
+
+### 高級APIの機能
+
+### CZMQ高級API
+
+## 非同期クライアント・サーバーパターン
 
 ## Worked Example: Inter-Broker Routing
 ### Establishing the Details
