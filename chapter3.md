@@ -768,9 +768,295 @@ int main (void)
 ;If we never need to pass the message along to a REP socket, we can simply drop the empty delimiter frame at both sides, which makes things simpler. This is usually the design I use for pure DEALER to ROUTER protocols.
 
 もし、メッセージがREPソケットを経由しないのであれば、両側でこの区切り文字を省略する事が可能で、こうする事でより単純になります。
-純粋なDEALERとROUTERプロトコルの場合で、私はこの設計を利用します。
+これは純粋なDEALERとROUTERプロトコルを利用したい場合に一般的な設計です。
 
 ### 負荷分散メッセージブローカー
+;The previous example is half-complete. It can manage a set of workers with dummy requests and replies, but it has no way to talk to clients. If we add a second frontend ROUTER socket that accepts client requests, and turn our example into a proxy that can switch messages from frontend to backend, we get a useful and reusable tiny load balancing message broker.
+
+前回のサンプルコードは複数のワーカーを管理し、擬似的なリクエストと応答を行うことが出来ましたが、これだけでは十分で無い場合があります。
+ワーカーからクライアントに対して問い合わせを行うことが出来ないからです。
+2つ目のフロントエンドROUTERソケットを追加し、これでクライアントからのリクエストを受け付け、フロントエンドからバックエンドにメッセージを転送するプロキシーを用意します。
+こうすることで、便利で再利用可能な負荷分散メッセージブローカーを作成することが出来ます。
+
+![負荷分散ブローカー](images/fig32.eps)
+
+;This broker does the following:
+
+このブローカーは以下のように動作します。
+
+;* Accepts connections from a set of clients.
+;* Accepts connections from a set of workers.
+;* Accepts requests from clients and holds these in a single queue.
+;* Sends these requests to workers using the load balancing pattern.
+;* Receives replies back from workers.
+;* Sends these replies back to the original requesting client.
+
+* クライアントからの接続を受け付けます。
+* ワーカーからの接続を受け付けます。
+* クライアントからのリクエストは単一のキューで保持します。
+* これらリクエストは負荷分散パターンを利用してワーカーに送信します。
+* ブローカーはワーカーからの応答を受け取ります。
+* リクエストを行ったクライアントに応答を返します。
+
+;The broker code is fairly long, but worth understanding:
+
+このサンプルコードはそこそこ長いですが、理解する価値はあるでしょう。
+
+~~~ {caption="lbbroker: Load balancing broker in C"}
+// Load-balancing broker
+// Clients and workers are shown here in-process
+
+#include "zhelpers.h"
+#include <pthread.h>
+#define NBR_CLIENTS 10
+#define NBR_WORKERS 3
+
+// Dequeue operation for queue implemented as array of anything
+#define DEQUEUE(q) memmove (&(q)[0], &(q)[1], sizeof (q) - sizeof (q [0]))
+
+// Basic request-reply client using REQ socket
+// Because s_send and s_recv can't handle 0MQ binary identities, we
+// set a printable text identity to allow routing.
+//
+static void *
+client_task (void *args)
+{
+    void *context = zmq_ctx_new ();
+    void *client = zmq_socket (context, ZMQ_REQ);
+    s_set_id (client); // Set a printable identity
+    zmq_connect (client, "ipc://frontend.ipc");
+
+    // Send request, get reply
+    s_send (client, "HELLO");
+    char *reply = s_recv (client);
+    printf ("Client: %s\n", reply);
+    free (reply);
+    zmq_close (client);
+    zmq_ctx_destroy (context);
+    return NULL;
+}
+
+// While this example runs in a single process, that is just to make
+// it easier to start and stop the example. Each thread has its own
+// context and conceptually acts as a separate process.
+// This is the worker task, using a REQ socket to do load-balancing.
+// Because s_send and s_recv can't handle 0MQ binary identities, we
+// set a printable text identity to allow routing.
+
+
+
+static void *
+worker_task (void *args)
+{
+    void *context = zmq_ctx_new ();
+    void *worker = zmq_socket (context, ZMQ_REQ);
+    s_set_id (worker); // Set a printable identity
+    zmq_connect (worker, "ipc://backend.ipc");
+
+    // Tell broker we're ready for work
+    s_send (worker, "READY");
+
+    while (1) {
+        // Read and save all frames until we get an empty frame
+        // In this example there is only 1, but there could be more
+        char *identity = s_recv (worker);
+        char *empty = s_recv (worker);
+        assert (*empty == 0);
+        free (empty);
+
+        // Get request, send reply
+        char *request = s_recv (worker);
+        printf ("Worker: %s\n", request);
+        free (request);
+
+        s_sendmore (worker, identity);
+        s_sendmore (worker, "");
+        s_send (worker, "OK");
+        free (identity);
+    }
+    zmq_close (worker);
+    zmq_ctx_destroy (context);
+    return NULL;
+}
+
+// This is the main task. It starts the clients and workers, and then
+// routes requests between the two layers. Workers signal READY when
+// they start; after that we treat them as ready when they reply with
+// a response back to a client. The load-balancing data structure is
+// just a queue of next available workers.
+
+int main (void)
+{
+    // Prepare our context and sockets
+    void *context = zmq_ctx_new ();
+    void *frontend = zmq_socket (context, ZMQ_ROUTER);
+    void *backend = zmq_socket (context, ZMQ_ROUTER);
+    zmq_bind (frontend, "ipc://frontend.ipc");
+    zmq_bind (backend, "ipc://backend.ipc");
+
+    int client_nbr;
+    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++) {
+        pthread_t client;
+        pthread_create (&client, NULL, client_task, NULL);
+    }
+    int worker_nbr;
+    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++) {
+        pthread_t worker;
+        pthread_create (&worker, NULL, worker_task, NULL);
+    }
+    // Here is the main loop for the least-recently-used queue. It has two
+    // sockets; a frontend for clients and a backend for workers. It polls
+    // the backend in all cases, and polls the frontend only when there are
+    // one or more workers ready. This is a neat way to use 0MQ's own queues
+    // to hold messages we're not ready to process yet. When we get a client
+    // reply, we pop the next available worker and send the request to it,
+    // including the originating client identity. When a worker replies, we
+    // requeue that worker and forward the reply to the original client
+    // using the reply envelope.
+
+    // Queue of available workers
+    int available_workers = 0;
+    char *worker_queue [10];
+
+    while (1) {
+        zmq_pollitem_t items [] = {
+            { backend, 0, ZMQ_POLLIN, 0 },
+            { frontend, 0, ZMQ_POLLIN, 0 }
+        };
+        // Poll frontend only if we have available workers
+        int rc = zmq_poll (items, available_workers ? 2 : 1, -1);
+        if (rc == -1)
+            break; // Interrupted
+
+        // Handle worker activity on backend
+        if (items [0].revents & ZMQ_POLLIN) {
+            // Queue worker identity for load-balancing
+            char *worker_id = s_recv (backend);
+            assert (available_workers < NBR_WORKERS);
+            worker_queue [available_workers++] = worker_id;
+
+            // Second frame is empty
+            char *empty = s_recv (backend);
+            assert (empty [0] == 0);
+            free (empty);
+
+            // Third frame is READY or else a client reply identity
+            char *client_id = s_recv (backend);
+
+            // If client reply, send rest back to frontend
+            if (strcmp (client_id, "READY") != 0) {
+                empty = s_recv (backend);
+                assert (empty [0] == 0);
+                free (empty);
+                char *reply = s_recv (backend);
+                s_sendmore (frontend, client_id);
+                s_sendmore (frontend, "");
+                s_send (frontend, reply);
+                free (reply);
+                if (--client_nbr == 0)
+                    break; // Exit after N messages
+                }
+                free (client_id);
+            }
+            // Here is how we handle a client request:
+
+            if (items [1].revents & ZMQ_POLLIN) {
+            // Now get next client request, route to last-used worker
+            // Client request is [identity][empty][request]
+            char *client_id = s_recv (frontend);
+            char *empty = s_recv (frontend);
+            assert (empty [0] == 0);
+            free (empty);
+            char *request = s_recv (frontend);
+
+            s_sendmore (backend, worker_queue [0]);
+            s_sendmore (backend, "");
+            s_sendmore (backend, client_id);
+            s_sendmore (backend, "");
+            s_send (backend, request);
+
+            free (client_id);
+            free (request);
+
+            // Dequeue and drop the next worker identity
+            free (worker_queue [0]);
+            DEQUEUE (worker_queue);
+            available_workers--;
+        }
+    }
+    zmq_close (frontend);
+    zmq_close (backend);
+    zmq_ctx_destroy (context);
+    return 0;
+}
+~~~
+
+;The difficult part of this program is (a) the envelopes that each socket reads and writes, and (b) the load balancing algorithm. We'll take these in turn, starting with the message envelope formats.
+
+このプログラムの難しい所は、(a) 各ソケットでエンベロープを読み書きを行なっている事と、(b) 負荷分散アルゴリズムです。
+まずはエンベロープのフォーマットから説明します。
+
+;Let's walk through a full request-reply chain from client to worker and back. In this code we set the identity of client and worker sockets to make it easier to trace the message frames. In reality, we'd allow the ROUTER sockets to invent identities for connections. Let's assume the client's identity is "CLIENT" and the worker's identity is "WORKER". The client application sends a single frame containing "Hello".
+
+それでは、クライアントがリクエストを行い、ワーカーが応答を返す流れを見て行きましょう。
+このコードでは、メッセージフレームを追跡し易くする為に、クライアントとワーカーのIDを設定しています。
+実際にはROUTERソケットが接続IDを割り振ることも出来るでしょう。
+ここでは、クライアントのIDを「CLIENT」、ワーカーのIDを「WORKER」だと仮定しましょう。
+まず、クライアント側のアプリケーションが「Hello」という単一のメッセージを送信します。
+
+![クライアントが送信するメッセージ](images/fig33.eps)
+
+;Because the REQ socket adds its empty delimiter frame and the ROUTER socket adds its connection identity, the proxy reads off the frontend ROUTER socket the client address, empty delimiter frame, and the data part.
+
+REQソケットが空の区切りフレームを追加し、ルーターソケットが接続IDを追加するので、ブローカーはこのアドレスと区切りフレーム、データフレームを読み込みます。
+
+![フロントエンドで受け取るメッセージ](images/fig34.eps)
+
+;The broker sends this to the worker, prefixed by the address of the chosen worker, plus an additional empty part to keep the REQ at the other end happy.
+
+ブローカーはこのメッセージに送信先に選んだワーカーのアドレスと、区切りフレームを先頭に追加てワーカーに送信します。
+
+![バックエンドに届いたメッセージ](images/fig35.eps)
+
+;This complex envelope stack gets chewed up first by the backend ROUTER socket, which removes the first frame. Then the REQ socket in the worker removes the empty part, and provides the rest to the worker application.
+
+この積み重なった複雑なエンベロープは、まずバックエンドのROUTERソケットで最初のフレームが取り除かれます。
+次にワーカー側のREQソケットで空の区切りフレームが取り除かれ、残りがワーカー側のアプリケーションに渡ります。
+
+![ワーカーに到達したメッセージ](images/fig36.eps)
+
+;The worker has to save the envelope (which is all the parts up to and including the empty message frame) and then it can do what's needed with the data part. Note that a REP socket would do this automatically, but we're using the REQ-ROUTER pattern so that we can get proper load balancing.
+
+ワーカーが必要とするのはデータ部ですが、区切りフレームを含むエンベロープ全体を保持しておく必要があります。
+ここでは、REQ-ROUTERパターンを利用して負荷分散を行なっているので、REPソケットがこれを自動的に行うことに注意して下さい。
+
+;On the return path, the messages are the same as when they come in, i.e., the backend socket gives the broker a message in five parts, and the broker sends the frontend socket a message in three parts, and the client gets a message in one part.
+
+帰りの経路は来た時と同じです。
+すなわち、ブローカーのバックエンドソケットで5つのフレームになり、ブローカーのフロントエンドは3つのフレームが送信されます。そしてクライアントは一つのデータフレームが渡されます。
+
+;Now let's look at the load balancing algorithm. It requires that both clients and workers use REQ sockets, and that workers correctly store and replay the envelope on messages they get. The algorithm is:
+
+それでは負荷分散アルゴリズムを見て行きましょう。
+クライアントとワーカーでREQソケットを利用する必要があり、
+ワーカーは、受け取ったエンベロープを正しく保持して応答する必要があります。
+このアルゴリズムは、
+
+;* Create a pollset that always polls the backend, and polls the frontend only if there are one or more workers available.
+;* Poll for activity with infinite timeout.
+;* If there is activity on the backend, we either have a "ready" message or a reply for a client. In either case, we store the worker address (the first part) on our worker queue, and if the rest is a client reply, we send it back to that client via the frontend.
+;* If there is activity on the frontend, we take the client request, pop the next worker (which is the last used), and send the request to the backend. This means sending the worker address, empty part, and then the three parts of the client request.
+
+* zmq_pollitem_t構造体の配列を作成してバックエンドを常にポーリングします。そして1つ以上ワーカーが存在する場合のみ、フロントエンドをポーリングします。
+* ポーリングのタイムアウトは設定しません。
+* バックエンドにワーカーからメッセージが送られて来た場合「READY」というメッセージかクライアントへの応答を受け取る可能性があります。どちらの場合でも最初のフレームはワーカーのアドレスですのでワーカーキューに格納します。残りの部分があればフロントエンドソケットを経由してクライアントに応答します。
+* フロントエンドにメッセージが送られてきた場合、最後に利用されたワーカーを選択し、リクエストをバックエンドに送信します。この時、ワーカーのアドレス、区切りフレーム、データフレームという3つのフレームを送信します。
+
+;You should now see that you can reuse and extend the load balancing algorithm with variations based on the information the worker provides in its initial "ready" message. For example, workers might start up and do a performance self test, then tell the broker how fast they are. The broker can then choose the fastest available worker rather than the oldest.
+
+これまでの情報を元にして様々な負荷分散アルゴリズムに拡張できることに気がついたと思います。
+例えば、ワーカーが起動した後に自分自身でパフォーマンステストを走らせると、ブローカはどのワーカーが一番早いか知ることが出来ます。
+こうすることでブローカは最も速いワーカーを選択することが可能です。
 
 ## ØMQの高級API
 
