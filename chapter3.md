@@ -1190,6 +1190,173 @@ while (true) {
 * Ctrl-Cを適切に処理する。既に割り込みを処理する方法を見てきましたが、これは全てのアプリケーションで必要とされる処理です。
 
 ### CZMQ高級API
+;Turning this wish list into reality for the C language gives us CZMQ, a ØMQ language binding for C. This high-level binding, in fact, developed out of earlier versions of the examples. It combines nicer semantics for working with ØMQ with some portability layers, and (importantly for C, but less for other languages) containers like hashes and lists. CZMQ also uses an elegant object model that leads to frankly lovely code.
+
+CZMQはこのような要件リストをC言語で実現した高級な言語バインディングです。
+これによって、より良い記述と移植性の高いより良い記述が可能になります。
+また、C言語に限り、ハッシュやリストなどのコンテナを提供します。
+CZMQはソースコードを親しみやすくする、エレガントなオブジェクトモデルを導入しています。
+
+;Here is the load balancing broker rewritten to use a higher-level API (CZMQ for the C case):
+
+以下は、負荷分散ブローカーをC言語の高級API(CZMQ)で書き直したものです。
+
+~~~ {caption="lbbroker2: Load balancing broker using high-level API in C"}
+// Load-balancing broker
+// Demonstrates use of the CZMQ API
+
+#include "czmq.h"
+
+#define NBR_CLIENTS 10
+#define NBR_WORKERS 3
+#define WORKER_READY "\001" // Signals worker is ready
+
+// Basic request-reply client using REQ socket
+//
+static void *
+client_task (void *args)
+{
+    zctx_t *ctx = zctx_new ();
+    void *client = zsocket_new (ctx, ZMQ_REQ);
+    zsocket_connect (client, "ipc://frontend.ipc");
+
+    // Send request, get reply
+    while (true) {
+        zstr_send (client, "HELLO");
+        char *reply = zstr_recv (client);
+        if (!reply)
+            break;
+        printf ("Client: %s\n", reply);
+        free (reply);
+        sleep (1);
+    }
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+// Worker using REQ socket to do load-balancing
+//
+static void *
+worker_task (void *args)
+{
+    zctx_t *ctx = zctx_new ();
+    void *worker = zsocket_new (ctx, ZMQ_REQ);
+    zsocket_connect (worker, "ipc://backend.ipc");
+
+    // Tell broker we're ready for work
+    zframe_t *frame = zframe_new (WORKER_READY, 1);
+    zframe_send (&frame, worker, 0);
+
+    // Process messages as they arrive
+    while (true) {
+        zmsg_t *msg = zmsg_recv (worker);
+        if (!msg)
+            break; // Interrupted
+        zframe_reset (zmsg_last (msg), "OK", 2);
+        zmsg_send (&msg, worker);
+    }
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+// Now we come to the main task. This has the identical functionality to
+// the previous lbbroker broker example, but uses CZMQ to start child
+// threads, to hold the list of workers, and to read and send messages:
+
+int main (void)
+{
+    zctx_t *ctx = zctx_new ();
+    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
+    void *backend = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_bind (frontend, "ipc://frontend.ipc");
+    zsocket_bind (backend, "ipc://backend.ipc");
+
+    int client_nbr;
+    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++)
+        zthread_new (client_task, NULL);
+    int worker_nbr;
+    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++)
+        zthread_new (worker_task, NULL);
+
+    // Queue of available workers
+    zlist_t *workers = zlist_new ();
+
+    // Here is the main loop for the load balancer. It works the same way
+    // as the previous example, but is a lot shorter because CZMQ gives
+    // us an API that does more with fewer calls:
+    while (true) {
+        zmq_pollitem_t items [] = {
+            { backend, 0, ZMQ_POLLIN, 0 },
+            { frontend, 0, ZMQ_POLLIN, 0 }
+        };
+        // Poll frontend only if we have available workers
+        int rc = zmq_poll (items, zlist_size (workers)? 2: 1, -1);
+        if (rc == -1)
+            break; // Interrupted
+
+        // Handle worker activity on backend
+        if (items [0].revents & ZMQ_POLLIN) {
+            // Use worker identity for load-balancing
+            zmsg_t *msg = zmsg_recv (backend);
+            if (!msg)
+                break; // Interrupted
+            zframe_t *identity = zmsg_unwrap (msg);
+            zlist_append (workers, identity);
+
+            // Forward message to client if it's not a READY
+            zframe_t *frame = zmsg_first (msg);
+            if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
+                zmsg_destroy (&msg);
+            else
+                zmsg_send (&msg, frontend);
+        }
+        if (items [1].revents & ZMQ_POLLIN) {
+            // Get client request, route to first available worker
+            zmsg_t *msg = zmsg_recv (frontend);
+            if (msg) {
+                zmsg_wrap (msg, (zframe_t *) zlist_pop (workers));
+                zmsg_send (&msg, backend);
+            }
+        }
+    }
+    // When we're done, clean up properly
+    while (zlist_size (workers)) {
+        zframe_t *frame = (zframe_t *) zlist_pop (workers);
+        zframe_destroy (&frame);
+    }
+    zlist_destroy (&workers);
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;One thing CZMQ provides is clean interrupt handling. This means that Ctrl-C will cause any blocking ØMQ call to exit with a return code -1 and errno set to EINTR. The high-level recv methods will return NULL in such cases. So, you can cleanly exit a loop like this:
+
+CZMQがやっていることのひとつはに割り込み処理があります。
+通常のØMQのブロッキングAPIは、Ctrl-Cを押した時にはerrnoにEINTRを設定して処理を中断しますが、高級APIの受信関数は単純にNULLを返します。
+ですので、この様な単純なループだけで行儀よくに終了することが出来ています。
+
+~~~
+while (true) {
+    zstr_send (client, "Hello");
+    char *reply = zstr_recv (client);
+    if (!reply)
+        break; // Interrupted
+    printf ("Client: %s\n", reply);
+    free (reply);
+    sleep (1);
+}
+~~~
+
+;Or, if you're calling zmq_poll(), test on the return code:
+
+また、zmq_poll()を呼び出す時は返り値を確認して下さい。
+
+~~~
+if (zmq_poll (items, 2, 1000 * 1000) == -1)
+    break; // Interrupted
+~~~
+
 
 ## 非同期クライアント・サーバーパターン
 
