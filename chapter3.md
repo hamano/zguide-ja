@@ -1060,7 +1060,134 @@ REQソケットが空の区切りフレームを追加し、ルーターソケ�
 
 ## ØMQの高級API
 
+;We're going to push request-reply onto the stack and open a different area, which is the ØMQ API itself. There's a reason for this detour: as we write more complex examples, the low-level ØMQ API starts to look increasingly clumsy. Look at the core of the worker thread from our load balancing broker:
+
+ここでリクエスト・応答パターンの話題から外れ、ØMQ API自身の話になりますがこれには理由があります。
+このまま低レベルなØMQを使ってもっと複雑なサンプルコードを書くと可読性が低下してしまうからです。
+先ほどの負荷分散ブローカーのワーカースレッドの主要な処理を見て下さい。
+
+~~~
+while (true) {
+    // Get one address frame and empty delimiter
+    char *address = s_recv (worker);
+    char *empty = s_recv (worker);
+    assert (*empty == 0);
+    free (empty);
+
+    // Get request, send reply
+    char *request = s_recv (worker);
+    printf ("Worker: %s\n", request);
+    free (request);
+
+    s_sendmore (worker, address);
+    s_sendmore (worker, "");
+    s_send (worker, "OK");
+    free (address);
+}
+~~~
+
+}
+
+;That code isn't even reusable because it can only handle one reply address in the envelope, and it already does some wrapping around the ØMQ API. If we used the libzmq simple message API this is what we'd have to write:
+
+このコードはたった1つの応答アドレスしか読み取っていないので、再利用可能ではありません。
+そして、既にØMQ APIのヘルパー関数を利用していますが、純粋なlibzmqのAPIを利用する場合は以下のように書く必要があるでしょう。
+
+~~~
+while (true) {
+    // Get one address frame and empty delimiter
+    char address [255];
+    int address_size = zmq_recv (worker, address, 255, 0);
+    if (address_size == -1)
+        break;
+
+    char empty [1];
+    int empty_size = zmq_recv (worker, empty, 1, 0);
+    zmq_recv (worker, &empty, 0);
+    assert (empty_size <= 0);
+    if (empty_size == -1)
+        break;
+
+    // Get request, send reply
+    char request [256];
+    int request_size = zmq_recv (worker, request, 255, 0);
+    if (request_size == -1)
+        return NULL;
+    request [request_size] = 0;
+    printf ("Worker: %s\n", request);
+
+    zmq_send (worker, address, address_size, ZMQ_SNDMORE);
+    zmq_send (worker, empty, 0, ZMQ_SNDMORE);
+    zmq_send (worker, "OK", 2, 0);
+}
+~~~
+
+;And when code is too long to write quickly, it's also too long to understand. Up until now, I've stuck to the native API because, as ØMQ users, we need to know that intimately. But when it gets in our way, we have to treat it as a problem to solve.
+
+そしてこのコードは長すぎるため、理解するのに時間が掛かってしまいます。
+これまではØMQに慣れるためにあえて低レベルなAPIを利用してきましたが、そろそろその必要もなくなって来ました。
+
+;We can't of course just change the ØMQ API, which is a documented public contract on which thousands of people agree and depend. Instead, we construct a higher-level API on top based on our experience so far, and most specifically, our experience from writing more complex request-reply patterns.
+
+もちろん、既に多くの人々に周知されているØMQ APIを私達が勝手に変更することは出来ません。
+その代わりに私達の経験に基づいて高級APIを用意しています。
+特にこれはより複雑なリクエスト・応答パターンを書くために役立ちます。
+
+;What we want is an API that lets us receive and send an entire message in one shot, including the reply envelope with any number of reply addresses. One that lets us do what we want with the absolute least lines of code.
+
+私達が欲しいのは複数の応答エンベロープを含むメッセージを一発で送受信するためのAPIです。
+これがあれば、やりたいことを最小のコードで記述することが出来ます。
+
+;Making a good message API is fairly difficult. We have a problem of terminology: ØMQ uses "message" to describe both multipart messages, and individual message frames. We have a problem of expectations: sometimes it's natural to see message content as printable string data, sometimes as binary blobs. And we have technical challenges, especially if we want to avoid copying data around too much.
+
+良質なメッセージAPIを設計するのはとても難しいことです。
+まず私達は用語に関する問題を抱えています。
+「メッセージ」という用語はマルチパートメッセージを表すこともあるし個別のメッセージフレームを表す場合もあります。
+期待するデータ種別が異なるという問題があります。
+メッセージは大抵の場合印字可能な文字列でしょうが、バイナリデータでる場合もあります。
+そして、技術的な挑戦として、巨大なデータをコピーせずに送信したい場合があります。
+
+;The challenge of making a good API affects all languages, though my specific use case is C. Whatever language you use, think about how you could contribute to your language binding to make it as good (or better) than the C binding I'm going to describe.
+
+私の場合はC言語ですが、良質なAPIを設計するための努力は全ての言語に影響を与えます。
+あなたがどのプログラミング言語を利用するにしても、より良い言語バインディングを作れるように考えています。
+
 ### 高級APIの機能
+;My solution is to use three fairly natural and obvious concepts: string (already the basis for our s_send and s_recv) helpers, frame (a message frame), and message (a list of one or more frames). Here is the worker code, rewritten onto an API using these concepts:
+
+高級APIでは、3つの解かりやすい概念を利用します。
+文字列ヘルパー(既に出てきたs_sendやs_recvの様なもの)、フレーム(メッセージフレーム)、そしてメッセージ(1つ以上のフレームで構成される)です。
+これらの概念を利用してワーカーのコードを書き直してみます。
+
+~~~
+while (true) {
+    zmsg_t *msg = zmsg_recv (worker);
+    zframe_reset (zmsg_last (msg), "OK", 2);
+    zmsg_send (&msg, worker);
+}
+~~~
+
+;Cutting the amount of code we need to read and write complex messages is great: the results are easy to read and understand. Let's continue this process for other aspects of working with ØMQ. Here's a wish list of things I'd like in a higher-level API, based on my experience with ØMQ so far:
+
+素晴らしいことに、複雑なメッセージを読み書きする為に必要なコードを削減することが出来ました。
+これでかなりコードが読み易くなったでしょう。
+今後ØMQの他の機能についてはこんな風に説明します。
+
+以下は私の経験を元に設計した高級APIの要件リストです。
+
+;* Automatic handling of sockets. I find it cumbersome to have to close sockets manually, and to have to explicitly define the linger timeout in some (but not all) cases. It'd be great to have a way to close sockets automatically when I close the context.
+;* Portable thread management. Every nontrivial ØMQ application uses threads, but POSIX threads aren't portable. So a decent high-level API should hide this under a portable layer.
+;* Piping from parent to child threads. It's a recurrent problem: how to signal between parent and child threads. Our API should provide a ØMQ message pipe (using PAIR sockets and inproc automatically.
+;* Portable clocks. Even getting the time to a millisecond resolution, or sleeping for some milliseconds, is not portable. Realistic ØMQ applications need portable clocks, so our API should provide them.
+;* A reactor to replace zmq_poll(). The poll loop is simple, but clumsy. Writing a lot of these, we end up doing the same work over and over: calculating timers, and calling code when sockets are ready. A simple reactor with socket readers and timers would save a lot of repeated work.
+;* Proper handling of Ctrl-C. We already saw how to catch an interrupt. It would be useful if this happened in all applications.
+
+* ソケットの自動処理。私は手動でソケットを閉じたり、明示的にlingerのタイムアウトを設定するのが面倒になりました。ソケットはコンテキストをクローズする時に自動的にクローズしてくれるのが望ましいでしょう。
+* 移植性のあるスレッド管理。多くのØMQアプリケーションはスレッドを利用しますが、POSIXスレッドには移植性がありません。ですので高級APIでこの移植レイヤを隠蔽出来るのが望ましいです。
+* 親スレッドから子スレッドへのパイプ接続。どの様にして親スレッドと子スレッド同士で通知を行うかという問題は度々発生します。高レベルAPIはPAIRソケットとプロセス内通信を利用するメッセージパイプを提供します。
+* 移植性のある時刻の取得方法。既におおよそミリ秒の精度で時刻を取得する方法はありますが移植性がありません。実際のアプリケーションでは移植性のあるAPIが求められます。
+* zmq_poll()の単純化。pollループは単純ですがやや不格好です。大抵の場合、タイマーを設定して、ソケットから読み出すという単純なコードになりがちです。この単純化によって余計なな繰り返し作業を削減します。
+* Ctrl-Cを適切に処理する。既に割り込みを処理する方法を見てきましたが、これは全てのアプリケーションで必要とされる処理です。
 
 ### CZMQ高級API
 
