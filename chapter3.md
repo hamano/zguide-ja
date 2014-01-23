@@ -1186,7 +1186,7 @@ while (true) {
 * 移植性のあるスレッド管理。多くのØMQアプリケーションはスレッドを利用しますが、POSIXスレッドには移植性がありません。ですので高級APIでこの移植レイヤを隠蔽出来るのが望ましいです。
 * 親スレッドから子スレッドへのパイプ接続。どの様にして親スレッドと子スレッド同士で通知を行うかという問題は度々発生します。高レベルAPIはPAIRソケットとプロセス内通信を利用するメッセージパイプを提供します。
 * 移植性のある時刻の取得方法。既におおよそミリ秒の精度で時刻を取得する方法はありますが移植性がありません。実際のアプリケーションでは移植性のあるAPIが求められます。
-* zmq_poll()の単純化。pollループは単純ですがやや不格好です。大抵の場合、タイマーを設定して、ソケットから読み出すという単純なコードになりがちです。この単純化によって余計なな繰り返し作業を削減します。
+* リアクターパターンによるzmq_poll()の置き換え。pollループは単純ですがやや不格好です。大抵の場合、タイマーを設定して、ソケットから読み出すという単純なコードになりがちです。単純なリアクターパターンを導入して余計なな繰り返し作業を削減します。
 * Ctrl-Cを適切に処理する。既に割り込みを処理する方法を見てきましたが、これは全てのアプリケーションで必要とされる処理です。
 
 ### CZMQ高級API
@@ -1350,13 +1350,233 @@ while (true) {
 
 ;Or, if you're calling zmq_poll(), test on the return code:
 
-また、zmq_poll()を呼び出す時は返り値を確認して下さい。
+あと、zmq_poll()を呼び出す時は返り値を確認して下さい。
 
 ~~~
 if (zmq_poll (items, 2, 1000 * 1000) == -1)
     break; // Interrupted
 ~~~
 
+;The previous example still uses zmq_poll(). So how about reactors? The CZMQ zloop reactor is simple but functional. It lets you:
+
+先ほどのサンプルコードではまだzmq_poll()を使用しています。
+リアクターはどうなったのでしょうか。
+CZMQのzloopリアクターは単純かつ機能的です。
+
+これは以下のことを行えます。
+
+;* Set a reader on any socket, i.e., code that is called whenever the socket has input.
+;* Cancel a reader on a socket.
+;* Set a timer that goes off once or multiple times at specific intervals.
+;* Cancel a timer.
+
+* ソケットに対して処理関数をセット出来ます。これはソケットにメッセージが到達した時に呼び出されるコードの事です。
+* ソケットと処理関数を取り外します。
+* 指定した間隔でタイムアウトを発生させるタイマーを設定出来ます。
+* タイマーのキャンセル出来ます。
+
+;zloop of course uses zmq_poll() internally. It rebuilds its poll set each time you add or remove readers, and it calculates the poll timeout to match the next timer. Then, it calls the reader and timer handlers for each socket and timer that need attention.
+
+zloopは内部的に`zmq_poll()`を利用しています。
+これは、処理関数を設定し、次のタイムアウト時間を計算してソケットの監視します。
+そして、処理関数と必要に応じてタイマー関数を呼び出します。
+
+;When we use a reactor pattern, our code turns inside out. The main logic looks like this:
+
+リアクターパターンを利用することで、ループが除去されます。
+メインループのコードはこんな風になるでしょう。
+
+~~~
+zloop_t *reactor = zloop_new ();
+zloop_reader (reactor, self->backend, s_handle_backend, self);
+zloop_start (reactor);
+zloop_destroy (&reactor);
+~~~
+
+;The actual handling of messages sits inside dedicated functions or methods. You may not like the style—it's a matter of taste. What it does help with is mixing timers and socket activity. In the rest of this text, we'll use zmq_poll() in simpler cases, and zloop in more complex examples.
+
+実際のメッセージ処理は指定した処理関数で行われます。
+このパターンはタイマー処理とソケットの処理が混ざっている場合に役立ちます。
+このスタイルが気に入らない場合もあるでしょうから好みに合わせて使用して下さい。
+この本では、単純なケースでは`zmq_poll()`を利用し、より複雑なケースではzloopを利用しています。
+
+;Here is the load balancing broker rewritten once again, this time to use zloop:
+以下の負荷分散ブローカーはzloopを利用して改めて書きなおしたものです。
+
+~~~ {caption="lbbroker3: Load balancing broker using zloop in C"}
+// Load-balancing broker
+// Demonstrates use of the CZMQ API and reactor style
+//
+// The client and worker tasks are identical from the previous example.
+
+#include "czmq.h"
+#define NBR_CLIENTS 10
+#define NBR_WORKERS 3
+#define WORKER_READY "\001" // Signals worker is ready
+
+// Basic request-reply client using REQ socket
+//
+static void *
+client_task (void *args)
+{
+    zctx_t *ctx = zctx_new ();
+    void *client = zsocket_new (ctx, ZMQ_REQ);
+    zsocket_connect (client, "ipc://frontend.ipc");
+
+    // Send request, get reply
+    while (true) {
+        zstr_send (client, "HELLO");
+        char *reply = zstr_recv (client);
+        if (!reply)
+            break;
+        printf ("Client: %s\n", reply);
+        free (reply);
+        sleep (1);
+    }
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+// Worker using REQ socket to do load-balancing
+//
+static void *
+worker_task (void *args)
+{
+    zctx_t *ctx = zctx_new ();
+    void *worker = zsocket_new (ctx, ZMQ_REQ);
+    zsocket_connect (worker, "ipc://backend.ipc");
+
+    // Tell broker we're ready for work
+    zframe_t *frame = zframe_new (WORKER_READY, 1);
+    zframe_send (&frame, worker, 0);
+
+    // Process messages as they arrive
+    while (true) {
+        zmsg_t *msg = zmsg_recv (worker);
+        if (!msg)
+            break; // Interrupted
+        //zframe_print (zmsg_last (msg), "Worker: ");
+        zframe_reset (zmsg_last (msg), "OK", 2);
+        zmsg_send (&msg, worker);
+    }
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+// Our load-balancer structure, passed to reactor handlers
+typedef struct {
+    void *frontend; // Listen to clients
+    void *backend; // Listen to workers
+    zlist_t *workers; // List of ready workers
+} lbbroker_t;
+
+// In the reactor design, each time a message arrives on a socket, the
+// reactor passes it to a handler function. We have two handlers; one
+// for the frontend, one for the backend:
+
+// Handle input from client, on frontend
+int s_handle_frontend (zloop_t *loop, zmq_pollitem_t *poller, void *arg)
+{
+    lbbroker_t *self = (lbbroker_t *) arg;
+    zmsg_t *msg = zmsg_recv (self->frontend);
+    if (msg) {
+        zmsg_wrap (msg, (zframe_t *) zlist_pop (self->workers));
+        zmsg_send (&msg, self->backend);
+
+        // Cancel reader on frontend if we went from 1 to 0 workers
+        if (zlist_size (self->workers) == 0) {
+            zmq_pollitem_t poller = { self->frontend, 0, ZMQ_POLLIN };
+            zloop_poller_end (loop, &poller);
+        }
+    }
+    return 0;
+}
+
+// Handle input from worker, on backend
+int s_handle_backend (zloop_t *loop, zmq_pollitem_t *poller, void *arg)
+{
+    // Use worker identity for load-balancing
+    lbbroker_t *self = (lbbroker_t *) arg;
+    zmsg_t *msg = zmsg_recv (self->backend);
+    if (msg) {
+        zframe_t *identity = zmsg_unwrap (msg);
+        zlist_append (self->workers, identity);
+
+        // Enable reader on frontend if we went from 0 to 1 workers
+        if (zlist_size (self->workers) == 1) {
+            zmq_pollitem_t poller = { self->frontend, 0, ZMQ_POLLIN };
+            zloop_poller (loop, &poller, s_handle_frontend, self);
+        }
+        // Forward message to client if it's not a READY
+        zframe_t *frame = zmsg_first (msg);
+        if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
+            zmsg_destroy (&msg);
+        else
+            zmsg_send (&msg, self->frontend);
+    }
+    return 0;
+}
+
+// And the main task now sets up child tasks, then starts its reactor.
+// If you press Ctrl-C, the reactor exits and the main task shuts down.
+// Because the reactor is a CZMQ class, this example may not translate
+// into all languages equally well.
+
+int main (void)
+{
+    zctx_t *ctx = zctx_new ();
+    lbbroker_t *self = (lbbroker_t *) zmalloc (sizeof (lbbroker_t));
+    self->frontend = zsocket_new (ctx, ZMQ_ROUTER);
+    self->backend = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_bind (self->frontend, "ipc://frontend.ipc");
+    zsocket_bind (self->backend, "ipc://backend.ipc");
+
+    int client_nbr;
+    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++)
+        zthread_new (client_task, NULL);
+    int worker_nbr;
+    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++)
+        zthread_new (worker_task, NULL);
+
+    // Queue of available workers
+    self->workers = zlist_new ();
+
+    // Prepare reactor and fire it up
+    zloop_t *reactor = zloop_new ();
+    zmq_pollitem_t poller = { self->backend, 0, ZMQ_POLLIN };
+    zloop_poller (reactor, &poller, s_handle_backend, self);
+    zloop_start (reactor);
+    zloop_destroy (&reactor);
+
+    // When we're done, clean up properly
+    while (zlist_size (self->workers)) {
+        zframe_t *frame = (zframe_t *) zlist_pop (self->workers);
+        zframe_destroy (&frame);
+    }
+    zlist_destroy (&self->workers);
+    zctx_destroy (&ctx);
+    free (self);
+    return 0;
+}
+~~~
+
+;Getting applications to properly shut down when you send them Ctrl-C can be tricky. If you use the zctx class it'll automatically set up signal handling, but your code still has to cooperate. You must break any loop if zmq_poll returns -1 or if any of the zstr_recv, zframe_recv, or zmsg_recv methods return NULL. If you have nested loops, it can be useful to make the outer ones conditional on !zctx_interrupted.
+
+Ctrl-Cを送信すると、アプリケーションは行儀よく終了します。
+`zctx_new()`でコンテキストを作成した場合、自動的にシグナルハンドラが設定されますので、アプリケーションはこれに連動しなければなりません。
+従来の方法だと、zmq_pollの返り値が-1であるかどうかや、zstr_recv, zframe_recv, zmsg_recvなどの返り値がNULLかどうかを確認しなければなりませんでしたがもはや必要ありません。
+ネストしたループがある場合には、zctx_interruptedを利用して割り込みを確認する事ができます。
+
+;If you're using child threads, they won't receive the interrupt. To tell them to shutdown, you can either:
+
+子スレッドでは、割り込みシグナルを受け取ることが出来ません。
+子スレッドに終了させるには以下の方法があります。
+
+;* Destroy the context, if they are sharing the same context, in which case any blocking calls they are waiting on will end with ETERM.
+;* Send them shutdown messages, if they are using their own contexts. For this you'll need some socket plumbing.
+
+* 共有しているコンテキストを破棄します。そうするとブロッキングしている処理がETERMを設定して戻ってきます。
+* 独自のコンテキストを利用している場合にはメッセージを送信して終了を通知します。もちろんソケット同士で接続しておく必要があります。
 
 ## 非同期クライアント・サーバーパターン
 
