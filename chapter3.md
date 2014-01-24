@@ -1795,10 +1795,73 @@ int main (void)
 ;Let's take everything we've seen so far, and scale things up to a real application. We'll build this step-by-step over several iterations. Our best client calls us urgently and asks for a design of a large cloud computing facility. He has this vision of a cloud that spans many data centers, each a cluster of clients and workers, and that works together as a whole. Because we're smart enough to know that practice always beats theory, we propose to make a working simulation using ØMQ. Our client, eager to lock down the budget before his own boss changes his mind, and having read great things about ØMQ on Twitter, agrees.
 
 それでは、これまで見てきたものを実際のアプリケーションに応用してみましょう。
-
+これらを一歩一歩説明しながら作っていきます。
+私達の顧客が緊急に私達を呼び出して大規模なクラウドコンピューティング施設を設計するように要求してきたとします。
+彼らは多くのデータセンターにわたって動作するクライアントとワーカーのクラスターが協調することで全体が機能するクラウドを構想しています。
+我々には理論に裏付けされた知識と経験が十分にあるので、私達はØMQを使用してシュミレーションを行うことを提案します。
+その顧客は自分の上司が心変わりする前に、Twitter上でのØMQの賞賛を読ませて予算を確保することに同意させます。
 
 ### Establishing the Details
-### Architecture of a Single Cluster
+;Several espressos later, we want to jump into writing code, but a little voice tells us to get more details before making a sensational solution to entirely the wrong problem. "What kind of work is the cloud doing?", we ask.
+
+エスプレッソでも飲んでコードを書き始めたいところですが、重大な問題が発生する前により詳細な要件を確認しろと心の中で何かが囁きます。
+そこで顧客に「クラウドでどんな事をやりたいのですか?」と尋ねます。
+
+;The client explains:
+
+顧客はこう答えます。
+
+;* Workers run on various kinds of hardware, but they are all able to handle any task. There are several hundred workers per cluster, and as many as a dozen clusters in total.
+;* Clients create tasks for workers. Each task is an independent unit of work and all the client wants is to find an available worker, and send it the task, as soon as possible. There will be a lot of clients and they'll come and go arbitrarily.
+;* The real difficulty is to be able to add and remove clusters at any time. A cluster can leave or join the cloud instantly, bringing all its workers and clients with it.
+;* If there are no workers in their own cluster, clients' tasks will go off to other available workers in the cloud.
+;* Clients send out one task at a time, waiting for a reply. If they don't get an answer within X seconds, they'll just send out the task again. This isn't our concern; the client API does it already.
+;* Workers process one task at a time; they are very simple beasts. If they crash, they get restarted by whatever script started them.
+
+* ワーカーは様々なハードウェアで動作し、あらゆる処理を行います。クラスターは数十個ほどあり、そのクラスター毎に数百ほどのワーカーを持っています。
+* クライアントは独立した処理タスクを生成し、即座に空いているワーカーを見つけてタスクを送信します。膨大な数のクライアントが存在し、任意のタイミングで増えたり減ったりもします。
+* 本当に難しい所は任意のタイミングでクラスターを追加したり外したり出来るようにすることです。クラスターは全てのワーカーとクライアントを引き連れて瞬時に追加したり外すことが出来なくてはなりません。
+* クラスターにワーカーが存在しない場合、クライアントの処理タスクは他のクラスターに存在するワーカーに送信します。
+* クライアントがひとつのタスクを送信すると、応答が返ってくるまで待ちます。一定時間待って応答が帰ってこなかった場合は再送します。これについてはクライアントのAPIが勝手に行ってくれるので特に何もする必要はありません。
+* ワーカーは1度にひとつのタスクしか処理しません。もしワーカーがクラッシュしてしまった場合は起動したスクリプトで再起動します。
+
+;So we double-check to make sure that we understood this correctly:
+
+これを正確に理解するために再確認します。
+
+;* "There will be some kind of super-duper network interconnect between clusters, right?", we ask. The client says, "Yes, of course, we're not idiots."
+;* "What kind of volumes are we talking about?", we ask. The client replies, "Up to a thousand clients per cluster, each doing at most ten requests per second. Requests are small, and replies are also small, no more than 1K bytes each."
+
+* 「そのクラスター間のネットワーク接続は十分高速なんでしょうね?」と尋ねます。「もちろん、そこまで我々は馬鹿じゃない」と顧客は言います。
+* 「通信料はどれくらいですか?」と尋ねます。「1クラスターあたりのクライアント数は最大1000台程度で、各クライアントはせいぜい秒間10リクエスト程度でしょう。リクエストと応答のサイズは小さく、1Kバイトを超えないでしょう。」と答えました。
+
+;So we do a little calculation and see that this will work nicely over plain TCP. 2,500 clients x 10/second x 1,000 bytes x 2 directions = 50MB/sec or 400Mb/sec, not a problem for a 1Gb network.
+
+これを聞いて私達は通常のTCPで上手く動作するか簡単に計算します。
+2,500 クライアント x 10/秒 x 1,000 バイト x 2 方向 = 50MB/秒 〜 400Mb/秒。1Gbネットワークで問題なさそうだ。
+
+;It's a straightforward problem that requires no exotic hardware or protocols, just some clever routing algorithms and careful design. We start by designing one cluster (one data center) and then we figure out how to connect clusters together.
+
+これは特別なハードウェアやプロトコルを利用しなければ簡単な問題です。
+ただし、特殊なルーティングアルゴリズムを使用する場合は注意して設計して下さい。
+まず1つのクラスター(データセンター)で設計し、続いて複数のクラスター間の接続方法を考えます。
+
+### 単一クラスターのアーキテクチャ
+;Workers and clients are synchronous. We want to use the load balancing pattern to route tasks to workers. Workers are all identical; our facility has no notion of different services. Workers are anonymous; clients never address them directly. We make no attempt here to provide guaranteed delivery, retry, and so on.
+
+ワーカーとクライアントは同期的に通信します。
+ここでは負荷分散パターンを利用してタスクをワーカーにルーティングします。
+ワーカーは全て同一のサービスを提供します。
+ワーカーは匿名であり、固定的なアドレスを持ちません。
+再試行を自動的に行いますので通信の保証については特に考えなくても良いでしょう。
+
+;For reasons we already examined, clients and workers won't speak to each other directly. It makes it impossible to add or remove nodes dynamically. So our basic model consists of the request-reply message broker we saw earlier.
+
+これまで検討してきたように、ノードの追加や削除が動的に行えなくなるのでクライアントとワーカーは直接通信しません。
+従ってこれまでに見てきたリクエスト・応答のメッセージブローカーを基本的なモデルとします。
+
+![クラスターのアーキテクチャ](images/fig39.eps)
+
 ### Scaling to Multiple Clusters
 ### Federation Versus Peering
 ### The Naming Ceremony
