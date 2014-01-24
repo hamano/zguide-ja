@@ -1579,8 +1579,224 @@ Ctrl-Cを送信すると、アプリケーションは行儀よく終了しま�
 * 独自のコンテキストを利用している場合にはメッセージを送信して終了を通知します。もちろんソケット同士で接続しておく必要があります。
 
 ## 非同期クライアント・サーバーパターン
+;In the ROUTER to DEALER example, we saw a 1-to-N use case where one server talks asynchronously to multiple workers. We can turn this upside down to get a very useful N-to-1 architecture where various clients talk to a single server, and do this asynchronously.
+
+ROUTERからDEALERに接続する例では、単一のサーバーが複数のワーカーに非同期で1対多の通信を行う例を見てきました。
+これとは逆に、複数のクライアントが単一のサーバーに非同期で通信を行う多対1のアーキテクチャも簡単に構築することが出来ます。
+
+![非同期なクライアント・サーバー](images/fig37.eps)
+
+;Here's how it works:
+
+これは以下のように機能します。
+
+;* Clients connect to the server and send requests.
+;* For each request, the server sends 0 or more replies.
+;* Clients can send multiple requests without waiting for a reply.
+;* Servers can send multiple replies without waiting for new requests.
+
+* クライアント側がサーバーに対してリクエストを送信します。
+* サーバーは各リクエストに対して、0以上の応答を返します。
+* クライアントは応答を待たずに複数のリクエストを送信することが出来ます。
+* サーバーは新しいリクエストを待たずに複数の応答を返すことが出来ます。
+
+;Here's code that shows how this works:
+
+以下にサンプルコードを示します。
+
+~~~ {caption="asyncsrv: Asynchronous client/server in C"}
+// Asynchronous client-to-server (DEALER to ROUTER)
+//
+// While this example runs in a single process, that is to make
+// it easier to start and stop the example. Each task has its own
+// context and conceptually acts as a separate process.
+
+#include "czmq.h"
+
+// This is our client task
+// It connects to the server, and then sends a request once per second
+// It collects responses as they arrive, and it prints them out. We will
+// run several client tasks in parallel, each with a different random ID.
+
+static void *
+client_task (void *args)
+{
+    zctx_t *ctx = zctx_new ();
+    void *client = zsocket_new (ctx, ZMQ_DEALER);
+
+    // Set random identity to make tracing easier
+    char identity [10];
+    sprintf (identity, "%04X-%04X", randof (0x10000), randof (0x10000));
+    zsocket_set_identity (client, identity);
+    zsocket_connect (client, "tcp://localhost:5570");
+
+    zmq_pollitem_t items [] = { { client, 0, ZMQ_POLLIN, 0 } };
+    int request_nbr = 0;
+    while (true) {
+        // Tick once per second, pulling in arriving messages
+        int centitick;
+        for (centitick = 0; centitick < 100; centitick++) {
+            zmq_poll (items, 1, 10 * ZMQ_POLL_MSEC);
+            if (items [0].revents & ZMQ_POLLIN) {
+                zmsg_t *msg = zmsg_recv (client);
+                zframe_print (zmsg_last (msg), identity);
+                zmsg_destroy (&msg);
+            }
+        }
+        zstr_send (client, "request #%d", ++request_nbr);
+    }
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+// This is our server task.
+// It uses the multithreaded server model to deal requests out to a pool
+// of workers and route replies back to clients. One worker can handle
+// one request at a time but one client can talk to multiple workers at
+// once.
+
+static void server_worker (void *args, zctx_t *ctx, void *pipe);
+
+void *server_task (void *args)
+{
+    // Frontend socket talks to clients over TCP
+    zctx_t *ctx = zctx_new ();
+    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_bind (frontend, "tcp://*:5570");
+
+    // Backend socket talks to workers over inproc
+    void *backend = zsocket_new (ctx, ZMQ_DEALER);
+    zsocket_bind (backend, "inproc://backend");
+
+    // Launch pool of worker threads, precise number is not critical
+    int thread_nbr;
+    for (thread_nbr = 0; thread_nbr < 5; thread_nbr++)
+        zthread_fork (ctx, server_worker, NULL);
+
+    // Connect backend to frontend via a proxy
+    zmq_proxy (frontend, backend, NULL);
+
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+// Each worker task works on one request at a time and sends a random number
+// of replies back, with random delays between replies:
+
+static void
+server_worker (void *args, zctx_t *ctx, void *pipe)
+{
+    void *worker = zsocket_new (ctx, ZMQ_DEALER);
+    zsocket_connect (worker, "inproc://backend");
+
+    while (true) {
+        // The DEALER socket gives us the reply envelope and message
+        zmsg_t *msg = zmsg_recv (worker);
+        zframe_t *identity = zmsg_pop (msg);
+        zframe_t *content = zmsg_pop (msg);
+        assert (content);
+        zmsg_destroy (&msg);
+
+        // Send 0..4 replies back
+        int reply, replies = randof (5);
+        for (reply = 0; reply < replies; reply++) {
+            // Sleep for some fraction of a second
+            zclock_sleep (randof (1000) + 1);
+            zframe_send (&identity, worker, ZFRAME_REUSE + ZFRAME_MORE);
+            zframe_send (&content, worker, ZFRAME_REUSE);
+        }
+        zframe_destroy (&identity);
+        zframe_destroy (&content);
+    }
+}
+
+// The main thread simply starts several clients and a server, and then
+// waits for the server to finish.
+
+int main (void)
+{
+    zthread_new (client_task, NULL);
+    zthread_new (client_task, NULL);
+    zthread_new (client_task, NULL);
+    zthread_new (server_task, NULL);
+    zclock_sleep (5 * 1000); // Run for 5 seconds then quit
+    return 0;
+}
+~~~
+
+;The example runs in one process, with multiple threads simulating a real multiprocess architecture. When you run the example, you'll see three clients (each with a random ID), printing out the replies they get from the server. Look carefully and you'll see each client task gets 0 or more replies per request.
+
+このサンプルコードは単一プロセスで動作しますが、ここでのマルチスレッドはマルチプロセスアーキテクチャをシミュレートしていると思って見て下さい。
+サンプルコードを実行すると、3つのクライアントはサーバーに対してリクエストを行い、応答を出力します。
+注意深く見ると、クライアントは0以上の応答を受け取っていることが分かるでしょう。
+
+;Some comments on this code:
+
+コードに補足すると、
+
+;* The clients send a request once per second, and get zero or more replies back. To make this work using zmq_poll(), we can't simply poll with a 1-second timeout, or we'd end up sending a new request only one second after we received the last reply. So we poll at a high frequency (100 times at 1/100th of a second per poll), which is approximately accurate.
+;* The server uses a pool of worker threads, each processing one request synchronously. It connects these to its frontend socket using an internal queue. It connects the frontend and backend sockets using a zmq_proxy() call.
+
+* クライアントは1秒毎に1つのリクエストを送信し、複数の応答を受け取ります。これにはzmq_poll()を利用しますが、単純に1秒のタイムアウトしまうと1秒間何も出来なくなってしまいますので、高頻度(100分の1秒に1回の頻度)でポーリングを行うようにします。
+* サーバーはワーカースレッドを複数用意していてリクエストを同期的に処理します。接続をフロントエンドソケットでキューイングし、zmq_proxy()を呼び出してバックエンドソケットに接続します。
+
+![非同期サーバーの詳細](images/fig38.eps)
+
+;Note that we're doing DEALER to ROUTER dialog between client and server, but internally between the server main thread and workers, we're doing DEALER to DEALER. If the workers were strictly synchronous, we'd use REP. However, because we want to send multiple replies, we need an async socket. We do not want to route replies, they always go to the single server thread that sent us the request.
+
+クライアントとサーバー間ではDEALER対ROUTERの通信を行っていますが、内部的なサーバーとワーカーの通信では、DEALER対DEALERの通信を行っていることに注意して下さい。
+もしワーカーが完全に同期的に動作する場合はREPソケットを利用するでしょう。
+しかしここでは複数の応答を行うために非同期なソケットが必要です。
+応答をルーティングするようなことはやりたくないので、単一のサーバーに対して応答を返すようにしてやります。
+
+;Let's think about the routing envelope. The client sends a message consisting of a single frame. The server thread receives a two-frame message (original message prefixed by client identity). We send these two frames on to the worker, which treats it as a normal reply envelope, returns that to us as a two frame message. We then use the first frame as an identity to route the second frame back to the client as a reply.
+
+ルーティングのエンベロープについて考えてみましょう。
+クライアントは単一のフレームからなるメッセージを送信し、サーバースレッドはクライアントのIDが付け加えられた2つのフレームを受信します。
+この2つのフレームをワーカーに送信すると、通常の応答エンベロープとして扱われ2つのフレームが返ってきます。そして最初のフレームはクライアントのIDとしてルーテイングし、後続のフレームをクライアントに応答します。
+
+;It looks something like this:
+
+以下の様になります
+
+~~~
+     client          server       frontend       worker
+   [ DEALER ]<---->[ ROUTER <----> DEALER <----> DEALER ]
+             1 part         2 parts       2 parts
+~~~
+
+;Now for the sockets: we could use the load balancing ROUTER to DEALER pattern to talk to workers, but it's extra work. In this case, a DEALER to DEALER pattern is probably fine: the trade-off is lower latency for each request, but higher risk of unbalanced work distribution. Simplicity wins in this case.
+
+ここでROUTERからDEALERへの負荷分散パターンをを利用することも出来ますが余計な作業が必要です。
+この場合では、各リクエストのレイテンシが少ないDEALERからDEALERへのパターンを利用するのが最も適切ではありますが、分散が平均化されないリスクがありますのでこれらがトレードオフになります。
+
+;When you build servers that maintain stateful conversations with clients, you will run into a classic problem. If the server keeps some state per client, and clients keep coming and going, eventually it will run out of resources. Even if the same clients keep connecting, if you're using default identities, each connection will look like a new one.
+
+クライアントとステートフルなやりとりを行うサーバーを構築する際、あなたは古典的な問題に遭遇するでしょう。
+サーバーがクライアント毎の状態を保持する場合、クライアントが接続を繰り返す内にリソースを食いつぶしてしまうという問題です。
+既定のIDを利用すると、こういう事になってしまいます。
+
+;We cheat in the above example by keeping state only for a very short time (the time it takes a worker to process a request) and then throwing away the state. But that's not practical for many cases. To properly manage client state in a stateful asynchronous server, you have to:
+
+これは短い時間だけ状態を保持し、一定の時間が経過した場合に状態を捨てることでこの問題を回避することが出来ます。
+しかしこれは多くの場合で実用的ではありません。
+ステートフルな非同期サーバーでは以下のようにしてクライアントの状態を適切に管理する必要があります。
+
+;* Do heartbeating from client to server. In our example, we send a request once per second, which can reliably be used as a heartbeat.
+;* Store state using the client identity (whether generated or explicit) as key.
+;* Detect a stopped heartbeat. If there's no request from a client within, say, two seconds, the server can detect this and destroy any state it's holding for that client.
+
+* クライアントからサーバーに対して定期的に疎通確認を行います。先ほどの例では1秒間に一度の疎通確認を行うことが出来ます。
+* クライアントIDをキーとして状態を保持します。
+* 疎通確認が失敗し、例えば2秒間クライアントからのリクエストが行われない場合は保持しているクライアントの状態を破棄します。
 
 ## Worked Example: Inter-Broker Routing
+
+;Let's take everything we've seen so far, and scale things up to a real application. We'll build this step-by-step over several iterations. Our best client calls us urgently and asks for a design of a large cloud computing facility. He has this vision of a cloud that spans many data centers, each a cluster of clients and workers, and that works together as a whole. Because we're smart enough to know that practice always beats theory, we propose to make a working simulation using ØMQ. Our client, eager to lock down the budget before his own boss changes his mind, and having read great things about ØMQ on Twitter, agrees.
+
+それでは、これまで見てきたものを実際のアプリケーションに応用してみましょう。
+
+
 ### Establishing the Details
 ### Architecture of a Single Cluster
 ### Scaling to Multiple Clusters
