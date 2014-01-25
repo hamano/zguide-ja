@@ -1862,7 +1862,84 @@ int main (void)
 
 ![クラスターのアーキテクチャ](images/fig39.eps)
 
-### Scaling to Multiple Clusters
+### 複数クラスターへの拡張
+;Now we scale this out to more than one cluster. Each cluster has a set of clients and workers, and a broker that joins these together.
+
+さて、複数のクラスターへ拡張してみましょう。
+各クラスターは接続されたクライアントとワーカーとブローカーで構成されます。
+
+![複数のクラスター](images/fig40.eps)
+
+;The question is: how do we get the clients of each cluster talking to the workers of the other cluster? There are a few possibilities, each with pros and cons:
+
+ここで問題です。クライアントはどの様にして他のクラスターに居るワーカーと通信すればよいのでしょうか。これには幾つかの方法があり、長所と短所があります。
+
+;* Clients could connect directly to both brokers. The advantage is that we don't need to modify brokers or workers. But clients get more complex and become aware of the overall topology. If we want to add a third or forth cluster, for example, all the clients are affected. In effect we have to move routing and failover logic into the clients and that's not nice.
+;* Workers might connect directly to both brokers. But REQ workers can't do that, they can only reply to one broker. We might use REPs but REPs don't give us customizable broker-to-worker routing like load balancing does, only the built-in load balancing. That's a fail; if we want to distribute work to idle workers, we precisely need load balancing. One solution would be to use ROUTER sockets for the worker nodes. Let's label this "Idea #1".
+;* Brokers could connect to each other. This looks neatest because it creates the fewest additional connections. We can't add clusters on the fly, but that is probably out of scope. Now clients and workers remain ignorant of the real network topology, and brokers tell each other when they have spare capacity. Let's label this "Idea #2".
+
+* クライアントを他のブローカーに直接接続する方法。これにはブローカーとワーカーを変更する必要がないという利点があります。しかしクライアントはトポロジーを意識する必要がありますのでより複雑になります。例えば3つ目、4つめのクラスターを追加する際に全てのクライアントが影響を受けます。これはルーティングやフェイルオーバーのロジックにも影響してしまうのであまり良くありません。
+* ワーカーが他のブローカに接続する方法。残念ながらREQソケットのワーカーは1つのブローカーにしか応答を返さないのでこれを行うことが出来ません。そこでREPソケットを使おうとするかもしれませんが、REPソケットは負荷分散を行うようなルーティング機能を提供していません。これでは空いているワーカーを探して分散する機能を実現できません。唯一の方法はROUTERソケットを利用することです。これをアイディア#1としておきます。
+* ブローカー同士を相互に接続する方法。これは接続数を少なくできるので賢い方法の様に見えます。クラスターを動的に追加することが難しくなりますが、これは許容範囲でしょう。クライアントとワーカーは実際のネットワークトポロジに関して何も知らなくて構いません。またブローカーはお互いの処理容量を教えあうことが可能です。これをアイディア#2とします。
+
+;Let's explore Idea #1. In this model, we have workers connecting to both brokers and accepting jobs from either one.
+
+アイディア#2について説明していきましょう。
+このモデルでは、ワーカーは2つのブローカーに接続してタスクを受け付けています。
+
+![アイディア#1: ワーカーのクロス接続](images/fig41.eps)
+
+;It looks feasible. However, it doesn't provide what we wanted, which was that clients get local workers if possible and remote workers only if it's better than waiting. Also workers will signal "ready" to both brokers and can get two jobs at once, while other workers remain idle. It seems this design fails because again we're putting routing logic at the edges.
+
+これはもっともな方法に見えますが私達が求めているものとは少し違います。
+クライアントはまずローカルクラスターのワーカーを利用し、これが利用できない場合にリモートクラスターのワーカーを使用して欲しいのです。また、ワーカーが2つのブローカーに対して「準備完了」シグナルを送信すると、同時に2つのタスクを受け取る可能性があります。どうやらこれは設計に失敗した様だ。
+
+;So, idea #2 then. We interconnect the brokers and don't touch the clients or workers, which are REQs like we're used to.
+
+ならばアイディア#2で行きます。
+ブローカー同士の相互接続しますが、クライアントとワーカーがREQソケットを利用していることには触れないで下さい。
+
+![アイディア#2: ブローカーの相互接続](images/fig42.eps)
+
+;This design is appealing because the problem is solved in one place, invisible to the rest of the world. Basically, brokers open secret channels to each other and whisper, like camel traders, "Hey, I've got some spare capacity. If you have too many clients, give me a shout and we'll deal".
+
+この設計は、全体を隠蔽化して局所的なクラスター内で自己完結している所が魅力的です。ブローカーは常時専用の回線で接続し、こんな風にお互いに囁き合っています。「おい、俺の処理容量は空きがあるぜ、そっちが忙しいようならこちらでタスクを引き受けるよ。」
+
+;In effect it is just a more sophisticated routing algorithm: brokers become subcontractors for each other. There are other things to like about this design, even before we play with real code:
+
+実際にはこれはブローカーがお互いに下請け業者となるという高度なルーティングアルゴリズムです。
+この設計にはまだまだ特徴があります。
+
+;* It treats the common case (clients and workers on the same cluster) as default and does extra work for the exceptional case (shuffling jobs between clusters).
+;* It lets us use different message flows for the different types of work. That means we can handle them differently, e.g., using different types of network connection.
+;* It feels like it would scale smoothly. Interconnecting three or more brokers doesn't get overly complex. If we find this to be a problem, it's easy to solve by adding a super-broker.
+
+* クライアントとワーカーは既定ではいつも通りの動作を行います。タスクが他のクラスタに問い合わせるような場合は例外的に特別な処理を行います。
+* 処理の種別に応じて異なるメッセージの経路を利用出来るようになります。これは異なるネットワーク接続を使い分ける事を意味しています。
+* 高い拡張性。3つ以上のブローカーを相互接続する場合は複雑になってきますが、もしこれが問題になる場合、超越的なブローカーを配置すれば良いでしょう。
+
+;We'll now make a worked example. We'll pack an entire cluster into one process. That is obviously not realistic, but it makes it simple to simulate, and the simulation can accurately scale to real processes. This is the beauty of ØMQ—you can design at the micro-level and scale that up to the macro-level. Threads become processes, and then become boxes and the patterns and logic remain the same. Each of our "cluster" processes contains client threads, worker threads, and a broker thread.
+
+それでは実際に動作するコードを書いてみましょう。
+ここでは1クラスターを1つのプロセスに押し込めます。
+これは現実的ではありませんが、単純なシミュレートだと思って下さい。
+このシミュレーションからマルチプロセスに拡張することは簡単です。
+ミクロのレベルで行った設計をマクロのレベルに拡張できる事こそがØMQの美学です。
+パターンやロジックはそのままで、スレッドをプロセスに移行し、さらに別サーバーで動作させることが可能です。
+これから作る「クラスター」プロセスにはクライアントスレッドとワーカースレッド、およびブローカースレッドが含まれています。
+
+;We know the basic model well by now:
+
+基本的なモデルは既に知っている通りです。
+
+;* The REQ client (REQ) threads create workloads and pass them to the broker (ROUTER).
+;* The REQ worker (REQ) threads process workloads and return the results to the broker (ROUTER).
+;* The broker queues and distributes workloads using the load balancing pattern.
+
+* REQクライアントスレッドはタスクを生成し、ブローカーに渡します。(REQソケットからROUTERソケットへ)
+* REQワーカースレッドはタスクを処理し、ブローカーに応答します。(REQソケットからROUTERソケットへ)
+* ブローカーはキューイングし、負荷分散パターンを利用してタスクを分散します。
+
 ### Federation Versus Peering
 ### The Naming Ceremony
 ### Prototyping the State Flow
