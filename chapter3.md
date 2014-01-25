@@ -1940,8 +1940,55 @@ int main (void)
 * REQワーカースレッドはタスクを処理し、ブローカーに応答します。(REQソケットからROUTERソケットへ)
 * ブローカーはキューイングし、負荷分散パターンを利用してタスクを分散します。
 
-### Federation Versus Peering
-### The Naming Ceremony
+### フェデレーションとピア接続
+;There are several possible ways to interconnect brokers. What we want is to be able to tell other brokers, "we have capacity", and then receive multiple tasks. We also need to be able to tell other brokers, "stop, we're full". It doesn't need to be perfect; sometimes we may accept jobs we can't process immediately, then we'll do them as soon as possible.
+
+ブローカーを相互接続するには幾つかの方法があります。
+私達が欲しいのは「自分の処理容量」を別のブローカに伝え、複数のタスクを受け取る機能です。
+また、別のブローカーに「もう一杯だ、送らないでくれ」とつらえる機能も必要です。
+これは完璧である必要はありません、タスクを受け付けたら可能な限り早く処理できれば良しとします。
+
+;The simplest interconnect is federation, in which brokers simulate clients and workers for each other. We would do this by connecting our frontend to the other broker's backend socket. Note that it is legal to both bind a socket to an endpoint and connect it to other endpoints.
+
+最も単純な相互接続を行う方法はフェデレーションモデルです。これはお互いにクライアントとワーカーをシミュレートします。
+これはブローカーのフロントエンドから、別のブローカーのバックエンドに接続することで実現します。
+この時ソケットがbindと接続の両方を行えるかどうかを確認して下さい。
+
+![フェデレーションモデルによる部ブローカーの相互接続](images/fig43.eps)
+
+;This would give us simple logic in both brokers and a reasonably good mechanism: when there are no clients, tell the other broker "ready", and accept one job from it. The problem is also that it is too simple for this problem. A federated broker would be able to handle only one task at a time. If the broker emulates a lock-step client and worker, it is by definition also going to be lock-step, and if it has lots of available workers they won't be used. Our brokers need to be connected in a fully asynchronous fashion.
+
+これは双方のブローカーにとって単純なロジックであり、そこそこ良いメカニズムです。
+ワーカーが居ない場合でも他のクラスターのブローカーが「準備完了」メッセージを通知し、タスクを受け付けます。
+唯一の問題はこれが単純すぎるという所です。
+フェデレーションのブローカーは一度に1つのタスクしか処理できません。
+ブローカーがロックステップなクライアントとワーカーをエミュレートするならば、ブローカーもそのままロックステップとなり、たとえ沢山のワーカーが居たとしても同時に利用することが出来ません。ブローカーは完全に非同期で接続する必要があります。
+
+;The federation model is perfect for other kinds of routing, especially service-oriented architectures (SOAs), which route by service name and proximity rather than load balancing or round robin. So don't dismiss it as useless, it's just not right for all use cases.
+
+フェデレーションモデルは様々な種類のルーティング、特にサービス指向アーキテクチャに最適です。サービス指向アーキテクチャは負荷分散ではなく、サービス種別に応じてルーティングを行います。
+ですので全ての用途に適応するわけではありませんが用途によっては有効です。
+
+;Instead of federation, let's look at a peering approach in which brokers are explicitly aware of each other and talk over privileged channels. Let's break this down, assuming we want to interconnect N brokers. Each broker has (N - 1) peers, and all brokers are using exactly the same code and logic. There are two distinct flows of information between brokers:
+
+フェデレーションではなくピア接続を行う方法を紹介します。
+この方法ではブローカーは特別な接続を通じてお互いを認識しています。
+詳しく言うと、N個のブローカーで相互接続を行いたい場合、(N - 1)個のピアが存在し、これらは同じコードで動作しています。
+この時、ブローカー同士の間で2種類の情報の流れが存在します。
+
+;* Each broker needs to tell its peers how many workers it has available at any time. This can be fairly simple information—just a quantity that is updated regularly. The obvious (and correct) socket pattern for this is pub-sub. So every broker opens a PUB socket and publishes state information on that, and every broker also opens a SUB socket and connects that to the PUB socket of every other broker to get state information from its peers.
+;* Each broker needs a way to delegate tasks to a peer and get replies back, asynchronously. We'll do this using ROUTER sockets; no other combination works. Each broker has two such sockets: one for tasks it receives and one for tasks it delegates. If we didn't use two sockets, it would be more work to know whether we were reading a request or a reply each time. That would mean adding more information to the message envelope.
+
+* 各ブローカーは常にピアに対して自信の処理容量(ワーカーの数)を通知する必要があります。これはワーカーの数に変更が有った場合のみ通知される単純な情報になるでしょう。この様な用途に適したソケットパターンはpub-subです。ですから全てのブローカーはSUBソケットを利用して、各ブローカーのPUBソケットに接続してピアから情報を受け取ることになるます。
+* 各ブローカーはタスクを非同期でピアに委託し、応答を受け取る必要があります。これにははROUTERソケットを利用します。これ以外の選択肢は無いでしょう。ここでブローカーは2種類のソケットを扱うことになります。ひとつはタスクを受信するためのソケットでもうひとつはタスクを委任するためのソケットです。2つのソケットを利用しない場合は幾つかの作業が必要です。この場合メッセージエンベロープに付加的な情報を追加する必要があるでしょう。
+
+;And there is also the flow of information between a broker and its local clients and workers.
+
+もちろんこの情報の流れに加えて、クラスター内のワーカーとクライアントとの接続もあります。
+
+### 命名の儀式
+
+
 ### Prototyping the State Flow
 ### Prototyping the Local and Cloud Flows
 ### Putting it All Together
