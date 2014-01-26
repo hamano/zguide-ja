@@ -1974,7 +1974,7 @@ int main (void)
 フェデレーションではなくピア接続を行う方法を紹介します。
 この方法ではブローカーは特別な接続を通じてお互いを認識しています。
 詳しく言うと、N個のブローカーで相互接続を行いたい場合、(N - 1)個のピアが存在し、これらは同じコードで動作しています。
-この時、ブローカー同士の間で2種類の情報の流れが存在します。
+この時、ブローカー同士の間で2種類の情報の経路が存在します。
 
 ;* Each broker needs to tell its peers how many workers it has available at any time. This can be fairly simple information—just a quantity that is updated regularly. The obvious (and correct) socket pattern for this is pub-sub. So every broker opens a PUB socket and publishes state information on that, and every broker also opens a SUB socket and connects that to the PUB socket of every other broker to get state information from its peers.
 ;* Each broker needs a way to delegate tasks to a peer and get replies back, asynchronously. We'll do this using ROUTER sockets; no other combination works. Each broker has two such sockets: one for tasks it receives and one for tasks it delegates. If we didn't use two sockets, it would be more work to know whether we were reading a request or a reply each time. That would mean adding more information to the message envelope.
@@ -1984,11 +1984,70 @@ int main (void)
 
 ;And there is also the flow of information between a broker and its local clients and workers.
 
-もちろんこの情報の流れに加えて、クラスター内のワーカーとクライアントとの接続もあります。
+もちろんこれらの情報の経路に加えて、クラスター内のワーカーとクライアントとの接続もあります。
 
 ### 命名の儀式
+;Three flows x two sockets for each flow = six sockets that we have to manage in the broker. Choosing good names is vital to keeping a multisocket juggling act reasonably coherent in our minds. Sockets do something and what they do should form the basis for their names. It's about being able to read the code several weeks later on a cold Monday morning before coffee, and not feel any pain.
 
+3つの通信経路×2ソケットという事でブローカーは合計6つのソケットを管理する必要があります。
+多くのソケットを扱う際に混乱しないようにするためには良い名前を付けることが不可欠です。
+ソケットが何を行い、どの様な役割を持っているかを元に名前を決定します。
+そうしなければ後々寒い月曜の朝に苦んでコードを読むことになるでしょう。
+
+;Let's do a shamanistic naming ceremony for the sockets. The three flows are:
+
+それでは、ソケットの命名の儀式を行いましょう。
+3つの通信経路は、
+
+;* A local request-reply flow between the broker and its clients and workers.
+;* A cloud request-reply flow between the broker and its peer brokers.
+;* A state flow between the broker and its peer brokers.
+
+* ブローカーとクライアント、ワーカーの間でリクエスト・応答を行う通信経路を「local」と呼びます。
+* ブローカー同士の間でリクエスト・応答を行う通信経路を「cloud」と呼びます。
+* ブローカー同士で状態を通知する通信経路を「state」と呼びます。
+
+;Finding meaningful names that are all the same length means our code will align nicely. It's not a big thing, but attention to details helps. For each flow the broker has two sockets that we can orthogonally call the frontend and backend. We've used these names quite often. A frontend receives information or tasks. A backend sends those out to other peers. The conceptual flow is from front to back (with replies going in the opposite direction from back to front).
+
+同じ長さの名前を付けるとコードがキレイに整うのでいい感じです。
+これは些細なことですが、細部への気配りです。
+ブローカーは各通信経路毎にそれぞれフロントエンドとバックエンドソケットを持ちます。
+フロントエンドからは状態やタスクを受信し、バックエンドにこれらを送信します。
+リクエストはフロントエンドからバックエンドへ、応答はバックエンドからフロントへ返されると考えて下さい。
+
+;So in all the code we write for this tutorial, we will use these socket names:
+
+という訳でこのチュートリアルでは以下のソケット名を使用します。
+
+;* localfe and localbe for the local flow.
+;* cloudfe and cloudbe for the cloud flow.
+;* statefe and statebe for the state flow.
+
+* 「local」の通信経路で利用するソケットは「localfe」と「localbe」
+* 「cloud」の通信経路で利用するソケットは「cloudfe」と「cloudbe」
+* 「state」の通信経路で利用するソケットは「statefe」と「statebe」
+
+;For our transport and because we're simulating the whole thing on one box, we'll use ipc for everything. This has the advantage of working like tcp in terms of connectivity (i.e., it's a disconnected transport, unlike inproc), yet we don't need IP addresses or DNS names, which would be a pain here. Instead, we will use ipc endpoints called something-local, something-cloud, and something-state, where something is the name of our simulated cluster.
+
+ここでは1サーバーで全てをシミュレートしているので、通信方式は全てIPC(プロセス間通信)を利用します。
+これはTCPで言う所の接続性を持ち、IPアドレスやDNS名を必要としません。
+そして、ここではエンドポイントを呼ぶ時はシミュレートするクラスター名を付けて〜のlocal、〜のcloud、〜のstateという言い方をします。
+
+;You might be thinking that this is a lot of work for some names. Why not call them s1, s2, s3, s4, etc.? The answer is that if your brain is not a perfect machine, you need a lot of help when reading code, and we'll see that these names do help. It's easier to remember "three flows, two directions" than "six different sockets".
+
+ソケットに名前を付ける作業が面倒になって、単純にS1, S2, S3, S4で良いのではないかと考えていませんか?
+あなたの脳は完璧な機械ではありませんのでコードを読むときには名前による手助けが必要です。
+「6種類のソケット」と覚えるより、「3つの経路と、2つの方向性」と覚える方が簡単でしょう。
+
+![ブローカーが利用するソケット](images/fig44.eps)
+
+;Note that we connect the cloudbe in each broker to the cloudfe in every other broker, and likewise we connect the statebe in each broker to the statefe in every other broker.
+
+各ブローカーのcloudbeソケットは、他のブローカーのcloudfeソケットに対して接続を行い、これと同様にstatebeソケットで、他のブローカのstatefeソケットに接続を行っています。
 
 ### Prototyping the State Flow
+
+
+
 ### Prototyping the Local and Cloud Flows
 ### Putting it All Together
