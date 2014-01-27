@@ -1954,7 +1954,7 @@ int main (void)
 これはブローカーのフロントエンドから、別のブローカーのバックエンドに接続することで実現します。
 この時ソケットがbindと接続の両方を行えるかどうかを確認して下さい。
 
-![フェデレーションモデルによる部ブローカーの相互接続](images/fig43.eps)
+![フェデレーションモデルによるブローカーの相互接続](images/fig43.eps)
 
 ;This would give us simple logic in both brokers and a reasonably good mechanism: when there are no clients, tell the other broker "ready", and accept one job from it. The problem is also that it is too simple for this problem. A federated broker would be able to handle only one task at a time. If the broker emulates a lock-step client and worker, it is by definition also going to be lock-step, and if it has lots of available workers they won't be used. Our brokers need to be connected in a fully asynchronous fashion.
 
@@ -2011,7 +2011,7 @@ int main (void)
 
 同じ長さの名前を付けるとコードがキレイに整うのでいい感じです。
 これは些細なことですが、細部への気配りです。
-ブローカーは各通信経路毎にそれぞれフロントエンドとバックエンドソケットを持ちます。
+ブローカーは各通信経路にそれぞれフロントエンドとバックエンドソケットを持ちます。
 フロントエンドからは状態やタスクを受信し、バックエンドにこれらを送信します。
 リクエストはフロントエンドからバックエンドへ、応答はバックエンドからフロントへ返されると考えて下さい。
 
@@ -2165,7 +2165,7 @@ peering1 DC3 DC1 DC2  #  Start DC3 and connect to DC1 and DC2
 また、ワーカーの数に更新があった場合にメインスレッドから子スレッドに通知を行い、定期的なメッセージと合わせて送信しても良いでしょう。
 これ以上事はここでは取り上げません。
 
-### ローカル経路とクラウド経路の実装
+### タスクの通信経路を実装
 ;Let's now prototype at the flow of tasks via the local and cloud sockets. This code pulls requests from clients and then distributes them to local workers and cloud peers on a random basis.
 
 では、localやcloudソケットを経由するタスクの経路を実装してみましょう。
@@ -2173,6 +2173,291 @@ peering1 DC3 DC1 DC2  #  Start DC3 and connect to DC1 and DC2
 
 ![タスクの通信経路](images/fig46.eps)
 
+;Before we jump into the code, which is getting a little complex, let's sketch the core routing logic and break it down into a simple yet robust design.
 
+コードが若干複雑になってきているので、まずはルーティングのロジックの整理して設計を掘り下げてみましょう。
+
+;We need two queues, one for requests from local clients and one for requests from cloud clients. One option would be to pull messages off the local and cloud frontends, and pump these onto their respective queues. But this is kind of pointless because ØMQ sockets are queues already. So let's use the ØMQ socket buffers as queues.
+
+ローカルのクライアントと他のクラウドからのリクエストを受け付けるために2つのソケットが必要です。
+ローカルとクラウドから受信したメッセージを個別のキューに格納する必要がありますが、ØMQソケットは既にキューになっているので特に配慮する必要はありません。
+
+;This was the technique we used in the load balancing broker, and it worked nicely. We only read from the two frontends when there is somewhere to send the requests. We can always read from the backends, as they give us replies to route back. As long as the backends aren't talking to us, there's no point in even looking at the frontends.
+
+これは負荷分散ブローカーで利用したテクニックですね。
+今回は2つフロントエンドソケットから読み込んだメッセージをバックエンドに送信し、2つのバックエンドソケットから読み込んだメッセージをフロントエンドにルーティングします。
+また、バックエンドが接続してきていない場合は、フロントエンドのソケットを監視する必要は無いでしょう。
+
+;So our main loop becomes:
+
+メインループはこんな風になります。
+
+;* Poll the backends for activity. When we get a message, it may be "ready" from a worker or it may be a reply. If it's a reply, route back via the local or cloud frontend.
+;* If a worker replied, it became available, so we queue it and count it.
+;* While there are workers available, take a request, if any, from either frontend and route to a local worker, or randomly, to a cloud peer.
+
+* バックエンドのソケットを監視してメッセージを受信します。これが「準備完了」メッセージであればなにもしません、そうでなければフロントエンドのlocalまたはcloudにルーティングして応答します。
+* ワーカーからのメッセージ届けば、そのワーカーは空きになったと言えるのでキューに入れてカウントします。
+* フロントエンドからのリクエストを受け付けた時、ワーカーの空きがあれば、ローカルのワーカーか、他のクラウドのどちらかをランダムに選んでルーティングします。
+
+;Randomly sending tasks to a peer broker rather than a worker simulates work distribution across the cluster. It's dumb, but that is fine for this stage.
+
+他のブローカーをワーカーと見なして分散させるのではなく、単純にランダムで選択するというのはあまり賢く無いですが、ここではこれで行きます。
+
+;We use broker identities to route messages between brokers. Each broker has a name that we provide on the command line in this simple prototype. As long as these names don't overlap with the ØMQ-generated UUIDs used for client nodes, we can figure out whether to route a reply back to a client or to a broker.
+
+ブローカーはそれぞれのブローカー間でメッセージのルーティングを行うためにIDを持っており、このIDはコマンドラインで指定しています。
+このIDはクライアントノードが生成するUUIDと重複しないように注意して下さい。
+もし重複してしまったら、クライアントに返すべき応答がブローカーにルーティングされてしまいます。
+
+;Here is how this works in code. The interesting part starts around the comment "Interesting part".
+
+ここからが実際に動作するコードです。
+注目に値する部分は、「ここからが面白い」とコメントで書いてあります。
+
+~~~ {caption="peering2: Prototype local and cloud flow in C"}
+// Broker peering simulation (part 2)
+// Prototypes the request-reply flow
+
+#include "czmq.h"
+#define NBR_CLIENTS 10
+#define NBR_WORKERS 3
+#define WORKER_READY "\001" // Signals worker is ready
+
+// Our own name; in practice this would be configured per node
+static char *self;
+
+// The client task does a request-reply dialog using a standard
+// synchronous REQ socket:
+
+static void *
+client_task (void *args)
+{
+    zctx_t *ctx = zctx_new ();
+    void *client = zsocket_new (ctx, ZMQ_REQ);
+    zsocket_connect (client, "ipc://%s-localfe.ipc", self);
+
+    while (true) {
+        // Send request, get reply
+        zstr_send (client, "HELLO");
+        char *reply = zstr_recv (client);
+        if (!reply)
+            break; // Interrupted
+        printf ("Client: %s\n", reply);
+        free (reply);
+        sleep (1);
+    }
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+// The worker task plugs into the load-balancer using a REQ
+// socket:
+
+static void *
+worker_task (void *args)
+{
+    zctx_t *ctx = zctx_new ();
+    void *worker = zsocket_new (ctx, ZMQ_REQ);
+    zsocket_connect (worker, "ipc://%s-localbe.ipc", self);
+
+    // Tell broker we're ready for work
+    zframe_t *frame = zframe_new (WORKER_READY, 1);
+    zframe_send (&frame, worker, 0);
+
+    // Process messages as they arrive
+    while (true) {
+        zmsg_t *msg = zmsg_recv (worker);
+        if (!msg)
+            break; // Interrupted
+
+        zframe_print (zmsg_last (msg), "Worker: ");
+        zframe_reset (zmsg_last (msg), "OK", 2);
+        zmsg_send (&msg, worker);
+    }
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+// The main task begins by setting-up its frontend and backend sockets
+// and then starting its client and worker tasks:
+
+int main (int argc, char *argv [])
+{
+    // First argument is this broker's name
+    // Other arguments are our peers' names
+    //
+    if (argc < 2) {
+        printf ("syntax: peering2 me {you}…\n");
+        return 0;
+    }
+    self = argv [1];
+    printf ("I: preparing broker at %s…\n", self);
+    srandom ((unsigned) time (NULL));
+
+    zctx_t *ctx = zctx_new ();
+
+    // Bind cloud frontend to endpoint
+    void *cloudfe = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_set_identity (cloudfe, self);
+    zsocket_bind (cloudfe, "ipc://%s-cloud.ipc", self);
+
+    // Connect cloud backend to all peers
+    void *cloudbe = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_set_identity (cloudbe, self);
+    int argn;
+    for (argn = 2; argn < argc; argn++) {
+        char *peer = argv [argn];
+        printf ("I: connecting to cloud frontend at '%s'\n", peer);
+        zsocket_connect (cloudbe, "ipc://%s-cloud.ipc", peer);
+    }
+    // Prepare local frontend and backend
+    void *localfe = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_bind (localfe, "ipc://%s-localfe.ipc", self);
+    void *localbe = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_bind (localbe, "ipc://%s-localbe.ipc", self);
+
+    // Get user to tell us when we can start…
+    printf ("Press Enter when all brokers are started: ");
+    getchar ();
+
+    // Start local workers
+    int worker_nbr;
+    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++)
+        zthread_new (worker_task, NULL);
+
+    // Start local clients
+    int client_nbr;
+    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++)
+        zthread_new (client_task, NULL);
+
+    // ここからが面白い
+    // Here, we handle the request-reply flow. We're using load-balancing
+    // to poll workers at all times, and clients only when there are one //
+    // or more workers available.//
+
+    // Least recently used queue of available workers
+    int capacity = 0;
+    zlist_t *workers = zlist_new ();
+
+    while (true) {
+        // First, route any waiting replies from workers
+        zmq_pollitem_t backends [] = {
+            { localbe, 0, ZMQ_POLLIN, 0 },
+            { cloudbe, 0, ZMQ_POLLIN, 0 }
+        };
+        // If we have no workers, wait indefinitely
+        int rc = zmq_poll (backends, 2,
+        capacity? 1000 * ZMQ_POLL_MSEC: -1);
+        if (rc == -1)
+        break; // Interrupted
+
+        // Handle reply from local worker
+        zmsg_t *msg = NULL;
+        if (backends [0].revents & ZMQ_POLLIN) {
+            msg = zmsg_recv (localbe);
+            if (!msg)
+                break; // Interrupted
+            zframe_t *identity = zmsg_unwrap (msg);
+            zlist_append (workers, identity);
+            capacity++;
+
+         // If it's READY, don't route the message any further
+         zframe_t *frame = zmsg_first (msg);
+         if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
+             zmsg_destroy (&msg);
+    }
+    // Or handle reply from peer broker
+    else
+    if (backends [1].revents & ZMQ_POLLIN) {
+        msg = zmsg_recv (cloudbe);
+        if (!msg)
+            break; // Interrupted
+        // We don't use peer broker identity for anything
+        zframe_t *identity = zmsg_unwrap (msg);
+        zframe_destroy (&identity);
+    }
+    // Route reply to cloud if it's addressed to a broker
+    for (argn = 2; msg && argn < argc; argn++) {
+        char *data = (char *) zframe_data (zmsg_first (msg));
+        size_t size = zframe_size (zmsg_first (msg));
+        if (size == strlen (argv [argn])
+            && memcmp (data, argv [argn], size) == 0)
+            zmsg_send (&msg, cloudfe);
+    }
+    // Route reply to client if we still need to
+    if (msg)
+        zmsg_send (&msg, localfe);
+
+    // Now we route as many client requests as we have worker capacity
+    // for. We may reroute requests from our local frontend, but not from //
+    // the cloud frontend. We reroute randomly now, just to test things
+    // out. In the next version, we'll do this properly by calculating
+    // cloud capacity://
+
+    while (capacity) {
+        zmq_pollitem_t frontends [] = {
+            { localfe, 0, ZMQ_POLLIN, 0 },
+            { cloudfe, 0, ZMQ_POLLIN, 0 }
+        };
+        rc = zmq_poll (frontends, 2, 0);
+        assert (rc >= 0);
+        int reroutable = 0;
+        // We'll do peer brokers first, to prevent starvation
+        if (frontends [1].revents & ZMQ_POLLIN) {
+            msg = zmsg_recv (cloudfe);
+            reroutable = 0;
+        }
+        else
+        if (frontends [0].revents & ZMQ_POLLIN) {
+            msg = zmsg_recv (localfe);
+            reroutable = 1;
+        }
+        else
+            break; // No work, go back to backends
+
+        // If reroutable, send to cloud 20% of the time
+        // Here we'd normally use cloud status information
+        //
+        if (reroutable && argc > 2 && randof (5) == 0) {
+            // Route to random broker peer
+            int peer = randof (argc - 2) + 2;
+            zmsg_pushmem (msg, argv [peer], strlen (argv [peer]));
+            zmsg_send (&msg, cloudbe);
+        }
+        else {
+            zframe_t *frame = (zframe_t *) zlist_pop (workers);
+            zmsg_wrap (msg, frame);
+            zmsg_send (&msg, localbe);
+            capacity--;
+        }
+    }
+}
+~~~
+
+;Run this by, for instance, starting two instances of the broker in two windows:
+
+これを試すには、ターミナルを2つ開いて2つのインスタンスを起動して下さい。
+
+~~~
+peering2 me you
+peering2 you me
+~~~
+
+;Some comments on this code:
+
+少し解説しておくと、
+
+;* In the C code at least, using the zmsg class makes life much easier, and our code much shorter. It's obviously an abstraction that works. If you build ØMQ applications in C, you should use CZMQ.
+;* Because we're not getting any state information from peers, we naively assume they are running. The code prompts you to confirm when you've started all the brokers. In the real case, we'd not send anything to brokers who had not told us they exist.
+
+* C言語の場合、機能を抽象化したzmsg_関数を利用することで短くて簡潔なコードになります。これをビルドするには、CZMQライブラリとリンクする必要があります。
+* ピアブローカーからの状態情報が送られて来ない場合でも、普通に動作していると仮定してしまいますので、コードの最初で全てのブローカーが起動しているかどうかを確認しています。実際にはブローカーが何も言わなくなった時は、タスクを送信しないようにしてやると良いでしょう。
+
+;You can satisfy yourself that the code works by watching it run forever. If there were any misrouted messages, clients would end up blocking, and the brokers would stop printing trace information. You can prove that by killing either of the brokers. The other broker tries to send requests to the cloud, and one-by-one its clients block, waiting for an answer.
+
+あなたは動き続けているコードを眺めて満足するでしょう。
+もしもメッセージが誤った経路で流れると、クライアントは停止してブローカーはトレース情報を出力しなくなるでしょう。
+クライアントは応答が返ってくるまで待ち続けてしまいますので、こうなった場合はクライアントとブローカーを再起動するしかありません。
 
 ### Putting it All Together
