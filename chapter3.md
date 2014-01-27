@@ -2045,9 +2045,134 @@ int main (void)
 
 各ブローカーのcloudbeソケットは、他のブローカーのcloudfeソケットに対して接続を行い、これと同様にstatebeソケットで、他のブローカのstatefeソケットに接続を行っています。
 
-### Prototyping the State Flow
+### 状態通知の実装(Prototyping the State Flow)
+;Because each socket flow has its own little traps for the unwary, we will test them in real code one-by-one, rather than try to throw the whole lot into code in one go. When we're happy with each flow, we can put them together into a full program. We'll start with the state flow.
+
+ソケットの通信経路には所々罠が仕掛けられていますので全てのコードが出来上がるのを待たず、ひとつずつテストを行っていきます。
+各経路で問題がないことを確認してからプログラム全体で動作確認を行います。
+ここでは状態通知経路を実装します。
+
+![状態通知経路](images/fig45.eps)
+
+;Here is how this works in code:
+
+これがコードです。
+
+~~~ {caption="peering1: Prototype state flow in C"}
+// Broker peering simulation (part 1)
+// Prototypes the state flow
+
+#include "czmq.h"
+
+int main (int argc, char *argv [])
+{
+    // First argument is this broker's name
+    // Other arguments are our peers' names
+    //
+    if (argc < 2) {
+        printf ("syntax: peering1 me {you}…\n");
+        return 0;
+    }
+    char *self = argv [1];
+    printf ("I: preparing broker at %s…\n", self);
+    srandom ((unsigned) time (NULL));
+
+    zctx_t *ctx = zctx_new ();
+
+    // Bind state backend to endpoint
+    void *statebe = zsocket_new (ctx, ZMQ_PUB);
+    zsocket_bind (statebe, "ipc://%s-state.ipc", self);
+
+    // Connect statefe to all peers
+    void *statefe = zsocket_new (ctx, ZMQ_SUB);
+    zsocket_set_subscribe (statefe, "");
+    int argn;
+    for (argn = 2; argn < argc; argn++) {
+        char *peer = argv [argn];
+        printf ("I: connecting to state backend at '%s'\n", peer);
+        zsocket_connect (statefe, "ipc://%s-state.ipc", peer);
+    }
+    // The main loop sends out status messages to peers, and collects
+    // status messages back from peers. The zmq_poll timeout defines
+    // our own heartbeat:
+
+    while (true) {
+        // Poll for activity, or 1 second timeout
+        zmq_pollitem_t items [] = { { statefe, 0, ZMQ_POLLIN, 0 } };
+        int rc = zmq_poll (items, 1, 1000 * ZMQ_POLL_MSEC);
+        if (rc == -1)
+            break; // Interrupted
+
+        // Handle incoming status messages
+        if (items [0].revents & ZMQ_POLLIN) {
+            char *peer_name = zstr_recv (statefe);
+            char *available = zstr_recv (statefe);
+            printf ("%s - %s workers free\n", peer_name, available);
+            free (peer_name);
+            free (available);
+        }
+        else {
+            // Send random values for worker availability
+            zstr_sendm (statebe, self);
+            zstr_send (statebe, "%d", randof (10));
+        }
+    }
+    zctx_destroy (&ctx);
+    return EXIT_SUCCESS;
+}
+~~~
+
+;Notes about this code:
+
+このコードの注意点は、
+
+;* Each broker has an identity that we use to construct ipc endpoint names. A real broker would need to work with TCP and a more sophisticated configuration scheme. We'll look at such schemes later in this book, but for now, using generated ipc names lets us ignore the problem of where to get TCP/IP addresses or names.
+;* We use a zmq_poll() loop as the core of the program. This processes incoming messages and sends out state messages. We send a state message only if we did not get any incoming messages and we waited for a second. If we send out a state message each time we get one in, we'll get message storms.
+;* We use a two-part pub-sub message consisting of sender address and data. Note that we will need to know the address of the publisher in order to send it tasks, and the only way is to send this explicitly as a part of the message.
+;* We don't set identities on subscribers because if we did then we'd get outdated state information when connecting to running brokers.
+;* We don't set a HWM on the publisher, but if we were using ØMQ v2.x that would be a wise idea.
+
+* 各ブローカーはIPCエンドポイントの名前に利用するIDを持っています。実際にはTCPなどの別の通信方法が利用され、アドレスは設定ファイルなどから読み込むでしょう。これについては本書の後のほうで出てきますので、ひとまずここはIPCを利用します。
+* プログラムの主要な部分は`zmq_poll()`ループです。ここで受信したメッセージを処理し、状態情報を配信しています。メッセージを受信せず、1秒が経過した場合にのみ状態情報を配信します。もしも1つのメッセージを受信する度にメッセージを送信した場合、メッセージの嵐が発生するでしょう。
+* 状態を通知するためのpub-subメッセージは、送信者のアドレスとデータからなる2つのメッセージフレームで構成します。送信者のアドレスはタスクを送信するために必要なものです。
+* 既に動作しているブローカに接続した際に、古い状態情報を取得してしまう可能性があるので、ソケットにサブスクライバーのIDは設定していません。
+* ここではHWMを設定していませんが、もしØMQ v2.xを使用しているのであれば設定したほうが良いでしょう。
+
+;We can build this little program and run it three times to simulate three clusters. Let's call them DC1, DC2, and DC3 (the names are arbitrary). We run these three commands, each in a separate window:
+
+このプログラムをビルドしたら3回実行して3つのクラスターをシミュレートします。
+何でも構いませんがここではそれぞれのクラスターをDC1, DC2, DC3と呼びます。
+3つのターミナルを開いて以下のコマンドを実行してみましょう。
+
+~~~
+peering1 DC1 DC2 DC3  #  Start DC1 and connect to DC2 and DC3
+peering1 DC2 DC1 DC3  #  Start DC2 and connect to DC1 and DC3
+peering1 DC3 DC1 DC2  #  Start DC3 and connect to DC1 and DC2
+~~~
+
+;You'll see each cluster report the state of its peers, and after a few seconds they will all happily be printing random numbers once per second. Try this and satisfy yourself that the three brokers all match up and synchronize to per-second state updates.
+
+各クラスターは1秒毎に接続相手の仮の状態情報を出力します。実際にこれを試してみて、3つのブローカーが1秒間隔で状態情報を同期できていることを確認してみましょう。
+
+;In real life, we'd not send out state messages at regular intervals, but rather whenever we had a state change, i.e., whenever a worker becomes available or unavailable. That may seem like a lot of traffic, but state messages are small and we've established that the inter-cluster connections are super fast.
+
+実際には、一定間隔で状態メッセージを送信するのではなく、ワーカーに増減が有った場合などの状態に変更があった場合のみ送信したいと思うかもしれません。
+しかしこのメッセージは十分小さく、クラスター間の接続十分速い事は確認しましたので気する必要はないでしょう。
+
+;If we wanted to send state messages at precise intervals, we'd create a child thread and open the statebe socket in that thread. We'd then send irregular state updates to that child thread from our main thread and allow the child thread to conflate them into regular outgoing messages. This is more work than we need here.
+
+もし、状態メッセージ正確な間隔で送信したい場合は子スレッドを生成してstatebeソケットを扱えば良いでしょう。
+また、ワーカーの数に更新があった場合にメインスレッドから子スレッドに通知を行い、定期的なメッセージと合わせて送信しても良いでしょう。
+これ以上事はここでは取り上げません。
+
+### ローカル経路とクラウド経路の実装
+;Let's now prototype at the flow of tasks via the local and cloud sockets. This code pulls requests from clients and then distributes them to local workers and cloud peers on a random basis.
+
+では、localやcloudソケットを経由するタスクの経路を実装してみましょう。
+このコードはクライアントから受信したタスクを、ローカルのワーカーや別のクラウドに分散して送信します。ここでは仮にランダムに送信先を決定します。
+
+![タスクの通信経路](images/fig46.eps)
 
 
 
-### Prototyping the Local and Cloud Flows
 ### Putting it All Together
