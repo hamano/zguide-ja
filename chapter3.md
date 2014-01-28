@@ -1790,8 +1790,7 @@ int main (void)
 * クライアントIDをキーとして状態を保持します。
 * 疎通確認が失敗し、例えば2秒間クライアントからのリクエストが行われない場合は保持しているクライアントの状態を破棄します。
 
-## Worked Example: Inter-Broker Routing
-
+## ブローカー間ルーティングの実例
 ;Let's take everything we've seen so far, and scale things up to a real application. We'll build this step-by-step over several iterations. Our best client calls us urgently and asks for a design of a large cloud computing facility. He has this vision of a cloud that spans many data centers, each a cluster of clients and workers, and that works together as a whole. Because we're smart enough to know that practice always beats theory, we propose to make a working simulation using ØMQ. Our client, eager to lock down the budget before his own boss changes his mind, and having read great things about ØMQ on Twitter, agrees.
 
 それでは、これまで見てきたものを実際のアプリケーションに応用してみましょう。
@@ -1801,7 +1800,7 @@ int main (void)
 我々には理論に裏付けされた知識と経験が十分にあるので、私達はØMQを使用してシュミレーションを行うことを提案します。
 その顧客は自分の上司が心変わりする前に、Twitter上でのØMQの賞賛を読ませて予算を確保することに同意させます。
 
-### Establishing the Details
+### 要件の確認
 ;Several espressos later, we want to jump into writing code, but a little voice tells us to get more details before making a sensational solution to entirely the wrong problem. "What kind of work is the cloud doing?", we ask.
 
 エスプレッソでも飲んでコードを書き始めたいところですが、重大な問題が発生する前により詳細な要件を確認しろと心の中で何かが囁きます。
@@ -2045,7 +2044,7 @@ int main (void)
 
 各ブローカーのcloudbeソケットは、他のブローカーのcloudfeソケットに対して接続を行い、これと同様にstatebeソケットで、他のブローカのstatefeソケットに接続を行っています。
 
-### 状態通知の実装(Prototyping the State Flow)
+### 状態通知の仮実装
 ;Because each socket flow has its own little traps for the unwary, we will test them in real code one-by-one, rather than try to throw the whole lot into code in one go. When we're happy with each flow, we can put them together into a full program. We'll start with the state flow.
 
 ソケットの通信経路には所々罠が仕掛けられていますので全てのコードが出来上がるのを待たず、ひとつずつテストを行っていきます。
@@ -2165,7 +2164,7 @@ peering1 DC3 DC1 DC2  #  Start DC3 and connect to DC1 and DC2
 また、ワーカーの数に更新があった場合にメインスレッドから子スレッドに通知を行い、定期的なメッセージと合わせて送信しても良いでしょう。
 これ以上事はここでは取り上げません。
 
-### タスクの通信経路を実装
+### タスクの通信経路を仮実装
 ;Let's now prototype at the flow of tasks via the local and cloud sockets. This code pulls requests from clients and then distributes them to local workers and cloud peers on a random basis.
 
 では、localやcloudソケットを経由するタスクの経路を実装してみましょう。
@@ -2460,16 +2459,16 @@ peering2 you me
 もしもメッセージが誤った経路で流れると、クライアントは停止してブローカーはトレース情報を出力しなくなるでしょう。
 クライアントは応答が返ってくるまで待ち続けてしまいますので、こうなった場合はクライアントとブローカーを再起動するしかありません。
 
-### Putting it All Together
+### プログラムの結合
 ;Let's put this together into a single package. As before, we'll run an entire cluster as one process. We're going to take the two previous examples and merge them into one properly working design that lets you simulate any number of clusters.
 
-それではこれまで作ったコードをひとつにまとめてみましょう。
+それではこれまでの仮実装のコードをひとつにまとめてみましょう。
 以前にも述べた通り、ここでは1クラスターの全てを1プロセスで実現します。
 そこで先程の2つのコードを合わせることで、クラスターをシミュレート出来るようになります。
 
 ;This code is the size of both previous prototypes together, at 270 LoC. That's pretty good for a simulation of a cluster that includes clients and workers and cloud workload distribution. Here is the code:
 
-コードサイズは先程の実装を合わせますので約270行程度あります。
+先程の仮実装を合わせると、コードサイズは約270行程度になります。
 これはクライアントとワーカーを含む負荷分散クラスターを上手くシミュレートしています。
 コードはこちらです。
 
@@ -2647,7 +2646,7 @@ int main (int argc, char *argv [])
     //  .split main loop
     //  The main loop has two parts. First, we poll workers and our two service
     //  sockets (statefe and monitor), in any case. If we have no ready workers,
-    //  then there's no point in looking at incoming requests. These can remain 
+    //  then there's no point in looking at incoming requests. These can remain
     //  on their internal 0MQ queues:
 
     while (true) {
