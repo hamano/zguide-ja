@@ -368,7 +368,7 @@ assert (zmq_ctx_get (context, ZMQ_IO_THREADS) == io_threads);
 これら基本的なメッセージパターンの上に、ハイレベルなメッセージングパターンを追加する事が出来ます。
 アプリケーションで利用している様々な言語でØMQの上にハイレベルなパターンを構築します。
 これらはコア・ライブラリの一部ではありませんので、ØMQのパッケージには含まれていませんし、ØMQコミュニティで配布しているわけではありません。
-例えばMajordomoパターンについては「4章 - Reliable Request-Reply Patterns」で詳しく見ていきますが、これは別プロジェクトとしてGitHubでホスティングされています。
+例えばMajordomoパターンについては第4章の「信頼性のあるリクエスト・応答パターン」で詳しく解説しますが、これは別プロジェクトとしてGitHubでホスティングされています。
 
 ;One of the things we aim to provide you with in this book are a set of such high-level patterns, both small (how to handle messages sanely) and large (how to make a reliable pub-sub architecture).
 

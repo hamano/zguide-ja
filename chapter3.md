@@ -175,7 +175,7 @@ REQソケットはメッセージを受信し、最初のフレームが空の�
 
 正直に言うと、素のリクエスト・応答パターンや拡張したリクエスト・応答パターンには幾つかの制限があります。
 ひとつ例を挙げると、サーバー側のアプリケーションのバグに起因したクラッシュなどの一般的な障害から回復する簡単な方法がありません。
-これは第4章の「Reliable Request-Reply Patterns」で詳しく見ていきます。
+これは第4章の「信頼性のあるリクエスト・応答パターン」で詳しく解説します。
 
 さておき、4つのソケットがどの様な方法でエンベロープを扱い、お互いに会話するかを理解しておくことは大変有用です。
 これまで、ROUTERがどの様に応答エンベロープを利用してクライアントのREQソケットに応答するかを見てきましたので、簡単にまとめておきます。
@@ -343,8 +343,8 @@ REPソケットをDEALERソケットで置き換えた場合、ワーカーは�
 
 これは完全なN対N接続のように思うかもしれませんが、これは最も扱いにくい組み合わせです。
 ØMQを使いこなせる様になるまで、この使い方は避けたほうが無難です。
-第4章「Reliable Request-Reply Patterns」ではこれを利用したフリーランス・パターンをという例を見ていきます。
-また、第8章「A Framework for Distributed Computing」ではP2P機能を設計するする為のDEALER対ROUTER通信の代替としてとして紹介します。
+第4章信頼性のあるリクエスト・応答パターン「」ではこれを利用したフリーランス・パターンをという例を見ていきます。
+また、第8章「分散コンピューティング・フレームワーク」ではP2P機能を設計するする為のDEALER対ROUTER通信の代替としてとして紹介します。
 
 ### 不正な組み合わせ
 ;Mostly, trying to connect clients to clients, or servers to servers is a bad idea and won't work. However, rather than give general vague warnings, I'll explain in detail:
@@ -665,7 +665,7 @@ REQソケットの代わりにDEALERソケットを利用することも可能�
 ;The synchronous versus asynchronous behavior has no effect on our example because we're doing strict request-reply. It is more relevant when we address recovering from failures, which we'll come to in Chapter 4 - Reliable Request-Reply Patterns.
 
 同期から非同期に切り替える場合でも、リクエスト・応答パターンという事に変わりありませんのでサンプルコードに大きな影響を与えません。
-この組み合わせはエラーからの復旧に関連していますので、後ほどの「Chapter 4 - Reliable Request-Reply Patterns」でも出てきます。
+この組み合わせはエラーからの復旧に関連していますので、後の第4章「信頼性のあるリクエスト・応答パターン」でも出てきます。
 
 ;Now let's look at exactly the same example but with the REQ socket replaced by a DEALER socket:
 

@@ -317,7 +317,7 @@ int main (void)
 
 サーバーをCtrl-Cで終了して再起動した場合、クライアントは適切に復旧しません。
 プロセスの異常終了からの復旧は簡単なことではありません。
-信頼性の高いリクエスト-応答フローを構成することは十分複雑なので、これについては4章の「Reliable Request-Reply Patterns」で取り上げます。
+信頼性の高いリクエスト-応答フローを構成することは十分複雑なので、これについては4章の「信頼性のあるリクエスト・応答パターン」で取り上げます。
 
 ;There is a lot happening behind the scenes but what matters to us programmers is how short and sweet the code is, and how often it doesn't crash, even under a heavy load. This is the request-reply pattern, probably the simplest way to use ØMQ. It maps to RPC and the classic client/server model.
 
