@@ -58,7 +58,7 @@
 
 政治哲学的な話はこの辺にしておいて[他の本](http://swsi.info/)に譲る事にしますが、
 重要なのは、インターネットは潜在的に大量のコードが接続しあうにも関わらず、現実に私達には手の届かない所にあるという事です。
-そしてこれは健康、教育、経済、運輸などにおいて非常に興味深い問題を引き起こしますが、コードを接続する方法が無いので未だ解決出来ていません。
+そしてこれは健康、教育、経済、流通などにおいて非常に興味深い問題を引き起こしますが、コードを接続する方法が無いので未だ解決出来ていません。
 したがって、これらの問題を解決するために脳を接続出来る相手と一緒に仕事するしかありません。
 
 ;There have been many attempts to solve the challenge of connected code. There are thousands of IETF specifications, each solving part of the puzzle. For application developers, HTTP is perhaps the one solution to have been simple enough to work, but it arguably makes the problem worse by encouraging developers and architects to think in terms of big servers and thin, stupid clients.
