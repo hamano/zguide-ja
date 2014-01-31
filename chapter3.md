@@ -2806,3 +2806,4 @@ int main (int argc, char *argv [])
 ;This simulation does not detect disappearance of a cloud peer. If you start several peers and stop one, and it was broadcasting capacity to the others, they will continue to send it work even if it's gone. You can try this, and you will get clients that complain of lost requests. The solution is twofold: first, only keep the capacity information for a short time so that if a peer does disappear, its capacity is quickly set to zero. Second, add reliability to the request-reply chain. We'll look at reliability in the next chapter.
 
 このシミュレーションはクラウドの停止を検知しません。複数のクラウドを開始してひとつを停止した場合、一度でも処理容量を通知していれば他のクラウドはメッセージを送り続け、クライアントのタスクは消失していまいます。これは簡単にリクエストの消失状態を再現することが出来ます。解決方法は2つあります。1つ目は、クラウドからの処理容量の通知が届かなくなり、一定の時間が経ったら処理容量を0に設定することです。もうひとつの方法は信頼性のあるリクエスト・応答モデルを構築することです。これについては次の章で説明します。
+
