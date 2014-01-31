@@ -1,8 +1,8 @@
 # ソケットとパターン
 ;In Chapter 1 - Basics we took ØMQ for a drive, with some basic examples of the main ØMQ patterns: request-reply, pub-sub, and pipeline. In this chapter, we're going to get our hands dirty and start to learn how to use these tools in real programs.
 
-「1章 - 基礎」ではØMQの主要なパターン「リクエスト・応答」、「pub-sub」、「パイプライン」などの基本的なサンプルコードを見てきました。
-この章では実際のプログラムでこれらのパターンをどの様に利用するかを手を動かして学んで行きましょう。
+第1章「基礎」ではØMQの主要なパターンである「リクエスト・応答」、「pub-sub」、「パイプライン」などの基本的なサンプルコードを見てきました。
+この章では実際のプログラムでこれらのパターンをどの様に利用するかを手を動かしながら学んで行きましょう。
 
 ;We'll cover:
 
@@ -25,22 +25,22 @@
 ;* How to create and use message envelopes for pub-sub.
 ;* Using the HWM (high-water mark) to protect against memory overflows.
 
-* ØMQソケットを生成して、機能させる方法
+* ØMQソケットを生成して、動作させる方法
 * ØMQソケットを経由してメッセージを送受信する方法
-* ØMQの非同期I/Oモデルをアプリケーションに組み込む方法
-* 一つのスレッドで複数のソケットで扱う方法
+* ØMQの非同期I/Oモデルでアプリケーションを開発する方法
+* 1スレッドで複数のソケットで扱う方法
 * 致命的、致命的でないエラーを適切に処理する方法
-* Ctrl-Cの様な中断シグナルを処理する方法
+* Ctrl-Cの様な割り込みシグナルを処理する方法
 * ØMQアプリケーションを正しく終了させる方法
 * ØMQアプリケーションでメモリリークチェックを行う方法
 * マルチパートメッセージを送受信する方法
-* メッセージを転送する方法
+* 別のネットワークへメッセージを転送する方法
 * 簡易メッセージキューブローカーの作成方法
 * ØMQでマルチスレッドアプリケーションを作る方法
 * スレッド間でシグナルを利用する方法
 * ØMQでネットワークのノードを連携する方法
-* pub-subパターンでのmessageエンベローブの作成と利用方法
-* HWM(high-waterマーク)を使ってメモリ溢れを防ぐ方法
+* pub-subパターンにおけるメッセージエンベローブの作成と利用方法
+* HWM(満杯マーク)を使ってメモリ溢れを防ぐ方法
 
 ## ソケットAPI
 ;To be perfectly honest, ØMQ does a kind of switch-and-bait on you, for which we don't apologize. It's for your own good and it hurts us more than it hurts you. ØMQ presents a familiar socket-based API, which requires great effort for us to hide a bunch of message-processing engines. However, the result will slowly fix your world view about how to design and write distributed software.
@@ -48,7 +48,7 @@
 正直に言うと、ØMQには囮商法の様な所があるかもしれませんが謝罪はしません。
 その痛みはこれまでの痛みよりも良性の痛みだからです。
 私達がメッセージ処理エンジンの多くを隠蔽する事に尽力したことにより、ØMQは親しみやすいソケットベースのAPIを提供しています。
-しかしその結果、あなたの分散ソフトウェアの実装、設計方法に関する世界観を若干修正するかもしれません。
+しかしその結果、分散ソフトウェアの実装や設計方法に関するあなたの考え方を変える必要があるかもしれません。
 
 ;Sockets are the de facto standard API for network programming, as well as being useful for stopping your eyes from falling onto your cheeks. One thing that makes ØMQ especially tasty to developers is that it uses sockets and messages instead of some other arbitrary set of concepts. Kudos to Martin Sustrik for pulling this off.
 ;It turns "Message Oriented Middleware", a phrase guaranteed to send the whole room off to Catatonia, into "Extra Spicy Sockets!", which leaves us with a strange craving for pizza and a desire to know more.
@@ -56,13 +56,12 @@
 ソケットAPIはネットワークプログラミングの事実上の標準というだけでなく、目が飛び出るほど便利です。
 開発者にとってØMQの特に魅力的なところは、他の別の概念の代わりにソケットとメッセージを利用したという所です。
 これについてはMartin Sustrikに賞賛を送りたいと思います。
-
-;[TODO]
+; [TODO]
 
 ;Like a favorite dish, ØMQ sockets are easy to digest. Sockets have a life in four parts, just like BSD sockets:
 
 大好きな料理と同じように、ØMQを飲み込むのは簡単です。
-ØMQソケットはちょうどBSDソケットと同じように4つの操作に分類する事が出来ます。
+ØMQソケットの操作はBSDソケットとまったく同じように4つに分類する事が出来ます。
 
 ;* Creating and destroying sockets, which go together to form a karmic circle of socket life (see zmq_socket(), zmq_close()).
 ;* Configuring sockets by setting options on them and checking them if necessary (see zmq_setsockopt(), zmq_getsockopt()).
@@ -78,7 +77,7 @@
 
 ソケットは常にvoidポインタであり、メッセージは構造体であることに注意してください。[^1]
 つまり、C言語ではソケットをそのまま渡しますが、`zmq_send()`や`zmq_recv()`はメッセージ構造体のポインタを渡して動作します。
-覚え方としては、「全てのソケットは私達の所有物である」が、「メッセージはあなたのコードの所有物である」と言えます。
+覚え方としては、「ソケットは私達の所有物である」が、「メッセージはあなたのコードの所有物である」と言えます。
 
 [^1]: 訳注: メッセージ構造体は、古いAPIであるzmq_msg_send() や zmq_msg_recv() に関しての説明だと思われる。
 
@@ -326,7 +325,7 @@ assert (zmq_ctx_get (context, ZMQ_IO_THREADS) == io_threads);
 
 ;We looked at the first three of these in Chapter 1 - Basics, and we'll see the exclusive pair pattern later in this chapter. The zmq_socket() man page is fairly clear about the patterns — it's worth reading several times until it starts to make sense. These are the socket combinations that are valid for a connect-bind pair (either side can bind):
 
-「第１章 - 基本」で最初の3つは既に見てきました。
+第1章「基礎」で最初の3つは既に見てきました。
 そして排他的ペアのパターンは後の章でやります。
 `zmq_socket()`のmanページはパターンについて詳しく説明していますのでよく理解できるまで何度か読み返すだけの価値はあります。
 以下は接続とbindを行う際に有効なソケットペアの組み合わせです。(どちら側でもbind出来ます)
@@ -431,7 +430,7 @@ libzmqのコアライブラリは、送受信を行う2つのAPIを持ってい�
 ;ØMQ also supports multipart messages, which let you send or receive a list of frames as a single on-the-wire message. This is widely used in real applications and we'll look at that later in this chapter and in Chapter 3 - Advanced Request-Reply Patterns.
 
 ØMQは一つのメッセージに複数のフレームを含めて送受信を行う事が出来る、マルチパート・メッセージに対応しています。
-これは実際のアプリケーションでよく使われるので、「第3章 - AdvancedRequest-Reply Patterns」で説明します。
+これは実際のアプリケーションでよく使われるので、第3章の「リクエスト・応答パターンの応用」で説明します。
 
 ;Frames (also called "message parts" in the ØMQ reference manual pages) are the basic wire format for ØMQ messages. A frame is a length-specified block of data. The length can be zero upwards. If you've done any TCP programming you'll appreciate why frames are a useful answer to the question "how much data am I supposed to read of this network socket now?"
 
@@ -837,7 +836,7 @@ REQソケットからREPソケットに通信する際、厳密には同期的�
 ;Luckily, there are two sockets called DEALER and ROUTER that let you do nonblocking request-response. You'll see in Chapter 3 - Advanced Request-Reply Patterns how DEALER and ROUTER sockets let you build all kinds of asynchronous request-reply flows. For now, we're just going to see how DEALER and ROUTER let us extend REQ-REP across an intermediary, that is, our little broker.
 
 幸いなことに、リクエスト・応答を非ブロッキングで行うDEALERとROUTERと呼ばれる2つのソケットがあります。
-「第3章 Advanced Request-Reply Patterns」ではDEALERとROUTERソケットを利用した様々な非同期のリクエスト・応答パターンを見ていきます。
+第3章「リクエスト・応答パターンの応用」ではDEALERとROUTERソケットを利用した様々な非同期のリクエスト・応答パターンを見ていきます。
 ここでは、リクエスト・応答パターンの仲介者として動作する簡単なブローカーを実装する方法としてDEALERとROUTERの説明を行います。
 
 ;In this simple extended request-reply pattern, REQ talks to ROUTER and DEALER talks to REP. In between the DEALER and ROUTER, we have to have code (like our broker) that pulls messages off the one socket and shoves them onto the other.
@@ -1606,7 +1605,7 @@ int main (void)
 スレッドの生成は多くのプログラミング言語で移植性が無いことに注意して下さい。
 POSIXライブラリにpthreadsがありますが、Windowsでは異なるAPIを使わなくてはなりません。
 このサンプルコードでは、`pthread_create()`を呼び出して定義されたワーカー処理の関数を実行しています。
-「第3章 Advanced Request-Reply Patterns」では移植性のあるAPIでこれをラップする方法を見ていきます。
+第3章「リクエスト・応答パターンの応用」では移植性のあるAPIでこれをラップする方法を見ていきます。
 
 ;Here the "work" is just a one-second pause. We could do anything in the workers, including talking to other nodes. This is what the MT server looks like in terms of ØMQ sockets and nodes. Note how the request-reply chain is REQ-ROUTER-queue-DEALER-REP.
 ここでの「仕事」は単に1秒間停止しているだけです。
@@ -2051,7 +2050,7 @@ int main (void)
 
 ![Pub-Sub Envelope with Sender Address](images/fig24.eps)
 
-## High-Waterマーク
+## 満杯マーク
 ;When you can send messages rapidly from process to process, you soon discover that memory is a precious resource, and one that can be trivially filled up. A few seconds of delay somewhere in a process can turn into a backlog that blows up a server unless you understand the problem and take precautions.
 
 プロセスからプロセスに大量のメッセージを送信する際、メモリが貴重な資源であることに気がつくでしょう。
@@ -2092,7 +2091,7 @@ int main (void)
 
 ;ØMQ uses the concept of HWM (high-water mark) to define the capacity of its internal pipes. Each connection out of a socket or into a socket has its own pipe, and HWM for sending, and/or receiving, depending on the socket type. Some sockets (PUB, PUSH) only have send buffers. Some (SUB, PULL, REQ, REP) only have receive buffers. Some (DEALER, ROUTER, PAIR) have both send and receive buffers.
 
-ØMQはHWM(high-waterという)概念を用いてパイプの容量を定義します。
+ØMQはHWM(満杯マークという)概念を用いてパイプの容量を定義します。
 各コネクションはソケットの外部か内部に個別のパイプを持っていて、HWMは送信時と受信時にソケット種別に応じて制限を掛けます。
 PUB, PUSHなどのソケットは送信バッファのみを持っていて、SUB, PULL, REQ, REPなどのバッファは受信バッファを持っています。
 DEALER, ROUTER, PAIRなどのバッファに関しては送信と受信の両方バッファを持っています。
