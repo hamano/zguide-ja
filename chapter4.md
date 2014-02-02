@@ -113,6 +113,215 @@ REQソケットがREPソケットに対して同期的に送受信を行うリ�
 これら3つについて詳しく見ていきます。
 
 ## Client-Side Reliability (Lazy Pirate Pattern)
+;We can get very simple reliable request-reply with some changes to the client. We call this the Lazy Pirate pattern. Rather than doing a blocking receive, we:
+
+クライアントにちょっとした工夫を行うことで、リクエスト・応答パターンの信頼性を高めることが可能です。
+そのためにはブロッキングで受信を行うのではなく、非同期で以下のことを行います。
+
+;* Poll the REQ socket and receive from it only when it's sure a reply has arrived.
+;* Resend a request, if no reply has arrived within a timeout period.
+;* Abandon the transaction if there is still no reply after several requests.
+
+* REQソケットを監視して、間違いなくメッセージが到着している場合のみ受信を行う。
+* 一定の時間応答が返ってこない場合はリクエストを再送信する。
+* 何度かリクエストを送信しても応答が返ってこなかった場合は諦めます。
+
+;If you try to use a REQ socket in anything other than a strict send/receive fashion, you'll get an error (technically, the REQ socket implements a small finite-state machine to enforce the send/receive ping-pong, and so the error code is called "EFSM"). This is slightly annoying when we want to use REQ in a pirate pattern, because we may send several requests before getting a reply.
+
+REQソケットを利用して厳密に送信・受信の順序を守らなかった場合はエラーが発生します。技術的に説明すると、REQソケットは有限オートマトンとして実装されていて送受信を行うことで状態遷移を行います。そして異常な遷移が行われるとエラーコード「EFSM」を返します。
+ですから、REQソケットを利用してこの海賊パターンを行う場合、応答を受け取る前に送信する可能性があるので、ちょっと面倒な事が起こります。
+
+;The pretty good brute force solution is to close and reopen the REQ socket after an error:
+
+この問題の強引で手っ取り早い解決方法は、REQソケットでエラーが発生したら、一旦クローズして再接続する事です。
+
+~~~ {caption="lpclient: Lazy Pirate client in C"}
+//  Lazy Pirate client
+//  Use zmq_poll to do a safe request-reply
+//  To run, start lpserver and then randomly kill/restart it
+
+#include "czmq.h"
+#define REQUEST_TIMEOUT     2500    //  msecs, (> 1000!)
+#define REQUEST_RETRIES     3       //  Before we abandon
+#define SERVER_ENDPOINT     "tcp://localhost:5555"
+
+int main (void)
+{
+    zctx_t *ctx = zctx_new ();
+    printf ("I: connecting to server...\n");
+    void *client = zsocket_new (ctx, ZMQ_REQ);
+    assert (client);
+    zsocket_connect (client, SERVER_ENDPOINT);
+
+    int sequence = 0;
+    int retries_left = REQUEST_RETRIES;
+    while (retries_left && !zctx_interrupted) {
+        //  We send a request, then we work to get a reply
+        char request [10];
+        sprintf (request, "%d", ++sequence);
+        zstr_send (client, request);
+
+        int expect_reply = 1;
+        while (expect_reply) {
+            //  Poll socket for a reply, with timeout
+            zmq_pollitem_t items [] = { { client, 0, ZMQ_POLLIN, 0 } };
+            int rc = zmq_poll (items, 1, REQUEST_TIMEOUT * ZMQ_POLL_MSEC);
+            if (rc == -1)
+                break;          //  Interrupted
+
+            //  .split process server reply
+            //  Here we process a server reply and exit our loop if the
+            //  reply is valid. If we didn't a reply we close the client
+            //  socket and resend the request. We try a number of times
+            //  before finally abandoning:
+            
+            if (items [0].revents & ZMQ_POLLIN) {
+                //  We got a reply from the server, must match sequence
+                char *reply = zstr_recv (client);
+                if (!reply)
+                    break;      //  Interrupted
+                if (atoi (reply) == sequence) {
+                    printf ("I: server replied OK (%s)\n", reply);
+                    retries_left = REQUEST_RETRIES;
+                    expect_reply = 0;
+                }
+                else
+                    printf ("E: malformed reply from server: %s\n",
+                        reply);
+
+                free (reply);
+            }
+            else
+            if (--retries_left == 0) {
+                printf ("E: server seems to be offline, abandoning\n");
+                break;
+            }
+            else {
+                printf ("W: no response from server, retrying...\n");
+                //  Old socket is confused; close it and open a new one
+                zsocket_destroy (ctx, client);
+                printf ("I: reconnecting to server...\n");
+                client = zsocket_new (ctx, ZMQ_REQ);
+                zsocket_connect (client, SERVER_ENDPOINT);
+                //  Send request again, on new socket
+                zstr_send (client, request);
+            }
+        }
+    }
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;Run this together with the matching server:
+こちらのサーバーも実行してください。
+
+~~~ {caption="lpserver: Lazy Pirate server in C"}
+//  Lazy Pirate server
+//  Binds REQ socket to tcp://*:5555
+//  Like hwserver except:
+//   - echoes request as-is
+//   - randomly runs slowly, or exits to simulate a crash.
+
+#include "zhelpers.h"
+
+int main (void)
+{
+    srandom ((unsigned) time (NULL));
+
+    void *context = zmq_ctx_new ();
+    void *server = zmq_socket (context, ZMQ_REP);
+    zmq_bind (server, "tcp://*:5555");
+
+    int cycles = 0;
+    while (1) {
+        char *request = s_recv (server);
+        cycles++;
+
+        //  Simulate various problems, after a few cycles
+        if (cycles > 3 && randof (3) == 0) {
+            printf ("I: simulating a crash\n");
+            break;
+        }
+        else
+        if (cycles > 3 && randof (3) == 0) {
+            printf ("I: simulating CPU overload\n");
+            sleep (2);
+        }
+        printf ("I: normal request (%s)\n", request);
+        sleep (1);              //  Do some heavy work
+        s_send (server, request);
+        free (request);
+    }
+    zmq_close (server);
+    zmq_ctx_destroy (context);
+    return 0;
+}
+~~~
+
+![ものぐさ海賊パターン](images/fig47.eps)
+
+;To run this test case, start the client and the server in two console windows. The server will randomly misbehave after a few messages. You can check the client's response. Here is typical output from the server:
+
+このサンプルコードを実行するには、ターミナルを2つ立ち上げてクライアントとサーバーを起動します。
+このサーバーはランダムに障害をシミュレートし、以下の様なメッセージを出力します。
+
+~~~
+I: normal request (1)
+I: normal request (2)
+I: normal request (3)
+I: simulating CPU overload
+I: normal request (4)
+I: simulating a crash
+~~~
+
+;And here is the client's response:
+そして以下はクライアントの出力です。
+
+~~~
+I: connecting to server...
+I: server replied OK (1)
+I: server replied OK (2)
+I: server replied OK (3)
+W: no response from server, retrying...
+I: connecting to server...
+W: no response from server, retrying...
+I: connecting to server...
+E: server seems to be offline, abandoning
+~~~
+
+;The client sequences each message and checks that replies come back exactly in
+ order: that no requests or replies are lost, and no replies come back more than once, or out of order. Run the test a few times until you're convinced that this mechanism actually works. You don't need sequence numbers in a production application; they just help us trust our design.
+
+クライアントは応答メッセージのシーケンス番号を見て、メッセージが失われていないかどうかを確認しています。
+このメカニズムが期待通り動作しているか確信が持てるまでこのサンプルコードを何度でも実行してみてください。
+実際のアプリケーションではシーケンス番号は必要ありません、ここでは設計の正しさを確かめるために利用してるだけです。
+
+;The client uses a REQ socket, and does the brute force close/reopen because REQ sockets impose that strict send/receive cycle. You might be tempted to use a DEALER instead, but it would not be a good decision. First, it would mean emulating the secret sauce that REQ does with envelopes (if you've forgotten what that is, it's a good sign you don't want to have to do it). Second, it would mean potentially getting back replies that you didn't expect.
+
+クライアントはREQソケットを利用していますので、送受信の順序を守るために強制的にソケット閉じて再接続を行っています。
+ここでREQソケットの代わりにDEALERソケットを使おうと考えるかもしれませんが、これはあまり良くありません。
+まず、REQソケットのエンベロープを模倣するのが面倒ですし、期待しない応答が返ってくる可能性があります。
+
+;Handling failures only at the client works when we have a set of clients talking to a single server. It can handle a server crash, but only if recovery means restarting that same server. If there's a permanent error, such as a dead power supply on the server hardware, this approach won't work. Because the application code in servers is usually the biggest source of failures in any architecture, depending on a single server is not a great idea.
+
+これは複数のクライアントから単一のサーバーに対して通信する場合のみに適用できる障害対策であり、サーバーがクラッシュした場合は自動的に再起動することを期待しています。
+例えばハードウェア障害や電源供給が断たれるなどの恒久的なエラーが発生した場合はこの対策では不十分です。
+一般的にアプリケーションコードは障害の原因になりやすいので単一のサーバーに依存したアーキテクチャー自体があまり良くありません。
+
+;So, pros and cons:
+利点と欠点をまとめます。
+
+;* Pro: simple to understand and implement.
+;* Pro: works easily with existing client and server application code.
+;* Pro: ØMQ automatically retries the actual reconnection until it works.
+;* Con: doesn't failover to backup or alternate servers.
+
+* 利点: 理解しやすくて実装が簡単。
+* 利点: サーバーアプリケーションの改修は必要なく、クライアント側の変更もわずかです。
+* 利点: 接続が成功するまでØMQが自動的に再接続を行ってくれます。
+* 欠点: 代替のサーバーにフェイルオーバーしません。
+
 ## Basic Reliable Queuing (Simple Pirate Pattern)
 ## Robust Reliable Queuing (Paranoid Pirate Pattern)
 ## Heartbeating
