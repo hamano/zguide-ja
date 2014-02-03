@@ -18,7 +18,7 @@
 
 * ものぐさ海賊パターン: クライアント側による信頼性のあるリクエスト・応答パターン
 * 単純な海賊パターン: 負荷分散を利用したリクエスト・応答パターン
-* ピラミッド海賊パターン: ハートビートを利用したリクエスト・応答パターン
+* 神経質な海賊パターン: ハートビートを利用したリクエスト・応答パターン
 * Majordomoパターン: サービス指向の信頼性のあるキューイング
 * タイタニックパターン: ディスクベース・非接続な信頼性のあるキューイング
 * バイナリースターパターン: プライマリー・バックアップ構成
@@ -485,8 +485,402 @@ int main (void)
 そうするとワーカーがクラッシュしたり固まったりするでしょうが、キュープロキシーは機能を停止することなく動作し続けます。
 このモデルはクライアントやワーカーの数が幾つでも問題なく動作します。
 
-## Robust Reliable Queuing (Paranoid Pirate Pattern)
-## Heartbeating
+## Robust Reliable Queuing (神経質な海賊パターン)
+
+![神経質な海賊パターン](images/fig49.eps)
+
+;The Simple Pirate Queue pattern works pretty well, especially because it's just a combination of two existing patterns. Still, it does have some weaknesses:
+
+単純な海賊キューパターンは、ものぐさ海賊パターンと組み合わせて上手く機能する障害対策でしたが、これには欠点があります。
+
+;* It's not robust in the face of a queue crash and restart. The client will recover, but the workers won't. While ØMQ will reconnect workers' sockets automatically, as far as the newly started queue is concerned, the workers haven't signaled ready, so don't exist. To fix this, we have to do heartbeating from queue to worker so that the worker can detect when the queue has gone away.
+;* The queue does not detect worker failure, so if a worker dies while idle, the queue can't remove it from its worker queue until the queue sends it a request. The client waits and retries for nothing. It's not a critical problem, but it's not nice. To make this work properly, we do heartbeating from worker to queue, so that the queue can detect a lost worker at any stage.
+
+* キューの再起動やクラッシュに対して堅牢ではありません。またクライアントは自動的に復旧しますがワーカーはそうではありません。ワーカーのØMQソケットは自動的に再接続を行ってくれますが、準備完了メッセージを送信していませんのでメッセージが送られてきません。これを修正するにはキュープロキシーからワーカーに対してハートビートを送って、ワーカーの存在を確認する必要があります。
+* キュープロキシーはワーカーの障害を検知できないため、待機中のワーカーが落ちてしまった場合にワーカーキューから該当のワーカーを削除することが出来ません。存在しないワーカーに対してメッセージを送信すると、クライアントは待たされてしまうでしょう。これは致命的な問題ではありませんが良くもありません。これを上手く動作させるには、ワーカーからキューに対してハートビートを送るワーカーの障害をキューがワーが検知できるようにするよ良いでしょう。
+
+;We'll fix these in a properly pedantic Paranoid Pirate Pattern.
+
+これらの欠点を神経質な海賊パターンで修正します。
+
+;We previously used a REQ socket for the worker. For the Paranoid Pirate worker, we'll switch to a DEALER socket. This has the advantage of letting us send and receive messages at any time, rather than the lock-step send/receive that REQ imposes. The downside of DEALER is that we have to do our own envelope management (re-read Chapter 3 - Advanced Request-Reply Patterns for background on this concept).
+
+これまでのワーカーはREQソケットを利用してきましたが、この神経質な海賊パターンのワーカーはDEALERソケットを利用します。
+これにより、送受信の順序に拘らずにいつでもメッセージを送受信出来るというメリットがあります。
+デメリットはメッセージエンベロープを管理しなければならない事です。
+これについては第3章の「リクエスト・応答パターンの応用」で既に説明しました。
+
+;We're still using the Lazy Pirate client. Here is the Paranoid Pirate queue proxy:
+
+今回もまたものぐさ海賊パターンのクライアントを使いまわします。
+こちらは神経質な海賊キュープロキシーです。
+
+~~~ {caption="ppqueue: Paranoid Pirate queue in C"}
+//  Paranoid Pirate queue
+
+#include "czmq.h"
+#define HEARTBEAT_LIVENESS  3       //  3-5 is reasonable
+#define HEARTBEAT_INTERVAL  1000    //  msecs
+
+//  Paranoid Pirate Protocol constants
+#define PPP_READY       "\001"      //  Signals worker is ready
+#define PPP_HEARTBEAT   "\002"      //  Signals worker heartbeat
+
+//  .split worker class structure
+//  Here we define the worker class; a structure and a set of functions that
+//  act as constructor, destructor, and methods on worker objects:
+
+typedef struct {
+    zframe_t *identity;         //  Identity of worker
+    char *id_string;            //  Printable identity
+    int64_t expiry;             //  Expires at this time
+} worker_t;
+
+//  Construct new worker
+static worker_t *
+s_worker_new (zframe_t *identity)
+{
+    worker_t *self = (worker_t *) zmalloc (sizeof (worker_t));
+    self->identity = identity;
+    self->id_string = zframe_strhex (identity);
+    self->expiry = zclock_time ()
+                 + HEARTBEAT_INTERVAL * HEARTBEAT_LIVENESS;
+    return self;
+}
+
+//  Destroy specified worker object, including identity frame.
+static void
+s_worker_destroy (worker_t **self_p)
+{
+    assert (self_p);
+    if (*self_p) {
+        worker_t *self = *self_p;
+        zframe_destroy (&self->identity);
+        free (self->id_string);
+        free (self);
+        *self_p = NULL;
+    }
+}
+
+//  .split worker ready method
+//  The ready method puts a worker to the end of the ready list:
+
+static void
+s_worker_ready (worker_t *self, zlist_t *workers)
+{
+    worker_t *worker = (worker_t *) zlist_first (workers);
+    while (worker) {
+        if (streq (self->id_string, worker->id_string)) {
+            zlist_remove (workers, worker);
+            s_worker_destroy (&worker);
+            break;
+        }
+        worker = (worker_t *) zlist_next (workers);
+    }
+    zlist_append (workers, self);
+}
+
+//  .split get next available worker
+//  The next method returns the next available worker identity:
+
+static zframe_t *
+s_workers_next (zlist_t *workers)
+{
+    worker_t *worker = zlist_pop (workers);
+    assert (worker);
+    zframe_t *frame = worker->identity;
+    worker->identity = NULL;
+    s_worker_destroy (&worker);
+    return frame;
+}
+
+//  .split purge expired workers
+//  The purge method looks for and kills expired workers. We hold workers
+//  from oldest to most recent, so we stop at the first alive worker:
+
+static void
+s_workers_purge (zlist_t *workers)
+{
+    worker_t *worker = (worker_t *) zlist_first (workers);
+    while (worker) {
+        if (zclock_time () < worker->expiry)
+            break;              //  Worker is alive, we're done here
+
+        zlist_remove (workers, worker);
+        s_worker_destroy (&worker);
+        worker = (worker_t *) zlist_first (workers);
+    }
+}
+
+//  .split main task
+//  The main task is a load-balancer with heartbeating on workers so we
+//  can detect crashed or blocked worker tasks:
+
+int main (void)
+{
+    zctx_t *ctx = zctx_new ();
+    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
+    void *backend = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_bind (frontend, "tcp://*:5555");    //  For clients
+    zsocket_bind (backend,  "tcp://*:5556");    //  For workers
+
+    //  List of available workers
+    zlist_t *workers = zlist_new ();
+
+    //  Send out heartbeats at regular intervals
+    uint64_t heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
+
+    while (true) {
+        zmq_pollitem_t items [] = {
+            { backend,  0, ZMQ_POLLIN, 0 },
+            { frontend, 0, ZMQ_POLLIN, 0 }
+        };
+        //  Poll frontend only if we have available workers
+        int rc = zmq_poll (items, zlist_size (workers)? 2: 1,
+            HEARTBEAT_INTERVAL * ZMQ_POLL_MSEC);
+        if (rc == -1)
+            break;              //  Interrupted
+
+        //  Handle worker activity on backend
+        if (items [0].revents & ZMQ_POLLIN) {
+            //  Use worker identity for load-balancing
+            zmsg_t *msg = zmsg_recv (backend);
+            if (!msg)
+                break;          //  Interrupted
+
+            //  Any sign of life from worker means it's ready
+            zframe_t *identity = zmsg_unwrap (msg);
+            worker_t *worker = s_worker_new (identity);
+            s_worker_ready (worker, workers);
+
+            //  Validate control message, or return reply to client
+            if (zmsg_size (msg) == 1) {
+                zframe_t *frame = zmsg_first (msg);
+                if (memcmp (zframe_data (frame), PPP_READY, 1)
+                &&  memcmp (zframe_data (frame), PPP_HEARTBEAT, 1)) {
+                    printf ("E: invalid message from worker");
+                    zmsg_dump (msg);
+                }
+                zmsg_destroy (&msg);
+            }
+            else
+                zmsg_send (&msg, frontend);
+        }
+        if (items [1].revents & ZMQ_POLLIN) {
+            //  Now get next client request, route to next worker
+            zmsg_t *msg = zmsg_recv (frontend);
+            if (!msg)
+                break;          //  Interrupted
+            zmsg_push (msg, s_workers_next (workers));
+            zmsg_send (&msg, backend);
+        }
+        //  .split handle heartbeating
+        //  We handle heartbeating after any socket activity. First, we send
+        //  heartbeats to any idle workers if it's time. Then, we purge any
+        //  dead workers:
+        if (zclock_time () >= heartbeat_at) {
+            worker_t *worker = (worker_t *) zlist_first (workers);
+            while (worker) {
+                zframe_send (&worker->identity, backend,
+                             ZFRAME_REUSE + ZFRAME_MORE);
+                zframe_t *frame = zframe_new (PPP_HEARTBEAT, 1);
+                zframe_send (&frame, backend, 0);
+                worker = (worker_t *) zlist_next (workers);
+            }
+            heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
+        }
+        s_workers_purge (workers);
+    }
+    //  When we're done, clean up properly
+    while (zlist_size (workers)) {
+        worker_t *worker = (worker_t *) zlist_pop (workers);
+        s_worker_destroy (&worker);
+    }
+    zlist_destroy (&workers);
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;The queue extends the load balancing pattern with heartbeating of workers. Heartbeating is one of those "simple" things that can be difficult to get right. I'll explain more about that in a second.
+
+このキュープロキシーは負荷分散パターンを拡張してワーカーに対してハートビートを送信しています。
+ハートビートは単純な機能ですが、正しくこれを行うのは難しいので後ほど詳しく説明します。
+
+;Here is the Paranoid Pirate worker:
+
+以下は神経質な海賊パターンのワーカーです。
+
+~~~ {caption"ppworker: Paranoid Pirate worker in C"}
+//  Paranoid Pirate worker
+
+#include "czmq.h"
+#define HEARTBEAT_LIVENESS  3       //  3-5 is reasonable
+#define HEARTBEAT_INTERVAL  1000    //  msecs
+#define INTERVAL_INIT       1000    //  Initial reconnect
+#define INTERVAL_MAX       32000    //  After exponential backoff
+
+//  Paranoid Pirate Protocol constants
+#define PPP_READY       "\001"      //  Signals worker is ready
+#define PPP_HEARTBEAT   "\002"      //  Signals worker heartbeat
+
+//  Helper function that returns a new configured socket
+//  connected to the Paranoid Pirate queue
+
+static void *
+s_worker_socket (zctx_t *ctx) {
+    void *worker = zsocket_new (ctx, ZMQ_DEALER);
+    zsocket_connect (worker, "tcp://localhost:5556");
+
+    //  Tell queue we're ready for work
+    printf ("I: worker ready\n");
+    zframe_t *frame = zframe_new (PPP_READY, 1);
+    zframe_send (&frame, worker, 0);
+
+    return worker;
+}
+
+//  .split main task
+//  We have a single task that implements the worker side of the
+//  Paranoid Pirate Protocol (PPP). The interesting parts here are
+//  the heartbeating, which lets the worker detect if the queue has
+//  died, and vice versa:
+
+int main (void)
+{
+    zctx_t *ctx = zctx_new ();
+    void *worker = s_worker_socket (ctx);
+
+    //  If liveness hits zero, queue is considered disconnected
+    size_t liveness = HEARTBEAT_LIVENESS;
+    size_t interval = INTERVAL_INIT;
+
+    //  Send out heartbeats at regular intervals
+    uint64_t heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
+
+    srandom ((unsigned) time (NULL));
+    int cycles = 0;
+    while (true) {
+        zmq_pollitem_t items [] = { { worker,  0, ZMQ_POLLIN, 0 } };
+        int rc = zmq_poll (items, 1, HEARTBEAT_INTERVAL * ZMQ_POLL_MSEC);
+        if (rc == -1)
+            break;              //  Interrupted
+
+        if (items [0].revents & ZMQ_POLLIN) {
+            //  Get message
+            //  - 3-part envelope + content -> request
+            //  - 1-part HEARTBEAT -> heartbeat
+            zmsg_t *msg = zmsg_recv (worker);
+            if (!msg)
+                break;          //  Interrupted
+
+            //  .split simulating problems
+            //  To test the robustness of the queue implementation we 
+            //  simulate various typical problems, such as the worker
+            //  crashing or running very slowly. We do this after a few
+            //  cycles so that the architecture can get up and running
+            //  first:
+            if (zmsg_size (msg) == 3) {
+                cycles++;
+                if (cycles > 3 && randof (5) == 0) {
+                    printf ("I: simulating a crash\n");
+                    zmsg_destroy (&msg);
+                    break;
+                }
+                else
+                if (cycles > 3 && randof (5) == 0) {
+                    printf ("I: simulating CPU overload\n");
+                    sleep (3);
+                    if (zctx_interrupted)
+                        break;
+                }
+                printf ("I: normal reply\n");
+                zmsg_send (&msg, worker);
+                liveness = HEARTBEAT_LIVENESS;
+                sleep (1);              //  Do some heavy work
+                if (zctx_interrupted)
+                    break;
+            }
+            else
+            //  .split handle heartbeats
+            //  When we get a heartbeat message from the queue, it means the
+            //  queue was (recently) alive, so we must reset our liveness
+            //  indicator:
+            if (zmsg_size (msg) == 1) {
+                zframe_t *frame = zmsg_first (msg);
+                if (memcmp (zframe_data (frame), PPP_HEARTBEAT, 1) == 0)
+                    liveness = HEARTBEAT_LIVENESS;
+                else {
+                    printf ("E: invalid message\n");
+                    zmsg_dump (msg);
+                }
+                zmsg_destroy (&msg);
+            }
+            else {
+                printf ("E: invalid message\n");
+                zmsg_dump (msg);
+            }
+            interval = INTERVAL_INIT;
+        }
+        else
+        //  .split detecting a dead queue
+        //  If the queue hasn't sent us heartbeats in a while, destroy the
+        //  socket and reconnect. This is the simplest most brutal way of
+        //  discarding any messages we might have sent in the meantime:
+        if (--liveness == 0) {
+            printf ("W: heartbeat failure, can't reach queue\n");
+            printf ("W: reconnecting in %zd msec...\n", interval);
+            zclock_sleep (interval);
+
+            if (interval < INTERVAL_MAX)
+                interval *= 2;
+            zsocket_destroy (ctx, worker);
+            worker = s_worker_socket (ctx);
+            liveness = HEARTBEAT_LIVENESS;
+        }
+        //  Send heartbeat to queue if it's time
+        if (zclock_time () > heartbeat_at) {
+            heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
+            printf ("I: worker heartbeat\n");
+            zframe_t *frame = zframe_new (PPP_HEARTBEAT, 1);
+            zframe_send (&frame, worker, 0);
+        }
+    }
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;Some comments about this example:
+
+このコードを解説すると、
+
+;* The code includes simulation of failures, as before. This makes it (a) very hard to debug, and (b) dangerous to reuse. When you want to debug this, disable the failure simulation.
+;* The worker uses a reconnect strategy similar to the one we designed for the Lazy Pirate client, with two major differences: (a) it does an exponential back-off, and (b) it retries indefinitely (whereas the client retries a few times before reporting a failure).
+
+* このコードは以前と同じく、障害をシミュレートするコードが入っています。
+* このワーカーはものぐさ海賊パターンのクライアントと同様に再試行を行う戦略です。再試行の間隔を指数的に増やしていき何度でも再試行を行います。
+
+;Try the client, queue, and workers, such as by using a script like this:
+
+以下のスクリプトでこれらのコードを実行してみてください。
+
+~~~
+ppqueue &
+for i in 1 2 3 4; do
+    ppworker &
+    sleep 1
+done
+lpclient &
+~~~
+
+;You should see the workers die one-by-one as they simulate a crash, and the client eventually give up. You can stop and restart the queue and both client and workers will reconnect and carry on. And no matter what you do to queues and workers, the client will never get an out-of-order reply: the whole chain either works, or the client abandons.
+
+これを実行すると、ワーカーがひとつずつクラッシュして終了していくことを確認できるでしょう。
+キュープロキシーを再起動した場合でもワーカーは再接続して動作を継続し、ワーカーが1つでも動いていればクライアントは正しい応答を受け取る事が出来るでしょう。
+
+## ハートビート
+
 ### Shrugging It Off
 ### One-Way Heartbeats
 ### Ping-Pong Heartbeats
