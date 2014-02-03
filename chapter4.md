@@ -112,7 +112,7 @@ REQソケットがREPソケットに対して同期的に送受信を行うリ�
 これらの方法にはそれぞれ利点と欠点があり、時にはこれらが組み合わさる場合もあるでしょう。
 これら3つについて詳しく見ていきます。
 
-## Client-Side Reliability (Lazy Pirate Pattern)
+## クライアント側での信頼性(ものぐさ海賊パターン)
 ;We can get very simple reliable request-reply with some changes to the client. We call this the Lazy Pirate pattern. Rather than doing a blocking receive, we:
 
 クライアントにちょっとした工夫を行うことで、リクエスト・応答パターンの信頼性を高めることが可能です。
@@ -322,7 +322,169 @@ E: server seems to be offline, abandoning
 * 利点: 接続が成功するまでØMQが自動的に再接続を行ってくれます。
 * 欠点: 代替のサーバーにフェイルオーバーしません。
 
-## Basic Reliable Queuing (Simple Pirate Pattern)
+## 信頼性のあるキューイング (Simple Pirate Pattern)
+;Our second approach extends the Lazy Pirate pattern with a queue proxy that lets us talk, transparently, to multiple servers, which we can more accurately call "workers". We'll develop this in stages, starting with a minimal working model, the Simple Pirate pattern.
+
+2番目に紹介する方法は複数のサーバーと透過的に通信を行うキュープロキシーを用いてものぐさ海賊パターンを拡張します。
+まずは単純な海賊パターンが最低限動作する小さなモデルで実装していきます。
+
+;In all these Pirate patterns, workers are stateless. If the application requires some shared state, such as a shared database, we don't know about it as we design our messaging framework. Having a queue proxy means workers can come and go without clients knowing anything about it. If one worker dies, another takes over. This is a nice, simple topology with only one real weakness, namely the central queue itself, which can become a problem to manage, and a single point of failure.
+
+全ての海賊パターンにおいて、ワーカーはステートレスで動作します。
+もしアプリケーションがデーターベースなどを利用して状態を共有したい場合でもメッセージングフレームワークはこれに関知しません。
+キュープロキシーはクライアントについて何も知らずにやってくるメッセージをそのまま転送するだけの役割を持っています。
+こうした方がワーカーが落ちてしまった場合でも別のワーカーにメッセージを渡すだけで良いので都合が良いのです。
+これは単純でなかなか良いトポロジーですが中央キューが単一故障点になってしまうという欠点があります。
+
+![単純な海賊パターン](images/fig48.eps)
+
+;The basis for the queue proxy is the load balancing broker from Chapter 3 - Advanced Request-Reply Patterns. What is the very minimum we need to do to handle dead or blocked workers? Turns out, it's surprisingly little. We already have a retry mechanism in the client. So using the load balancing pattern will work pretty well. This fits with ØMQ's philosophy that we can extend a peer-to-peer pattern like request-reply by plugging naive proxies in the middle.
+
+負荷分散を行うキュープロキシーについては第3章「リクエスト・応答パターンの応用」で見てきました。
+ワーカーが落ちたりブロックしたりする障害に対して最低限どの様な対応を行う必要があるでしょうか?
+クライアントには再試行が実装されていますので、負荷分散パターンが効果的に機能します。
+;[TODO]
+;これはまさしくØMQの哲学に適合し、中間にプロキシーを介する事でP2Pパターンに拡張することが可能です。
+
+;We don't need a special client; we're still using the Lazy Pirate client. Here is the queue, which is identical to the main task of the load balancing broker:
+
+これには特別なクライアントは必要ありません。
+先程のものぐさ海賊パターンと同じクライアントを利用します。
+こちらが負荷分散ブローカーと同等の機能を持ったキュープロキシーのコードです。
+
+~~~ {caption="spqueue: Simple Pirate queue in C"}
+//  Simple Pirate broker
+//  This is identical to load-balancing pattern, with no reliability
+//  mechanisms. It depends on the client for recovery. Runs forever.
+
+#include "czmq.h"
+#define WORKER_READY   "\001"      //  Signals worker is ready
+
+int main (void)
+{
+    zctx_t *ctx = zctx_new ();
+    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
+    void *backend = zsocket_new (ctx, ZMQ_ROUTER);
+    zsocket_bind (frontend, "tcp://*:5555");    //  For clients
+    zsocket_bind (backend,  "tcp://*:5556");    //  For workers
+
+    //  Queue of available workers
+    zlist_t *workers = zlist_new ();
+    
+    //  The body of this example is exactly the same as lbbroker2.
+    //  .skip
+    while (true) {
+        zmq_pollitem_t items [] = {
+            { backend,  0, ZMQ_POLLIN, 0 },
+            { frontend, 0, ZMQ_POLLIN, 0 }
+        };
+        //  Poll frontend only if we have available workers
+        int rc = zmq_poll (items, zlist_size (workers)? 2: 1, -1);
+        if (rc == -1)
+            break;              //  Interrupted
+
+        //  Handle worker activity on backend
+        if (items [0].revents & ZMQ_POLLIN) {
+            //  Use worker identity for load-balancing
+            zmsg_t *msg = zmsg_recv (backend);
+            if (!msg)
+                break;          //  Interrupted
+            zframe_t *identity = zmsg_unwrap (msg);
+            zlist_append (workers, identity);
+
+            //  Forward message to client if it's not a READY
+            zframe_t *frame = zmsg_first (msg);
+            if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
+                zmsg_destroy (&msg);
+            else
+                zmsg_send (&msg, frontend);
+        }
+        if (items [1].revents & ZMQ_POLLIN) {
+            //  Get client request, route to first available worker
+            zmsg_t *msg = zmsg_recv (frontend);
+            if (msg) {
+                zmsg_wrap (msg, (zframe_t *) zlist_pop (workers));
+                zmsg_send (&msg, backend);
+            }
+        }
+    }
+    //  When we're done, clean up properly
+    while (zlist_size (workers)) {
+        zframe_t *frame = (zframe_t *) zlist_pop (workers);
+        zframe_destroy (&frame);
+    }
+    zlist_destroy (&workers);
+    zctx_destroy (&ctx);
+    return 0;
+    //  .until
+}
+~~~
+
+;Here is the worker, which takes the Lazy Pirate server and adapts it for the load balancing pattern (using the REQ "ready" signaling):
+
+こちらがワーカーのコードです。
+ものぐさ海賊パターンのサーバーと同じような仕組みを負荷分散ブローカーに組み込んでいます。
+
+~~~ {caption="spworker: Simple Pirate worker in C"}
+//  Simple Pirate worker
+//  Connects REQ socket to tcp://*:5556
+//  Implements worker part of load-balancing
+
+#include "czmq.h"
+#define WORKER_READY   "\001"      //  Signals worker is ready
+
+int main (void)
+{
+    zctx_t *ctx = zctx_new ();
+    void *worker = zsocket_new (ctx, ZMQ_REQ);
+
+    //  Set random identity to make tracing easier
+    srandom ((unsigned) time (NULL));
+    char identity [10];
+    sprintf (identity, "%04X-%04X", randof (0x10000), randof (0x10000));
+    zmq_setsockopt (worker, ZMQ_IDENTITY, identity, strlen (identity));
+    zsocket_connect (worker, "tcp://localhost:5556");
+
+    //  Tell broker we're ready for work
+    printf ("I: (%s) worker ready\n", identity);
+    zframe_t *frame = zframe_new (WORKER_READY, 1);
+    zframe_send (&frame, worker, 0);
+
+    int cycles = 0;
+    while (true) {
+        zmsg_t *msg = zmsg_recv (worker);
+        if (!msg)
+            break;              //  Interrupted
+
+        //  Simulate various problems, after a few cycles
+        cycles++;
+        if (cycles > 3 && randof (5) == 0) {
+            printf ("I: (%s) simulating a crash\n", identity);
+            zmsg_destroy (&msg);
+            break;
+        }
+        else
+        if (cycles > 3 && randof (5) == 0) {
+            printf ("I: (%s) simulating CPU overload\n", identity);
+            sleep (3);
+            if (zctx_interrupted)
+                break;
+        }
+        printf ("I: (%s) normal reply\n", identity);
+        sleep (1);              //  Do some heavy work
+        zmsg_send (&msg, worker);
+    }
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;To test this, start a handful of workers, a Lazy Pirate client, and the queue, in any order. You'll see that the workers eventually all crash and burn, and the client retries and then gives up. The queue never stops, and you can restart workers and clients ad nauseam. This model works with any number of clients and workers.
+
+これをテストするには幾つかのワーカーとものぐさ海賊クライアント、およびキュープロキシーを起動してやります。順序はなんでも構いません。
+そうするとワーカーがクラッシュしたり固まったりするでしょうが、キュープロキシーは機能を停止することなく動作し続けます。
+このモデルはクライアントやワーカーの数が幾つでも問題なく動作します。
+
 ## Robust Reliable Queuing (Paranoid Pirate Pattern)
 ## Heartbeating
 ### Shrugging It Off
