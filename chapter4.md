@@ -880,8 +880,31 @@ lpclient &
 キュープロキシーを再起動した場合でもワーカーは再接続して動作を継続し、ワーカーが1つでも動いていればクライアントは正しい応答を受け取る事が出来るでしょう。
 
 ## ハートビート
+;Heartbeating solves the problem of knowing whether a peer is alive or dead. This is not an issue specific to ØMQ. TCP has a long timeout (30 minutes or so), that means that it can be impossible to know whether a peer has died, been disconnected, or gone on a weekend to Prague with a case of vodka, a redhead, and a large expense account.
+
+ハートビートは相手が生きているか死んでいるかを知るための手段です。
+これはØMQ固有の概念ではありません。
+TCPのタイムアウト時間は約非常に長く、大抵30分程度が設定されています。
+これでは相手が生きているのか死んでいのるか、それともプラハに行って酒を飲んでいるか判断することは出来ません。
+
+;It's is not easy to get heartbeating right. When writing the Paranoid Pirate examples, it took about five hours to get the heartbeating working properly. The rest of the request-reply chain took perhaps ten minutes. It is especially easy to create "false failures", i.e., when peers decide that they are disconnected because the heartbeats aren't sent properly.
+
+ハートビートを正しく実装するのは簡単なことではありません。
+神経質な海賊パターンのコードではリクエスト・応答のロジックは10分程度で実装できましたがハートビートを正しく動作させるためには5時間程度掛かりました。
+;[TODO]
+
+;We'll look at the three main answers people use for heartbeating with ØMQ.
+
+それでは、ØMQの利用者がハートビートを実装する際に直面する問題を見て行きましょう。
 
 ### Shrugging It Off
+;The most common approach is to do no heartbeating at all and hope for the best. Many if not most ØMQ applications do this. ØMQ encourages this by hiding peers in many cases. What problems does this approach cause?
+
+;When we use a ROUTER socket in an application that tracks peers, as peers disconnect and reconnect, the application will leak memory (resources that the application holds for each peer) and get slower and slower.
+
+;When we use SUB- or DEALER-based data recipients, we can't tell the difference between good silence (there's no data) and bad silence (the other end died). When a recipient knows the other side died, it can for example switch over to a backup route.
+If we use a TCP connection that stays silent for a long while, it will, in some networks, just die. Sending something (technically, a "keep-alive" more than a heartbeat), will keep the network alive.
+
 ### One-Way Heartbeats
 ### Ping-Pong Heartbeats
 ### Heartbeating for Paranoid Pirate
