@@ -895,15 +895,21 @@ TCPのタイムアウト時間は約非常に長く、大抵30分程度が設定
 
 ;We'll look at the three main answers people use for heartbeating with ØMQ.
 
-それでは、ØMQの利用者がハートビートを実装する際に直面する問題を見て行きましょう。
+それでは、ØMQの利用者がハートビートを実装する際に直面する3つの問題を見て行きましょう。
 
 ### Shrugging It Off
 ;The most common approach is to do no heartbeating at all and hope for the best. Many if not most ØMQ applications do this. ØMQ encourages this by hiding peers in many cases. What problems does this approach cause?
 
-;When we use a ROUTER socket in an application that tracks peers, as peers disconnect and reconnect, the application will leak memory (resources that the application holds for each peer) and get slower and slower.
+ØMQアプリケーションのほとんどはハートビートを行いません。
+その場合どの様な問題が起こるでしょうか?
 
-;When we use SUB- or DEALER-based data recipients, we can't tell the difference between good silence (there's no data) and bad silence (the other end died). When a recipient knows the other side died, it can for example switch over to a backup route.
-If we use a TCP connection that stays silent for a long while, it will, in some networks, just die. Sending something (technically, a "keep-alive" more than a heartbeat), will keep the network alive.
+;* When we use a ROUTER socket in an application that tracks peers, as peers disconnect and reconnect, the application will leak memory (resources that the application holds for each peer) and get slower and slower.
+;* When we use SUB- or DEALER-based data recipients, we can't tell the difference between good silence (there's no data) and bad silence (the other end died). When a recipient knows the other side died, it can for example switch over to a backup route.
+;* If we use a TCP connection that stays silent for a long while, it will, in some networks, just die. Sending something (technically, a "keep-alive" more than a heartbeat), will keep the network alive.
+
+* アプリケーションがROUTERソケットを利用して接続を中継している場合、接続と切断を繰り返す度にメモリリークが発生します。そしてだんだん遅くなっていくでしょう。
+* SUBソケットやDEALERソケットを利用してメッセージを受信する側は、データが送られてこない事が正常なのか異常なのかを判断することが出来ません。接続相手の異常を検知できれば別の相手に切り替えることが出来ます。
+* TCPで接続している場合、長い時間無通信が続くと接続が切られてしまう場合があります。この問題を避けるには「keep-alive」データを送信することで接続を継続することが出来ます。
 
 ### One-Way Heartbeats
 ### Ping-Pong Heartbeats
