@@ -911,8 +911,39 @@ TCPのタイムアウト時間は約非常に長く、大抵30分程度が設定
 * SUBソケットやDEALERソケットを利用してメッセージを受信する側は、データが送られてこない事が正常なのか異常なのかを判断することが出来ません。接続相手の異常を検知できれば別の相手に切り替えることが出来ます。
 * TCPで接続している場合、長い時間無通信が続くと接続が切られてしまう場合があります。この問題を避けるには「keep-alive」データを送信することで接続を継続することが出来ます。
 
-### One-Way Heartbeats
-### Ping-Pong Heartbeats
+### 片側ハートビート
+;A second option is to send a heartbeat message from each node to its peers every second or so. When one node hears nothing from another within some timeout (several seconds, typically), it will treat that peer as dead. Sounds good, right? Sadly, no. This works in some cases but has nasty edge cases in others.
+
+2番目の選択肢は片方のノードからもう片方のノードへ1秒に1回位の間隔でハートビートを送る方法です。
+応答が返らずにタイムアウトが発生した場合(一般的に数秒間)、その相手は落ちたと見なします。
+これで本当に良いのでしょうか?
+これは上手く動作することもありますが、うまく行かない場合もあります。
+
+;For pub-sub, this does work, and it's the only model you can use. SUB sockets cannot talk back to PUB sockets, but PUB sockets can happily send "I'm alive" messages to their subscribers.
+
+pub-subパターンではこの方法が使える唯一の方法です。
+SUBソケットはPUBソケットに対して話しかけることは出来きません、一方、PUBソケットはサブスクライバーに対して「私は生きています」というメッセージを送信できます。
+
+;As an optimization, you can send heartbeats only when there is no real data to send. Furthermore, you can send heartbeats progressively slower and slower, if network activity is an issue (e.g., on mobile networks where activity drains the battery). As long as the recipient can detect a failure (sharp stop in activity), that's fine.
+
+無駄をなくす為には、実際に送信すべきデータがない場合のみハートビートを送信すると良いでしょう。
+また、ネットワークが貧弱な場合(例えばモバイルネットワークでバッテリーを節約したい場合)はハートビートの間隔を出来るだけ遅くするのが良いでしょう。
+サブスクライバーが障害を検知できさえすれば良いのです。
+
+;Here are the typical problems with this design:
+
+この設計の問題点を挙げると、
+
+;* It can be inaccurate when we send large amounts of data, as heartbeats will be delayed behind that data. If heartbeats are delayed, you can get false timeouts and disconnections due to network congestion. Thus, always treat any incoming data as a heartbeat, whether or not the sender optimizes out heartbeats.
+;* While the pub-sub pattern will drop messages for disappeared recipients, PUSH and DEALER sockets will queue them. So if you send heartbeats to a dead peer and it comes back, it will get all the heartbeats you sent, which can be thousands. Whoa, whoa!
+;* This design assumes that heartbeat timeouts are the same across the whole network. But that won't be accurate. Some peers will want very aggressive heartbeating in order to detect faults rapidly. And some will want very relaxed heartbeating, in order to let sleeping networks lie and save power.
+
+* 大量のデータが送信されている場合ハートビートのデータが遅延してしまい、不正確になる可能性があります。ハートビートが遅延してしまうとタイムアウトが発生して接続が切れてしまいます。従って受信者はハートビートを受信するかどうかに関わらず、全てのデータをハートビートとして扱う必要があります。
+* 受信者が居なくなった場合、PUSHソケットやDEALERソケットであれば送信キューにキューイングされるのですが、pub-subパターンの場合はメッセージを喪失してしまいます。ですのでハートビートの送出間隔以内に受信者が再起動を行った場合、ハートビートは全て受け取っていますが、メッセージは取りこぼしている可能性があります。
+* この設計ではハートビートのタイムアウト時間は全て同じである事を前提にしています。しかしそれでは困る場合があります。素早く障害を検知したいノードに対しては積極的なハートビートを行い、電力消費を抑えたいノードに対しては控えめなハートビートを行いたいという事もあるでしょう。
+
+### ピンポンハートビート
+
 ### Heartbeating for Paranoid Pirate
 ## Contracts and Protocols
 ## Service-Oriented Reliable Queuing (Majordomo Pattern)
