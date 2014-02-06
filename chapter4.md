@@ -943,6 +943,19 @@ SUBソケットはPUBソケットに対して話しかけることは出来き�
 * この設計ではハートビートのタイムアウト時間は全て同じである事を前提にしています。しかしそれでは困る場合があります。素早く障害を検知したいノードに対しては積極的なハートビートを行い、電力消費を抑えたいノードに対しては控えめなハートビートを行いたいという事もあるでしょう。
 
 ### ピンポンハートビート
+;The third option is to use a ping-pong dialog. One peer sends a ping command to the other, which replies with a pong command. Neither command has any payload. Pings and pongs are not correlated. Because the roles of "client" and "server" are arbitrary in some networks, we usually specify that either peer can in fact send a ping and expect a pong in response. However, because the timeouts depend on network topologies known best to dynamic clients, it is usually the client that pings the server.
+
+3番目の方法はピンポンのやりとりを行うことです。
+一方がPINGコマンドを送信し、受信者はPONGコマンドを返信します。
+2つのコマンドの相関性を確認するために、両方のコマンドはデータ部を持っています。
+ノードは「クライアント」とか「サーバー」といった役割を持っているかもしれませんが、基本的にどちらがPINGを送信して、どちらがPONGを応答するかは任意です。
+しかしながらタイムアウトはネットワークのトポロジーに依存していますので、動的なクライアントがPINGを行い、サーバーがPONGを返すのが適切でしょう。
+
+;This works for all ROUTER-based brokers. The same optimizations we used in the second model make this work even better: treat any incoming data as a pong, and only send a ping when not otherwise sending data.
+
+これはROUTERソケットを使ったブローカーで上手く動作します。
+2番目の方法で紹介した最適化はここでも有効です。
+送信者は実際に送信すべきデータがない場合のみPINGを送信し、受信者は全てのデータをPONGとして扱う事です。
 
 ### Heartbeating for Paranoid Pirate
 ## Contracts and Protocols
