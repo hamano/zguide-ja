@@ -942,7 +942,7 @@ SUBソケットはPUBソケットに対して話しかけることは出来き�
 * 受信者が居なくなった場合、PUSHソケットやDEALERソケットであれば送信キューにキューイングされるのですが、pub-subパターンの場合はメッセージを喪失してしまいます。ですのでハートビートの送出間隔以内に受信者が再起動を行った場合、ハートビートは全て受け取っていますが、メッセージは取りこぼしている可能性があります。
 * この設計ではハートビートのタイムアウト時間は全て同じである事を前提にしています。しかしそれでは困る場合があります。素早く障害を検知したいノードに対しては積極的なハートビートを行い、電力消費を抑えたいノードに対しては控えめなハートビートを行いたいという事もあるでしょう。
 
-### ピンポンハートビート
+### PING-PONGハートビート
 ;The third option is to use a ping-pong dialog. One peer sends a ping command to the other, which replies with a pong command. Neither command has any payload. Pings and pongs are not correlated. Because the roles of "client" and "server" are arbitrary in some networks, we usually specify that either peer can in fact send a ping and expect a pong in response. However, because the timeouts depend on network topologies known best to dynamic clients, it is usually the client that pings the server.
 
 3番目の方法はピンポンのやりとりを行うことです。
@@ -957,7 +957,108 @@ SUBソケットはPUBソケットに対して話しかけることは出来き�
 2番目の方法で紹介した最適化はここでも有効です。
 送信者は実際に送信すべきデータがない場合のみPINGを送信し、受信者は全てのデータをPONGとして扱う事です。
 
-### Heartbeating for Paranoid Pirate
+### 神経質な海賊パターンでのハートビート
+;For Paranoid Pirate, we chose the second approach. It might not have been the simplest option: if designing this today, I'd probably try a ping-pong approach instead. However the principles are similar. The heartbeat messages flow asynchronously in both directions, and either peer can decide the other is "dead" and stop talking to it.
+
+先ほど説明した神経質な海賊パターンでは2番目の方法でハートビートを行いました。
+これは単純ではありますが、今となってはPING-PONGハートビートを使ったほうが良いでしょう。
+基本的な所は前と同じです。双方向にハートビートメッセージを非同期で送信し、お互いに相手が落ちているかどうか確認することが出来ます。
+
+;In the worker, this is how we handle heartbeats from the queue:
+
+キューブローカーからのハートビートをワーカーが処理するには、
+
+;* We calculate a liveness, which is how many heartbeats we can still miss before deciding the queue is dead. It starts at three and we decrement it each time we miss a heartbeat.
+;* We wait, in the zmq_poll loop, for one second each time, which is our heartbeat interval.
+;* If there's any message from the queue during that time, we reset our liveness to three.
+;* If there's no message during that time, we count down our liveness.
+;* If the liveness reaches zero, we consider the queue dead.
+;* If the queue is dead, we destroy our socket, create a new one, and reconnect.
+;* To avoid opening and closing too many sockets, we wait for a certain interval before reconnecting, and we double the interval each time until it reaches 32 seconds.
+
+* ハートビートのタイムアウトが何回発生したら相手が落ちたと判断するかという基準(liveness)を決定します。ここでは3回を設定します。
+* `zmq_poll`ループではハートビートの間隔の1秒間ブロックしてメッセージを待ちます。
+* ハートビートに限らず、何らかのメッセージが届いたら`liveness`を3にリセットします。
+* メッセージが届かずタイムアウトした場合に`liveness`をカウントダウンします。
+* `liveness`が0になった時、キューブローカーに障害が発生したと判断します。
+* 障害を検知したらソケットを破棄し、再接続を試みます。
+* 大量のソケットが再接続を繰り返すのを避けるためにsleepを行っています。これは再接続の度に2倍され、最大32秒まで増えます。
+
+;And this is how we handle heartbeats to the queue:
+
+そしてキューブローカーがハートビートを処理する流れは以下の通りです。
+
+;* We calculate when to send the next heartbeat; this is a single variable because we're talking to one peer, the queue.
+;* In the zmq_poll loop, whenever we pass this time, we send a heartbeat to the queue.
+
+* 次のハートビートを送信する時間を決定します。これは通信相手が1つの場合は単一の変数です。
+* `zmq_poll`ループの中でこの時間を経過した場合にハートビートを送信します。
+
+;Here's the essential heartbeating code for the worker:
+
+こちらがワーカーがハートビートを行う主要なコードです。
+
+~~~
+#define HEARTBEAT_LIVENESS 3 // 3-5 is reasonable
+#define HEARTBEAT_INTERVAL 1000 // msecs
+#define INTERVAL_INIT 1000 // Initial reconnect
+#define INTERVAL_MAX 32000 // After exponential backoff
+
+…
+// If liveness hits zero, queue is considered disconnected
+size_t liveness = HEARTBEAT_LIVENESS;
+size_t interval = INTERVAL_INIT;
+
+// Send out heartbeats at regular intervals
+uint64_t heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
+
+while (true) {
+    zmq_pollitem_t items [] = { { worker, 0, ZMQ_POLLIN, 0 } };
+    int rc = zmq_poll (items, 1, HEARTBEAT_INTERVAL * ZMQ_POLL_MSEC);
+
+    if (items [0].revents & ZMQ_POLLIN) {
+        // Receive any message from queue
+        liveness = HEARTBEAT_LIVENESS;
+        interval = INTERVAL_INIT;
+    }
+    else
+    if (--liveness == 0) {
+        zclock_sleep (interval);
+        if (interval < INTERVAL_MAX)
+            interval *= 2;
+        zsocket_destroy (ctx, worker);
+        …
+        liveness = HEARTBEAT_LIVENESS;
+    }
+    // Send heartbeat to queue if it's time
+    if (zclock_time () > heartbeat_at) {
+        heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
+        // Send heartbeat message to queue
+    }
+}
+~~~
+
+;The queue does the same, but manages an expiration time for each worker.
+キューブローカー側もだいたい同じですがワーカー毎に有効時間を管理する必要があります。
+
+;Here are some tips for your own heartbeating implementation:
+
+以下はハートビートを実装する上でのアドバイスです。
+
+;* Use zmq_poll or a reactor as the core of your application's main task.
+;* Start by building the heartbeating between peers, test it by simulating failures, and then build the rest of the message flow. Adding heartbeating afterwards is much trickier.
+;* Use simple tracing, i.e., print to console, to get this working. To help you trace the flow of messages between peers, use a dump method such as zmsg offers, and number your messages incrementally so you can see if there are gaps.
+;* In a real application, heartbeating must be configurable and usually negotiated with the peer. Some peers will want aggressive heartbeating, as low as 10 msecs. Other peers will be far away and want heartbeating as high as 30 seconds.
+;* If you have different heartbeat intervals for different peers, your poll timeout should be the lowest (shortest time) of these. Do not use an infinite timeout.
+;* Do heartbeating on the same socket you use for messages, so your heartbeats also act as a keep-alive to stop the network connection from going stale (some firewalls can be unkind to silent connections).
+
+* アプリケーションのメインループでは、`zmq_poll`かリアクターを使用して下さい。
+* ハートビートを実装できたら、まず障害をシミュレートしてテストしてください。そしてその他のメッセージ処理を実装するのが良いでしょう。後からハートビートを実装するのは非常に難い事です。
+* ターミナルに出力するなどして簡単に動作確認してください。メッセージの流れを追うには、zmsgが提供するdump関数が役立ちます。これで想定通りのメッセージが流れているか確認しましょう。
+* 実際のアプリケーションではハートビート間隔は設定で記述するか、ネゴシエートすべきでしょう。特定の接続相手には10ミリ秒程度の積極的なハートビートを行いたい事もあるでしょうし、30秒程度の長い間隔で行いたい事もあります。
+* ハートビート間隔が接続相手毎に異なる場合、`zmq_poll`のポーリング間隔はこれらの中で最短の間隔である必要があります。また、無限のタイムアウトを設定してはいけません。
+* 実際のデータ通信と同じソケットでハートビート行って下さい。ハートービートはネットワークコネクションを維持するためのキープアライブとしての役割もあります。(不親切なルーターは通信が行われていない接続を切ってしまう事があるからです)
+
 ## Contracts and Protocols
 ## Service-Oriented Reliable Queuing (Majordomo Pattern)
 ## Asynchronous Majordomo Pattern
