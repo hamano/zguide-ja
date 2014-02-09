@@ -322,7 +322,7 @@ E: server seems to be offline, abandoning
 * 利点: 接続が成功するまでØMQが自動的に再接続を行ってくれます。
 * 欠点: 代替のサーバーにフェイルオーバーしません。
 
-## 信頼性のあるキューイング (Simple Pirate Pattern)
+## 信頼性のあるキューイング(単純な海賊パターン)
 ;Our second approach extends the Lazy Pirate pattern with a queue proxy that lets us talk, transparently, to multiple servers, which we can more accurately call "workers". We'll develop this in stages, starting with a minimal working model, the Simple Pirate pattern.
 
 2番目に紹介する方法は複数のサーバーと透過的に通信を行うキュープロキシーを用いてものぐさ海賊パターンを拡張します。
@@ -491,7 +491,7 @@ int main (void)
 
 ;The Simple Pirate Queue pattern works pretty well, especially because it's just a combination of two existing patterns. Still, it does have some weaknesses:
 
-単純な海賊キューパターンは、ものぐさ海賊パターンと組み合わせて上手く機能する障害対策でしたが、これには欠点があります。
+単純な海賊パターンはものぐさ海賊パターンと組み合わせて上手く機能する障害対策でしたが、これには欠点があります。
 
 ;* It's not robust in the face of a queue crash and restart. The client will recover, but the workers won't. While ØMQ will reconnect workers' sockets automatically, as far as the newly started queue is concerned, the workers haven't signaled ready, so don't exist. To fix this, we have to do heartbeating from queue to worker so that the worker can detect when the queue has gone away.
 ;* The queue does not detect worker failure, so if a worker dies while idle, the queue can't remove it from its worker queue until the queue sends it a request. The client waits and retries for nothing. It's not a critical problem, but it's not nice. To make this work properly, we do heartbeating from worker to queue, so that the queue can detect a lost worker at any stage.
@@ -711,7 +711,7 @@ int main (void)
 
 以下は神経質な海賊パターンのワーカーです。
 
-~~~ {caption"ppworker: Paranoid Pirate worker in C"}
+~~~ {caption="ppworker: Paranoid Pirate worker in C"}
 //  Paranoid Pirate worker
 
 #include "czmq.h"
@@ -1059,7 +1059,50 @@ while (true) {
 * ハートビート間隔が接続相手毎に異なる場合、`zmq_poll`のポーリング間隔はこれらの中で最短の間隔である必要があります。また、無限のタイムアウトを設定してはいけません。
 * 実際のデータ通信と同じソケットでハートビート行って下さい。ハートービートはネットワークコネクションを維持するためのキープアライブとしての役割もあります。(不親切なルーターは通信が行われていない接続を切ってしまう事があるからです)
 
-## Contracts and Protocols
+## 規約とプロトコル
+;If you're paying attention, you'll realize that Paranoid Pirate is not interoperable with Simple Pirate, because of the heartbeats. But how do we define "interoperable"? To guarantee interoperability, we need a kind of contract, an agreement that lets different teams in different times and places write code that is guaranteed to work together. We call this a "protocol".
+
+ここまで注意深く読んできた読者は、神経質な海賊パターンと単純な海賊パターンを相互運用できないことに気がついたでしょう。
+しかし「相互運用」とはどの様なものでしょうか?
+相互運用を保証するためには、異なる時間や場所で動作しているコードが協調して動作するための規約に同意する必要があります。
+これを私達は「プロトコル」と呼びます。
+
+;It's fun to experiment without specifications, but that's not a sensible basis for real applications. What happens if we want to write a worker in another language? Do we have to read code to see how things work? What if we want to change the protocol for some reason? Even a simple protocol will, if it's successful, evolve and become more complex.
+
+仕様の無いプロトコルで実験することは楽しいことですが、実際のアプリケーションでこれを行うのは賢明な判断とは言えません。
+例えばワーカーを別のプログラミング言語で書きたい場合はどうしますか?
+コードを読んで動作を調べますか?
+プロトコルを変更したい時はどうしますか?
+元々は単純なプロトコルであっても、プロトコルが普及するに従って進化し、複雑になっていきます。
+
+;Lack of contracts is a sure sign of a disposable application. So let's write a contract for this protocol. How do we do that?
+
+規約の欠如はアプリケーションが使い捨てにされる兆候です。
+というわけでプロトコルとしての規約を書いてみましょう。
+
+;There's a wiki at rfc.zeromq.org that we made especially as a home for public ØMQ contracts.
+;To create a new specification, register on the wiki if needed, and follow the instructions. It's fairly straightforward, though writing technical texts is not everyone's cup of tea.
+
+公開されたØMQの規約を集めた[rfc.zeromq.org](http://rfc.zeromq.org/)というWikiサイトがあります。
+新しい仕様を作成するには、wikiのアカウントを登録して書かれている手順に従って下さい。
+技術文書を書くのが得意ではない方もいると思いますが、これはとっても簡単な事ですよ。
+
+;It took me about fifteen minutes to draft the new Pirate Pattern Protocol. It's not a big specification, but it does capture enough to act as the basis for arguments ("your queue isn't PPP compatible; please fix it!").
+
+海賊パターンの仕様を書くのに15分程度掛かりました。
+これは大きな仕様ではありませんが、基本的な振る舞いを理解するためには十分です。
+このキューは神経質な海賊パターンと互換性がありませんので必要に応じて修正して下さい。
+
+;Turning PPP into a real protocol would take more work:
+
+実際の神経質な海賊パターンは以下のように動作します。
+
+;* There should be a protocol version number in the READY command so that it's possible to distinguish between different versions of PPP.
+;* Right now, READY and HEARTBEAT are not entirely distinct from requests and replies. To make them distinct, we would need a message structure that includes a "message type" part.
+
+* プロトコルバージョンを区別できるように、READYコマンドでプロトコルバージョンを通知すべきでしょう。
+* すでに、READYとハートビートコマンドというまったく異なるメッセージ種別が存在します。これらを区別するためにメッセージ構造に「メッセージ種別」を含める必要があるでしょう。
+
 ## Service-Oriented Reliable Queuing (Majordomo Pattern)
 ## Asynchronous Majordomo Pattern
 ## Service Discovery
