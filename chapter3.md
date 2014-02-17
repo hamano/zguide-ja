@@ -999,7 +999,7 @@ int main (void)
 ;Let's walk through a full request-reply chain from client to worker and back. In this code we set the identity of client and worker sockets to make it easier to trace the message frames. In reality, we'd allow the ROUTER sockets to invent identities for connections. Let's assume the client's identity is "CLIENT" and the worker's identity is "WORKER". The client application sends a single frame containing "Hello".
 
 それでは、クライアントがリクエストを行い、ワーカーが応答を返す流れを見て行きましょう。
-このコードでは、メッセージフレームを追跡し易くする為に、クライアントとワーカーのIDを設定しています。
+このコードでは、メッセージフレームを追跡し易くする為にクライアントとワーカーのIDを設定しています。
 実際にはROUTERソケットが接続IDを割り振ることも出来るでしょう。
 ここでは、クライアントのIDを「CLIENT」、ワーカーのIDを「WORKER」だと仮定しましょう。
 まず、クライアント側のアプリケーションが「Hello」という単一のメッセージを送信します。

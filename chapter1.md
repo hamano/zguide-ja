@@ -106,7 +106,7 @@ git clone --depth=1 git://github.com/imatix/zguide.git
 ;Next, browse the examples subdirectory. You'll find examples by language. If there are examples missing in a language you use, you're encouraged to submit a translation. This is how this text became so useful, thanks to the work of many people. All examples are licensed under MIT/X11.
 
 続いてexamplesサブディレクトリを参照すると、プログラミング言語毎のディレクトリ見つけるでしょう。
-もしあなたが利用している言語が無い場合は移植して送って頂けると助かります。
+もしあなたのお気に入りのプログラミング言語が無い場合は移植して送って頂ください。
 この様にして多くの人々の協力でこのテキストは便利になりました。
 全てのサンプルコードはMIT/X11ライセンスで公開されています。
 
