@@ -1103,8 +1103,1127 @@ while (true) {
 * プロトコルバージョンを区別できるように、READYコマンドでプロトコルバージョンを通知すべきでしょう。
 * すでに、READYとハートビートコマンドというまったく異なるメッセージ種別が存在します。これらを区別するためにメッセージ構造に「メッセージ種別」を含める必要があるでしょう。
 
-## Service-Oriented Reliable Queuing (Majordomo Pattern)
-## Asynchronous Majordomo Pattern
+## 信頼性のあるサービス試行キューイング(Majordomoパターン)
+
+![Majordomoパターン](images/fig50.eps)
+
+;The nice thing about progress is how fast it happens when lawyers and committees aren't involved. The one-page MDP specification turns PPP into something more solid. This is how we should design complex architectures: start by writing down the contracts, and only then write software to implement them.
+
+;[TODO]
+Majordomopプロトコルには信頼性を高める効果もあります。
+この様な複雑なアーキテクチャを実装するには、まずプロトコル仕様書を書く必要があります。
+
+;The Majordomo Protocol (MDP) extends and improves on PPP in one interesting way: it adds a "service name" to requests that the client sends, and asks workers to register for specific services. Adding service names turns our Paranoid Pirate queue into a service-oriented broker. The nice thing about MDP is that it came out of working code, a simpler ancestor protocol (PPP), and a precise set of improvements that each solved a clear problem. This made it easy to draft.
+
+Majordomoプロトコルは面白い方法で神経質な海賊パターンを拡張します。
+クライアントが送信するリクエストに「サービス名」を付加し、特定のサービスに登録されたワーカーに振り分けられます。
+神経質な海賊キューにサービス名を追加するとサービス指向ブローカーになります。
+このパターンの良い所は、単純なプロトコル(神経質な海賊パターン)を元にしているため既存の問題が既に解決されていることと、実際に動作するコードが公開されていることです。
+この仕様は簡単に書くことが出来ました。
+
+;To implement Majordomo, we need to write a framework for clients and workers. It's really not sane to ask every application developer to read the spec and make it work, when they could be using a simpler API that does the work for them.
+
+Majordomoプロトコルを実装するには、クライアントとワーカーのフレームワークを用意する必要があるります。
+全てのアプリケーション開発者がプロトコル仕様書を読んで理解するのは難しいことですから簡単に利用できるAPIを用意するのが良いでしょう。
+
+;So while our first contract (MDP itself) defines how the pieces of our distributed architecture talk to each other, our second contract defines how user applications talk to the technical framework we're going to design.
+
+1つ目の仕様書では、分散アーキテクチャーの部品同士が通信を行う方法を定義します。
+そして2つ目の仕様書ではユーザーアプリケーションがこれらのフレームワークと通信する方法を定義します。
+
+;Majordomo has two halves, a client side and a worker side. Because we'll write both client and worker applications, we will need two APIs. Here is a sketch for the client API, using a simple object-oriented approach:
+
+Majordomoプロトコルははクライアント側とワーカー側の2種類に分かれますので2つのAPIが必要です。
+こちらは単純なオブジェクト指向を利用して設計したクライアント側のAPIです。
+
+~~~
+// Majordomo Protocol client example
+// Uses the mdcli API to hide all MDP aspects
+
+// Lets us build this source without creating a library
+#include "mdcliapi.c"
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
+
+    int count;
+    for (count = 0; count < 100000; count++) {
+        zmsg_t *request = zmsg_new ();
+        zmsg_pushstr (request, "Hello world");
+        zmsg_t *reply = mdcli_send (session, "echo", &request);
+        if (reply)
+            zmsg_destroy (&reply);
+        else
+            break; // Interrupt or failure
+    }
+    printf ("%d requests/replies processed\n", count);
+    mdcli_destroy (&session);
+    return 0;
+}
+~~~
+
+;That's it. We open a session to the broker, send a request message, get a reply message back, and eventually close the connection. Here's a sketch for the worker API:
+
+これだけです。
+ブローカとのセッションを張り、リクエストを送信して応答を受け取って接続を切っています。
+今度はワーカー側のAPIです。
+
+~~~
+
+
+// Majordomo Protocol worker example
+// Uses the mdwrk API to hide all MDP aspects
+
+// Lets us build this source without creating a library
+#include "mdwrkapi.c"
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+    mdwrk_t *session = mdwrk_new (
+        "tcp://localhost:5555", "echo", verbose);
+
+    zmsg_t *reply = NULL;
+    while (true) {
+        zmsg_t *request = mdwrk_recv (session, &reply);
+        if (request == NULL)
+            break; // Worker was interrupted
+        reply = request; // Echo is complex… :-)
+    }
+    mdwrk_destroy (&session);
+    return 0;
+}
+~~~
+
+;It's more or less symmetrical, but the worker dialog is a little different. The first time a worker does a recv(), it passes a null reply. Thereafter, it passes the current reply, and gets a new request.
+
+これは対称的なコードに見えるかもしれませんが、ワーカー側のやりとりにちょっとした違いがあります。
+初回のrecv()呼び出しではnullを受け取り、続いてリクエストを受信します。
+
+The client and worker APIs were fairly simple to construct because they're heavily based on the Paranoid Pirate code we already developed. Here is the client API:
+クライアントとワーカーは既に実装済みの神経質な海賊パターンのコードを流用する事で、今回のAPIはとても簡単に設計することができました。
+
+~~~ {caption="mdcliapi: Majordomo client API in C"}
+//  mdcliapi class - Majordomo Protocol Client API
+//  Implements the MDP/Worker spec at http://rfc.zeromq.org/spec:7.
+
+#include "mdcliapi.h"
+
+//  Structure of our class
+//  We access these properties only via class methods
+
+struct _mdcli_t {
+    zctx_t *ctx;                //  Our context
+    char *broker;
+    void *client;               //  Socket to broker
+    int verbose;                //  Print activity to stdout
+    int timeout;                //  Request timeout
+    int retries;                //  Request retries
+};
+
+//  Connect or reconnect to broker
+
+void s_mdcli_connect_to_broker (mdcli_t *self)
+{
+    if (self->client)
+        zsocket_destroy (self->ctx, self->client);
+    self->client = zsocket_new (self->ctx, ZMQ_REQ);
+    zmq_connect (self->client, self->broker);
+    if (self->verbose)
+        zclock_log ("I: connecting to broker at %s...", self->broker);
+}
+
+//  .split constructor and destructor
+//  Here we have the constructor and destructor for our class:
+
+//  Constructor
+
+mdcli_t *
+mdcli_new (char *broker, int verbose)
+{
+    assert (broker);
+
+    mdcli_t *self = (mdcli_t *) zmalloc (sizeof (mdcli_t));
+    self->ctx = zctx_new ();
+    self->broker = strdup (broker);
+    self->verbose = verbose;
+    self->timeout = 2500;           //  msecs
+    self->retries = 3;              //  Before we abandon
+
+    s_mdcli_connect_to_broker (self);
+    return self;
+}
+
+//  Destructor
+
+void
+mdcli_destroy (mdcli_t **self_p)
+{
+    assert (self_p);
+    if (*self_p) {
+        mdcli_t *self = *self_p;
+        zctx_destroy (&self->ctx);
+        free (self->broker);
+        free (self);
+        *self_p = NULL;
+    }
+}
+
+//  .split configure retry behavior
+//  These are the class methods. We can set the request timeout and number
+//  of retry attempts before sending requests:
+
+//  Set request timeout
+
+void
+mdcli_set_timeout (mdcli_t *self, int timeout)
+{
+    assert (self);
+    self->timeout = timeout;
+}
+
+//  Set request retries
+
+void
+mdcli_set_retries (mdcli_t *self, int retries)
+{
+    assert (self);
+    self->retries = retries;
+}
+
+//  .split send request and wait for reply
+//  Here is the {{send}} method. It sends a request to the broker and gets
+//  a reply even if it has to retry several times. It takes ownership of 
+//  the request message, and destroys it when sent. It returns the reply
+//  message, or NULL if there was no reply after multiple attempts:
+
+zmsg_t *
+mdcli_send (mdcli_t *self, char *service, zmsg_t **request_p)
+{
+    assert (self);
+    assert (request_p);
+    zmsg_t *request = *request_p;
+
+    //  Prefix request with protocol frames
+    //  Frame 1: "MDPCxy" (six bytes, MDP/Client x.y)
+    //  Frame 2: Service name (printable string)
+    zmsg_pushstr (request, service);
+    zmsg_pushstr (request, MDPC_CLIENT);
+    if (self->verbose) {
+        zclock_log ("I: send request to '%s' service:", service);
+        zmsg_dump (request);
+    }
+    int retries_left = self->retries;
+    while (retries_left && !zctx_interrupted) {
+        zmsg_t *msg = zmsg_dup (request);
+        zmsg_send (&msg, self->client);
+
+        zmq_pollitem_t items [] = {
+            { self->client, 0, ZMQ_POLLIN, 0 }
+        };
+        //  .split body of send 
+        //  On any blocking call, {{libzmq}} will return -1 if there was
+        //  an error; we could in theory check for different error codes,
+        //  but in practice it's OK to assume it was {{EINTR}} (Ctrl-C):
+        
+        int rc = zmq_poll (items, 1, self->timeout * ZMQ_POLL_MSEC);
+        if (rc == -1)
+            break;          //  Interrupted
+
+        //  If we got a reply, process it
+        if (items [0].revents & ZMQ_POLLIN) {
+            zmsg_t *msg = zmsg_recv (self->client);
+            if (self->verbose) {
+                zclock_log ("I: received reply:");
+                zmsg_dump (msg);
+            }
+            //  We would handle malformed replies better in real code
+            assert (zmsg_size (msg) >= 3);
+
+            zframe_t *header = zmsg_pop (msg);
+            assert (zframe_streq (header, MDPC_CLIENT));
+            zframe_destroy (&header);
+
+            zframe_t *reply_service = zmsg_pop (msg);
+            assert (zframe_streq (reply_service, service));
+            zframe_destroy (&reply_service);
+
+            zmsg_destroy (&request);
+            return msg;     //  Success
+        }
+        else
+        if (--retries_left) {
+            if (self->verbose)
+                zclock_log ("W: no reply, reconnecting...");
+            s_mdcli_connect_to_broker (self);
+        }
+        else {
+            if (self->verbose)
+                zclock_log ("W: permanent error, abandoning");
+            break;          //  Give up
+        }
+    }
+    if (zctx_interrupted)
+        printf ("W: interrupt received, killing client...\n");
+    zmsg_destroy (&request);
+    return NULL;
+}
+~~~
+
+;Let's see how the client API looks in action, with an example test program that does 100K request-reply cycles:
+
+それではクライアントAPIを動かしてみましょう。
+こちらは10万回のリクエスト・応答のサイクルを実行するテストコードです。
+
+~~~{caption="mdclient: Majordomo client application in C"}
+//  Majordomo Protocol client example
+//  Uses the mdcli API to hide all MDP aspects
+
+//  Lets us build this source without creating a library
+#include "mdcliapi.c"
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
+
+    int count;
+    for (count = 0; count < 100000; count++) {
+        zmsg_t *request = zmsg_new ();
+        zmsg_pushstr (request, "Hello world");
+        zmsg_t *reply = mdcli_send (session, "echo", &request);
+        if (reply)
+            zmsg_destroy (&reply);
+        else
+            break;              //  Interrupt or failure
+    }
+    printf ("%d requests/replies processed\n", count);
+    mdcli_destroy (&session);
+    return 0;
+}
+~~~
+
+;And here is the worker API:
+
+そしてこちらはワーカーのAPIです。
+
+~~~ {caption="mdwrkapi: Majordomo worker API in C"}
+//  mdwrkapi class - Majordomo Protocol Worker API
+//  Implements the MDP/Worker spec at http://rfc.zeromq.org/spec:7.
+
+#include "mdwrkapi.h"
+
+//  Reliability parameters
+#define HEARTBEAT_LIVENESS  3       //  3-5 is reasonable
+
+//  .split worker class structure
+//  This is the structure of a worker API instance. We use a pseudo-OO
+//  approach in a lot of the C examples, as well as the CZMQ binding:
+
+//  Structure of our class
+//  We access these properties only via class methods
+
+struct _mdwrk_t {
+    zctx_t *ctx;                //  Our context
+    char *broker;
+    char *service;
+    void *worker;               //  Socket to broker
+    int verbose;                //  Print activity to stdout
+
+    //  Heartbeat management
+    uint64_t heartbeat_at;      //  When to send HEARTBEAT
+    size_t liveness;            //  How many attempts left
+    int heartbeat;              //  Heartbeat delay, msecs
+    int reconnect;              //  Reconnect delay, msecs
+
+    int expect_reply;           //  Zero only at start
+    zframe_t *reply_to;         //  Return identity, if any
+};
+
+//  .split utility functions
+//  We have two utility functions; to send a message to the broker and
+//  to (re)connect to the broker:
+
+//  Send message to broker
+//  If no msg is provided, creates one internally
+
+static void
+s_mdwrk_send_to_broker (mdwrk_t *self, char *command, char *option,
+                        zmsg_t *msg)
+{
+    msg = msg? zmsg_dup (msg): zmsg_new ();
+
+    //  Stack protocol envelope to start of message
+    if (option)
+        zmsg_pushstr (msg, option);
+    zmsg_pushstr (msg, command);
+    zmsg_pushstr (msg, MDPW_WORKER);
+    zmsg_pushstr (msg, "");
+
+    if (self->verbose) {
+        zclock_log ("I: sending %s to broker",
+            mdps_commands [(int) *command]);
+        zmsg_dump (msg);
+    }
+    zmsg_send (&msg, self->worker);
+}
+
+//  Connect or reconnect to broker
+
+void s_mdwrk_connect_to_broker (mdwrk_t *self)
+{
+    if (self->worker)
+        zsocket_destroy (self->ctx, self->worker);
+    self->worker = zsocket_new (self->ctx, ZMQ_DEALER);
+    zmq_connect (self->worker, self->broker);
+    if (self->verbose)
+        zclock_log ("I: connecting to broker at %s...", self->broker);
+
+    //  Register service with broker
+    s_mdwrk_send_to_broker (self, MDPW_READY, self->service, NULL);
+
+    //  If liveness hits zero, queue is considered disconnected
+    self->liveness = HEARTBEAT_LIVENESS;
+    self->heartbeat_at = zclock_time () + self->heartbeat;
+}
+
+//  .split constructor and destructor
+//  Here we have the constructor and destructor for our mdwrk class:
+
+//  Constructor
+
+mdwrk_t *
+mdwrk_new (char *broker,char *service, int verbose)
+{
+    assert (broker);
+    assert (service);
+
+    mdwrk_t *self = (mdwrk_t *) zmalloc (sizeof (mdwrk_t));
+    self->ctx = zctx_new ();
+    self->broker = strdup (broker);
+    self->service = strdup (service);
+    self->verbose = verbose;
+    self->heartbeat = 2500;     //  msecs
+    self->reconnect = 2500;     //  msecs
+
+    s_mdwrk_connect_to_broker (self);
+    return self;
+}
+
+//  Destructor
+
+void
+mdwrk_destroy (mdwrk_t **self_p)
+{
+    assert (self_p);
+    if (*self_p) {
+        mdwrk_t *self = *self_p;
+        zctx_destroy (&self->ctx);
+        free (self->broker);
+        free (self->service);
+        free (self);
+        *self_p = NULL;
+    }
+}
+
+//  .split configure worker
+//  We provide two methods to configure the worker API. You can set the
+//  heartbeat interval and retries to match the expected network performance.
+
+//  Set heartbeat delay
+
+void
+mdwrk_set_heartbeat (mdwrk_t *self, int heartbeat)
+{
+    self->heartbeat = heartbeat;
+}
+
+//  Set reconnect delay
+
+void
+mdwrk_set_reconnect (mdwrk_t *self, int reconnect)
+{
+    self->reconnect = reconnect;
+}
+
+//  .split recv method
+//  This is the {{recv}} method; it's a little misnamed because it first sends
+//  any reply and then waits for a new request. If you have a better name
+//  for this, let me know.
+
+//  Send reply, if any, to broker and wait for next request.
+
+zmsg_t *
+mdwrk_recv (mdwrk_t *self, zmsg_t **reply_p)
+{
+    //  Format and send the reply if we were provided one
+    assert (reply_p);
+    zmsg_t *reply = *reply_p;
+    assert (reply || !self->expect_reply);
+    if (reply) {
+        assert (self->reply_to);
+        zmsg_wrap (reply, self->reply_to);
+        s_mdwrk_send_to_broker (self, MDPW_REPLY, NULL, reply);
+        zmsg_destroy (reply_p);
+    }
+    self->expect_reply = 1;
+
+    while (true) {
+        zmq_pollitem_t items [] = {
+            { self->worker,  0, ZMQ_POLLIN, 0 } };
+        int rc = zmq_poll (items, 1, self->heartbeat * ZMQ_POLL_MSEC);
+        if (rc == -1)
+            break;              //  Interrupted
+
+        if (items [0].revents & ZMQ_POLLIN) {
+            zmsg_t *msg = zmsg_recv (self->worker);
+            if (!msg)
+                break;          //  Interrupted
+            if (self->verbose) {
+                zclock_log ("I: received message from broker:");
+                zmsg_dump (msg);
+            }
+            self->liveness = HEARTBEAT_LIVENESS;
+
+            //  Don't try to handle errors, just assert noisily
+            assert (zmsg_size (msg) >= 3);
+
+            zframe_t *empty = zmsg_pop (msg);
+            assert (zframe_streq (empty, ""));
+            zframe_destroy (&empty);
+
+            zframe_t *header = zmsg_pop (msg);
+            assert (zframe_streq (header, MDPW_WORKER));
+            zframe_destroy (&header);
+
+            zframe_t *command = zmsg_pop (msg);
+            if (zframe_streq (command, MDPW_REQUEST)) {
+                //  We should pop and save as many addresses as there are
+                //  up to a null part, but for now, just save one...
+                self->reply_to = zmsg_unwrap (msg);
+                zframe_destroy (&command);
+                //  .split process message
+                //  Here is where we actually have a message to process; we
+                //  return it to the caller application:
+                
+                return msg;     //  We have a request to process
+            }
+            else
+            if (zframe_streq (command, MDPW_HEARTBEAT))
+                ;               //  Do nothing for heartbeats
+            else
+            if (zframe_streq (command, MDPW_DISCONNECT))
+                s_mdwrk_connect_to_broker (self);
+            else {
+                zclock_log ("E: invalid input message");
+                zmsg_dump (msg);
+            }
+            zframe_destroy (&command);
+            zmsg_destroy (&msg);
+        }
+        else
+        if (--self->liveness == 0) {
+            if (self->verbose)
+                zclock_log ("W: disconnected from broker - retrying...");
+            zclock_sleep (self->reconnect);
+            s_mdwrk_connect_to_broker (self);
+        }
+        //  Send HEARTBEAT if it's time
+        if (zclock_time () > self->heartbeat_at) {
+            s_mdwrk_send_to_broker (self, MDPW_HEARTBEAT, NULL, NULL);
+            self->heartbeat_at = zclock_time () + self->heartbeat;
+        }
+    }
+    if (zctx_interrupted)
+        printf ("W: interrupt received, killing worker...\n");
+    return NULL;
+}
+~~~
+
+;Let's see how the worker API looks in action, with an example test program that implements an echo service:
+
+
+ワーカーのAPIを用いてechoサービスを実装するテストコードを見て行きましょう。
+
+~~~ {caption="mdworker: Majordomo worker application in C"}
+//  Majordomo Protocol worker example
+//  Uses the mdwrk API to hide all MDP aspects
+
+//  Lets us build this source without creating a library
+#include "mdwrkapi.c"
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+    mdwrk_t *session = mdwrk_new (
+        "tcp://localhost:5555", "echo", verbose);
+
+    zmsg_t *reply = NULL;
+    while (true) {
+        zmsg_t *request = mdwrk_recv (session, &reply);
+        if (request == NULL)
+            break;              //  Worker was interrupted
+        reply = request;        //  Echo is complex... :-)
+    }
+    mdwrk_destroy (&session);
+    return 0;
+}
+~~~
+
+;Here are some things to note about the worker API code:
+
+ワーカーAPIについて注意すべき点を挙げます。
+
+;* The APIs are single-threaded. This means, for example, that the worker won't send heartbeats in the background. Happily, this is exactly what we want: if the worker application gets stuck, heartbeats will stop and the broker will stop sending requests to the worker.
+;* The worker API doesn't do an exponential back-off; it's not worth the extra complexity.
+;* The APIs don't do any error reporting. If something isn't as expected, they raise an assertion (or exception depending on the language). This is ideal for a reference implementation, so any protocol errors show immediately. For real applications, the API should be robust against invalid messages.
+
+* このAPIはシングルスレッドで動作します。例えばバックグラウンドスレッドでハートビートを送信しないでください。
+* このAPIは指数的な間隔で再試行を行いません。
+* このAPIはエラー報告を行いません。必要に応じてアサーションや例外を投げたりすると良いでしょう。これは仮の参照実装ですので実際のアプリケーションでは不正なメッセージに対して堅牢でなくてはなりません。
+
+;You might wonder why the worker API is manually closing its socket and opening a new one, when ØMQ will automatically reconnect a socket if the peer disappears and comes back. Look back at the Simple Pirate and Paranoid Pirate workers to understand. Although ØMQ will automatically reconnect workers if the broker dies and comes back up, this isn't sufficient to re-register the workers with the broker. I know of at least two solutions. The simplest, which we use here, is for the worker to monitor the connection using heartbeats, and if it decides the broker is dead, to close its socket and start afresh with a new socket. The alternative is for the broker to challenge unknown workers when it gets a heartbeat from the worker and ask them to re-register. That would require protocol support.
+
+;[TODO]
+
+;Now let's design the Majordomo broker. Its core structure is a set of queues, one per service. We will create these queues as workers appear (we could delete them as workers disappear, but forget that for now because it gets complex). Additionally, we keep a queue of workers per service.
+
+それではMajordomoブローカーを設計してみましょう。
+基本的な構造としてサービス毎にひとつのキューを持っていて、このキューはワーカーが接続した時に生成されます。
+
+;And here is the broker:
+
+こちらがブローカーのコードです。
+
+~~~{caption="mdbroker: Majordomo broker in C"}
+//  Majordomo Protocol broker
+//  A minimal C implementation of the Majordomo Protocol as defined in
+//  http://rfc.zeromq.org/spec:7 and http://rfc.zeromq.org/spec:8.
+
+#include "czmq.h"
+#include "mdp.h"
+
+//  We'd normally pull these from config data
+
+#define HEARTBEAT_LIVENESS  3       //  3-5 is reasonable
+#define HEARTBEAT_INTERVAL  2500    //  msecs
+#define HEARTBEAT_EXPIRY    HEARTBEAT_INTERVAL * HEARTBEAT_LIVENESS
+
+//  .split broker class structure
+//  The broker class defines a single broker instance:
+
+typedef struct {
+    zctx_t *ctx;                //  Our context
+    void *socket;               //  Socket for clients & workers
+    int verbose;                //  Print activity to stdout
+    char *endpoint;             //  Broker binds to this endpoint
+    zhash_t *services;          //  Hash of known services
+    zhash_t *workers;           //  Hash of known workers
+    zlist_t *waiting;           //  List of waiting workers
+    uint64_t heartbeat_at;      //  When to send HEARTBEAT
+} broker_t;
+
+static broker_t *
+    s_broker_new (int verbose);
+static void
+    s_broker_destroy (broker_t **self_p);
+static void
+    s_broker_bind (broker_t *self, char *endpoint);
+static void
+    s_broker_worker_msg (broker_t *self, zframe_t *sender, zmsg_t *msg);
+static void
+    s_broker_client_msg (broker_t *self, zframe_t *sender, zmsg_t *msg);
+static void
+    s_broker_purge (broker_t *self);
+
+//  .split service class structure
+//  The service class defines a single service instance:
+
+typedef struct {
+    broker_t *broker;           //  Broker instance
+    char *name;                 //  Service name
+    zlist_t *requests;          //  List of client requests
+    zlist_t *waiting;           //  List of waiting workers
+    size_t workers;             //  How many workers we have
+} service_t;
+
+static service_t *
+    s_service_require (broker_t *self, zframe_t *service_frame);
+static void
+    s_service_destroy (void *argument);
+static void
+    s_service_dispatch (service_t *service, zmsg_t *msg);
+
+//  .split worker class structure
+//  The worker class defines a single worker, idle or active:
+
+typedef struct {
+    broker_t *broker;           //  Broker instance
+    char *id_string;            //  Identity of worker as string
+    zframe_t *identity;         //  Identity frame for routing
+    service_t *service;         //  Owning service, if known
+    int64_t expiry;             //  When worker expires, if no heartbeat
+} worker_t;
+
+static worker_t *
+    s_worker_require (broker_t *self, zframe_t *identity);
+static void
+    s_worker_delete (worker_t *self, int disconnect);
+static void
+    s_worker_destroy (void *argument);
+static void
+    s_worker_send (worker_t *self, char *command, char *option,
+                   zmsg_t *msg);
+static void
+    s_worker_waiting (worker_t *self);
+
+//  .split broker constructor and destructor
+//  Here are the constructor and destructor for the broker:
+
+static broker_t *
+s_broker_new (int verbose)
+{
+    broker_t *self = (broker_t *) zmalloc (sizeof (broker_t));
+
+    //  Initialize broker state
+    self->ctx = zctx_new ();
+    self->socket = zsocket_new (self->ctx, ZMQ_ROUTER);
+    self->verbose = verbose;
+    self->services = zhash_new ();
+    self->workers = zhash_new ();
+    self->waiting = zlist_new ();
+    self->heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
+    return self;
+}
+
+static void
+s_broker_destroy (broker_t **self_p)
+{
+    assert (self_p);
+    if (*self_p) {
+        broker_t *self = *self_p;
+        zctx_destroy (&self->ctx);
+        zhash_destroy (&self->services);
+        zhash_destroy (&self->workers);
+        zlist_destroy (&self->waiting);
+        free (self);
+        *self_p = NULL;
+    }
+}
+
+//  .split broker bind method
+//  This method binds the broker instance to an endpoint. We can call
+//  this multiple times. Note that MDP uses a single socket for both clients 
+//  and workers:
+
+void
+s_broker_bind (broker_t *self, char *endpoint)
+{
+    zsocket_bind (self->socket, endpoint);
+    zclock_log ("I: MDP broker/0.2.0 is active at %s", endpoint);
+}
+
+//  .split broker worker_msg method
+//  This method processes one READY, REPLY, HEARTBEAT, or
+//  DISCONNECT message sent to the broker by a worker:
+
+static void
+s_broker_worker_msg (broker_t *self, zframe_t *sender, zmsg_t *msg)
+{
+    assert (zmsg_size (msg) >= 1);     //  At least, command
+
+    zframe_t *command = zmsg_pop (msg);
+    char *id_string = zframe_strhex (sender);
+    int worker_ready = (zhash_lookup (self->workers, id_string) != NULL);
+    free (id_string);
+    worker_t *worker = s_worker_require (self, sender);
+
+    if (zframe_streq (command, MDPW_READY)) {
+        if (worker_ready)               //  Not first command in session
+            s_worker_delete (worker, 1);
+        else
+        if (zframe_size (sender) >= 4  //  Reserved service name
+        &&  memcmp (zframe_data (sender), "mmi.", 4) == 0)
+            s_worker_delete (worker, 1);
+        else {
+            //  Attach worker to service and mark as idle
+            zframe_t *service_frame = zmsg_pop (msg);
+            worker->service = s_service_require (self, service_frame);
+            worker->service->workers++;
+            s_worker_waiting (worker);
+            zframe_destroy (&service_frame);
+        }
+    }
+    else
+    if (zframe_streq (command, MDPW_REPLY)) {
+        if (worker_ready) {
+            //  Remove and save client return envelope and insert the
+            //  protocol header and service name, then rewrap envelope.
+            zframe_t *client = zmsg_unwrap (msg);
+            zmsg_pushstr (msg, worker->service->name);
+            zmsg_pushstr (msg, MDPC_CLIENT);
+            zmsg_wrap (msg, client);
+            zmsg_send (&msg, self->socket);
+            s_worker_waiting (worker);
+        }
+        else
+            s_worker_delete (worker, 1);
+    }
+    else
+    if (zframe_streq (command, MDPW_HEARTBEAT)) {
+        if (worker_ready)
+            worker->expiry = zclock_time () + HEARTBEAT_EXPIRY;
+        else
+            s_worker_delete (worker, 1);
+    }
+    else
+    if (zframe_streq (command, MDPW_DISCONNECT))
+        s_worker_delete (worker, 0);
+    else {
+        zclock_log ("E: invalid input message");
+        zmsg_dump (msg);
+    }
+    free (command);
+    zmsg_destroy (&msg);
+}
+
+//  .split broker client_msg method
+//  Process a request coming from a client. We implement MMI requests
+//  directly here (at present, we implement only the mmi.service request):
+
+static void
+s_broker_client_msg (broker_t *self, zframe_t *sender, zmsg_t *msg)
+{
+    assert (zmsg_size (msg) >= 2);     //  Service name + body
+
+    zframe_t *service_frame = zmsg_pop (msg);
+    service_t *service = s_service_require (self, service_frame);
+
+    //  Set reply return identity to client sender
+    zmsg_wrap (msg, zframe_dup (sender));
+
+    //  If we got a MMI service request, process that internally
+    if (zframe_size (service_frame) >= 4
+    &&  memcmp (zframe_data (service_frame), "mmi.", 4) == 0) {
+        char *return_code;
+        if (zframe_streq (service_frame, "mmi.service")) {
+            char *name = zframe_strdup (zmsg_last (msg));
+            service_t *service =
+                (service_t *) zhash_lookup (self->services, name);
+            return_code = service && service->workers? "200": "404";
+            free (name);
+        }
+        else
+            return_code = "501";
+
+        zframe_reset (zmsg_last (msg), return_code, strlen (return_code));
+
+        //  Remove & save client return envelope and insert the
+        //  protocol header and service name, then rewrap envelope.
+        zframe_t *client = zmsg_unwrap (msg);
+        zmsg_push (msg, zframe_dup (service_frame));
+        zmsg_pushstr (msg, MDPC_CLIENT);
+        zmsg_wrap (msg, client);
+        zmsg_send (&msg, self->socket);
+    }
+    else
+        //  Else dispatch the message to the requested service
+        s_service_dispatch (service, msg);
+    zframe_destroy (&service_frame);
+}
+
+//  .split broker purge method
+//  This method deletes any idle workers that haven't pinged us in a
+//  while. We hold workers from oldest to most recent so we can stop
+//  scanning whenever we find a live worker. This means we'll mainly stop
+//  at the first worker, which is essential when we have large numbers of
+//  workers (we call this method in our critical path):
+
+static void
+s_broker_purge (broker_t *self)
+{
+    worker_t *worker = (worker_t *) zlist_first (self->waiting);
+    while (worker) {
+        if (zclock_time () < worker->expiry)
+            break;                  //  Worker is alive, we're done here
+        if (self->verbose)
+            zclock_log ("I: deleting expired worker: %s",
+                        worker->id_string);
+
+        s_worker_delete (worker, 0);
+        worker = (worker_t *) zlist_first (self->waiting);
+    }
+}
+
+//  .split service methods
+//  Here is the implementation of the methods that work on a service:
+
+//  Lazy constructor that locates a service by name or creates a new
+//  service if there is no service already with that name.
+
+static service_t *
+s_service_require (broker_t *self, zframe_t *service_frame)
+{
+    assert (service_frame);
+    char *name = zframe_strdup (service_frame);
+
+    service_t *service =
+        (service_t *) zhash_lookup (self->services, name);
+    if (service == NULL) {
+        service = (service_t *) zmalloc (sizeof (service_t));
+        service->broker = self;
+        service->name = name;
+        service->requests = zlist_new ();
+        service->waiting = zlist_new ();
+        zhash_insert (self->services, name, service);
+        zhash_freefn (self->services, name, s_service_destroy);
+        if (self->verbose)
+            zclock_log ("I: added service: %s", name);
+    }
+    else
+        free (name);
+
+    return service;
+}
+
+//  Service destructor is called automatically whenever the service is
+//  removed from broker->services.
+
+static void
+s_service_destroy (void *argument)
+{
+    service_t *service = (service_t *) argument;
+    while (zlist_size (service->requests)) {
+        zmsg_t *msg = zlist_pop (service->requests);
+        zmsg_destroy (&msg);
+    }
+    zlist_destroy (&service->requests);
+    zlist_destroy (&service->waiting);
+    free (service->name);
+    free (service);
+}
+
+//  .split service dispatch method
+//  This method sends requests to waiting workers:
+
+static void
+s_service_dispatch (service_t *self, zmsg_t *msg)
+{
+    assert (self);
+    if (msg)                    //  Queue message if any
+        zlist_append (self->requests, msg);
+
+    s_broker_purge (self->broker);
+    while (zlist_size (self->waiting) && zlist_size (self->requests)) {
+        worker_t *worker = zlist_pop (self->waiting);
+        zlist_remove (self->broker->waiting, worker);
+        zmsg_t *msg = zlist_pop (self->requests);
+        s_worker_send (worker, MDPW_REQUEST, NULL, msg);
+        zmsg_destroy (&msg);
+    }
+}
+
+//  .split worker methods
+//  Here is the implementation of the methods that work on a worker:
+
+//  Lazy constructor that locates a worker by identity, or creates a new
+//  worker if there is no worker already with that identity.
+
+static worker_t *
+s_worker_require (broker_t *self, zframe_t *identity)
+{
+    assert (identity);
+
+    //  self->workers is keyed off worker identity
+    char *id_string = zframe_strhex (identity);
+    worker_t *worker =
+        (worker_t *) zhash_lookup (self->workers, id_string);
+
+    if (worker == NULL) {
+        worker = (worker_t *) zmalloc (sizeof (worker_t));
+        worker->broker = self;
+        worker->id_string = id_string;
+        worker->identity = zframe_dup (identity);
+        zhash_insert (self->workers, id_string, worker);
+        zhash_freefn (self->workers, id_string, s_worker_destroy);
+        if (self->verbose)
+            zclock_log ("I: registering new worker: %s", id_string);
+    }
+    else
+        free (id_string);
+    return worker;
+}
+
+//  This method deletes the current worker.
+
+static void
+s_worker_delete (worker_t *self, int disconnect)
+{
+    assert (self);
+    if (disconnect)
+        s_worker_send (self, MDPW_DISCONNECT, NULL, NULL);
+
+    if (self->service) {
+        zlist_remove (self->service->waiting, self);
+        self->service->workers--;
+    }
+    zlist_remove (self->broker->waiting, self);
+    //  This implicitly calls s_worker_destroy
+    zhash_delete (self->broker->workers, self->id_string);
+}
+
+//  Worker destructor is called automatically whenever the worker is
+//  removed from broker->workers.
+
+static void
+s_worker_destroy (void *argument)
+{
+    worker_t *self = (worker_t *) argument;
+    zframe_destroy (&self->identity);
+    free (self->id_string);
+    free (self);
+}
+
+//  .split worker send method
+//  This method formats and sends a command to a worker. The caller may
+//  also provide a command option, and a message payload:
+
+static void
+s_worker_send (worker_t *self, char *command, char *option, zmsg_t *msg)
+{
+    msg = msg? zmsg_dup (msg): zmsg_new ();
+
+    //  Stack protocol envelope to start of message
+    if (option)
+        zmsg_pushstr (msg, option);
+    zmsg_pushstr (msg, command);
+    zmsg_pushstr (msg, MDPW_WORKER);
+
+    //  Stack routing envelope to start of message
+    zmsg_wrap (msg, zframe_dup (self->identity));
+
+    if (self->broker->verbose) {
+        zclock_log ("I: sending %s to worker",
+            mdps_commands [(int) *command]);
+        zmsg_dump (msg);
+    }
+    zmsg_send (&msg, self->broker->socket);
+}
+
+//  This worker is now waiting for work
+
+static void
+s_worker_waiting (worker_t *self)
+{
+    //  Queue to broker and service waiting lists
+    assert (self->broker);
+    zlist_append (self->broker->waiting, self);
+    zlist_append (self->service->waiting, self);
+    self->expiry = zclock_time () + HEARTBEAT_EXPIRY;
+    s_service_dispatch (self->service, NULL);
+}
+
+//  .split main task
+//  Finally, here is the main task. We create a new broker instance and
+//  then process messages on the broker socket:
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+
+    broker_t *self = s_broker_new (verbose);
+    s_broker_bind (self, "tcp://*:5555");
+
+    //  Get and process messages forever or until interrupted
+    while (true) {
+        zmq_pollitem_t items [] = {
+            { self->socket,  0, ZMQ_POLLIN, 0 } };
+        int rc = zmq_poll (items, 1, HEARTBEAT_INTERVAL * ZMQ_POLL_MSEC);
+        if (rc == -1)
+            break;              //  Interrupted
+
+        //  Process next input message, if any
+        if (items [0].revents & ZMQ_POLLIN) {
+            zmsg_t *msg = zmsg_recv (self->socket);
+            if (!msg)
+                break;          //  Interrupted
+            if (self->verbose) {
+                zclock_log ("I: received message:");
+                zmsg_dump (msg);
+            }
+            zframe_t *sender = zmsg_pop (msg);
+            zframe_t *empty  = zmsg_pop (msg);
+            zframe_t *header = zmsg_pop (msg);
+
+            if (zframe_streq (header, MDPC_CLIENT))
+                s_broker_client_msg (self, sender, msg);
+            else
+            if (zframe_streq (header, MDPW_WORKER))
+                s_broker_worker_msg (self, sender, msg);
+            else {
+                zclock_log ("E: invalid message:");
+                zmsg_dump (msg);
+                zmsg_destroy (&msg);
+            }
+            zframe_destroy (&sender);
+            zframe_destroy (&empty);
+            zframe_destroy (&header);
+        }
+        //  Disconnect and delete any expired workers
+        //  Send heartbeats to idle workers if needed
+        if (zclock_time () > self->heartbeat_at) {
+            s_broker_purge (self);
+            worker_t *worker = (worker_t *) zlist_first (self->waiting);
+            while (worker) {
+                s_worker_send (worker, MDPW_HEARTBEAT, NULL, NULL);
+                worker = (worker_t *) zlist_next (self->waiting);
+            }
+            self->heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
+        }
+    }
+    if (zctx_interrupted)
+        printf ("W: interrupt received, shutting down...\n");
+
+    s_broker_destroy (&self);
+    return 0;
+}
+~~~
+
+;This is by far the most complex example we've seen. It's almost 500 lines of code. To write this and make it somewhat robust took two days. However, this is still a short piece of code for a full service-oriented broker.
+
+このサンプルコードはこれまで見てきた中で最も複雑な例でしょう。
+約500行もあり、これをちゃんと動作させるために2日もかかりました。
+しかし、完全なサービス指向ブローカーとしては短い方です。
+
+;Here are some things to note about the broker code:
+
+このブローカー注意点は、
+
+;* The Majordomo Protocol lets us handle both clients and workers on a single socket. This is nicer for those deploying and managing the broker: it just sits on one ØMQ endpoint rather than the two that most proxies need.
+;* The broker implements all of MDP/0.1 properly (as far as I know), including disconnection if the broker sends invalid commands, heartbeating, and the rest.
+;* It can be extended to run multiple threads, each managing one socket and one set of clients and workers. This could be interesting for segmenting large architectures. The C code is already organized around a broker class to make this trivial.
+;* A primary/failover or live/live broker reliability model is easy, as the broker essentially has no state except service presence. It's up to clients and workers to choose another broker if their first choice isn't up and running.
+;* The examples use five-second heartbeats, mainly to reduce the amount of output when you enable tracing. Realistic values would be lower for most LAN applications. However, any retry has to be slow enough to allow for a service to restart, say 10 seconds at least.
+
+* Majordomoブローカーはワーカーとクライアントの両方からの接続を1つのソケットで受け付けます。エンドポイントが2つあるより1つの方が管理上便利でしょう。
+* このブローカーはハートビートや不正なコマンドの処理など、MDP/0.1の仕様が全て実装されています。
+* アーキテクチャが大規模になる場合、クライアントとワーカーの組み合わせに対してひとつのスレッドが対応するような、マルチスレッドに拡張することも可能です。これによりとても大規模なアーキテクチャを構築できます。
+* ブローカーは状態を持たないのでプライマリー／バックアップ、あるいはプライマリー／プライマリーという信頼性モデルの構築は簡単です。最初にどちらのブローカーに接続するかはクライアントやワーカー次第です。
+* このサンプルコードでは動作を確認しやすい様に、ハートビートを5秒間の間隔で行っています。実際のアプリケーションではもっと短い間隔の方が良いでしょうが、サービスを再起動する場合を考えて、リトライ間隔は10秒以上にした方が良いでしょう。
+
+;We later improved and extended the protocol and the Majordomo implementation, which now sits in its own Github project. If you want a properly usable Majordomo stack, use the GitHub project.
+
+後に私達はこのMajordomoプロトコルの拡張と改良を行い、GitHubプロジェクトで公開しました。
+ちゃんとしたMajordomoスタックを利用したい場合はGitHubプロジェクトを見て下さい。
+
+## 非同期のMajordomoパターン
+;The Majordomo implementation in the previous section is simple and stupid. The client is just the original Simple Pirate, wrapped up in a sexy API. When I fire up a client, broker, and worker on a test box, it can process 100,000 requests in about 14 seconds. That is partially due to the code, which cheerfully copies message frames around as if CPU cycles were free. But the real problem is that we're doing network round-trips. ØMQ disables Nagle's algorithm, but round-tripping is still slow.
+
+
+;Theory is great in theory, but in practice, practice is better. Let's measure the actual cost of round-tripping with a simple test program. This sends a bunch of messages, first waiting for a reply to each message, and second as a batch, reading all the replies back as a batch. Both approaches do the same work, but they give very different results. We mock up a client, broker, and worker:
+
 ## Service Discovery
 ## Idempotent Services
 ## Disconnected Reliability (Titanic Pattern)
