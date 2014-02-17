@@ -2211,7 +2211,7 @@ int main (int argc, char *argv [])
 * このブローカーはハートビートや不正なコマンドの処理など、MDP/0.1の仕様が全て実装されています。
 * アーキテクチャが大規模になる場合、クライアントとワーカーの組み合わせに対してひとつのスレッドが対応するような、マルチスレッドに拡張することも可能です。これによりとても大規模なアーキテクチャを構築できます。
 * ブローカーは状態を持たないのでプライマリー／バックアップ、あるいはプライマリー／プライマリーという信頼性モデルの構築は簡単です。最初にどちらのブローカーに接続するかはクライアントやワーカー次第です。
-* このサンプルコードでは動作を確認しやすい様に、ハートビートを5秒間の間隔で行っています。実際のアプリケーションではもっと短い間隔の方が良いでしょうが、サービスを再起動する場合を考えて、リトライ間隔は10秒以上にした方が良いでしょう。
+* このサンプルコードでは動作を確認しやすい様に、ハートビートを5秒間の間隔で行っています。実際のアプリケーションではもっと短い間隔の方が良いでしょうが、サービスを再起動する場合を考えて、再試行間隔は10秒以上にした方が良いでしょう。
 
 ;We later improved and extended the protocol and the Majordomo implementation, which now sits in its own Github project. If you want a properly usable Majordomo stack, use the GitHub project.
 
@@ -2221,8 +2221,433 @@ int main (int argc, char *argv [])
 ## 非同期のMajordomoパターン
 ;The Majordomo implementation in the previous section is simple and stupid. The client is just the original Simple Pirate, wrapped up in a sexy API. When I fire up a client, broker, and worker on a test box, it can process 100,000 requests in about 14 seconds. That is partially due to the code, which cheerfully copies message frames around as if CPU cycles were free. But the real problem is that we're doing network round-trips. ØMQ disables Nagle's algorithm, but round-tripping is still slow.
 
+前節では愚直なMajordomoの実装を紹介しました。
+クライアントは単純な海賊モデルをセクシーなAPIでラップしただけのものです。
+クライアントとブローカーとワーカーを1台のサーバーで稼働させると14秒間の間に10万リクエスト処理できるはずです。すなわちCPUリソースのある限りメッセージフレームをコピー出来るという事です。しかし現実的にはネットワークのラウンドトリップが問題になります。ØMQはNagleのアルゴリズムを無効にしており、ラウンドトリップは非常に遅いものなのです。
 
 ;Theory is great in theory, but in practice, practice is better. Let's measure the actual cost of round-tripping with a simple test program. This sends a bunch of messages, first waiting for a reply to each message, and second as a batch, reading all the replies back as a batch. Both approaches do the same work, but they give very different results. We mock up a client, broker, and worker:
+
+理論は理論として素晴らしいものですが、実践には実践の良さがあります。
+簡単なテストプログラムを作成して実際のラウンドトリップを計測してみましょう。
+
+1つ目のテストは大量のメッセージをひとつずつ送信と受信を繰り返します。
+もうひとつのテストは、まず大量のメッセージを送信して、あとから全ての応答を受信します。
+両方のテストは同じことを行っていますが、異なるテスト結果が得られるでしょう。
+テストコードは以下の通りです。
+
+~~~ {caption="tripping: Round-trip demonstrator in C"}
+//  Round-trip demonstrator
+//  While this example runs in a single process, that is just to make
+//  it easier to start and stop the example. The client task signals to
+//  main when it's ready.
+
+#include "czmq.h"
+
+static void
+client_task (void *args, zctx_t *ctx, void *pipe)
+{
+    void *client = zsocket_new (ctx, ZMQ_DEALER);
+    zsocket_connect (client, "tcp://localhost:5555");
+    printf ("Setting up test...\n");
+    zclock_sleep (100);
+
+    int requests;
+    int64_t start;
+
+    printf ("Synchronous round-trip test...\n");
+    start = zclock_time ();
+    for (requests = 0; requests < 10000; requests++) {
+        zstr_send (client, "hello");
+        char *reply = zstr_recv (client);
+        free (reply);
+    }
+    printf (" %d calls/second\n",
+        (1000 * 10000) / (int) (zclock_time () - start));
+
+    printf ("Asynchronous round-trip test...\n");
+    start = zclock_time ();
+    for (requests = 0; requests < 100000; requests++)
+        zstr_send (client, "hello");
+    for (requests = 0; requests < 100000; requests++) {
+        char *reply = zstr_recv (client);
+        free (reply);
+    }
+    printf (" %d calls/second\n",
+        (1000 * 100000) / (int) (zclock_time () - start));
+    zstr_send (pipe, "done");
+}
+
+//  .split worker task
+//  Here is the worker task. All it does is receive a message, and
+//  bounce it back the way it came:
+
+static void *
+worker_task (void *args)
+{
+    zctx_t *ctx = zctx_new ();
+    void *worker = zsocket_new (ctx, ZMQ_DEALER);
+    zsocket_connect (worker, "tcp://localhost:5556");
+    
+    while (true) {
+        zmsg_t *msg = zmsg_recv (worker);
+        zmsg_send (&msg, worker);
+    }
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+//  .split broker task
+//  Here is the broker task. It uses the {{zmq_proxy}} function to switch
+//  messages between frontend and backend:
+
+static void *
+broker_task (void *args)
+{
+    //  Prepare our context and sockets
+    zctx_t *ctx = zctx_new ();
+    void *frontend = zsocket_new (ctx, ZMQ_DEALER);
+    zsocket_bind (frontend, "tcp://*:5555");
+    void *backend = zsocket_new (ctx, ZMQ_DEALER);
+    zsocket_bind (backend, "tcp://*:5556");
+    zmq_proxy (frontend, backend, NULL);
+    zctx_destroy (&ctx);
+    return NULL;
+}
+
+//  .split main task
+//  Finally, here's the main task, which starts the client, worker, and
+//  broker, and then runs until the client signals it to stop:
+
+int main (void)
+{
+    //  Create threads
+    zctx_t *ctx = zctx_new ();
+    void *client = zthread_fork (ctx, client_task, NULL);
+    zthread_new (worker_task, NULL);
+    zthread_new (broker_task, NULL);
+
+    //  Wait for signal on client pipe
+    char *signal = zstr_recv (client);
+    free (signal);
+
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;On my development box, this program says:
+
+私の開発サーバーでは以下の結果が得られました。
+
+~~~
+Setting up test...
+Synchronous round-trip test...
+ 9057 calls/second
+Asynchronous round-trip test...
+ 173010 calls/second
+~~~
+
+;Note that the client thread does a small pause before starting. This is to get around one of the "features" of the router socket: if you send a message with the address of a peer that's not yet connected, the message gets discarded. In this example we don't use the load balancing mechanism, so without the sleep, if the worker thread is too slow to connect, it will lose messages, making a mess of our test.
+
+クライアントは計測を開始する前に少しだけsleepする必要があることに注意して下さい。
+ルーティング先が存在しない場合はROUTERソケットはメッセージを捨てるという「機能」があるからです。
+この例では負荷分散パターンを使用していませんので、sleepを入れないとワーカーの接続に時間がかかってしまった場合にメッセージが失われてしまいます。
+これでは計測のテストになりません。
+
+;As we see, round-tripping in the simplest case is 20 times slower than the asynchronous, "shove it down the pipe as fast as it'll go" approach. Let's see if we can apply this to Majordomo to make it faster.
+
+ご覧の通り、1つ目のテストは2番目の非同期のテストよりもランドトリップの影響で20倍程度遅い事が判ります。
+それではこの非同期の実装をMajordomoパターンに適用してみましょう。
+
+;First, we modify the client API to send and receive in two separate methods:
+
+まず、APIを送信と受信の2つの関数に別けます。
+
+~~~
+mdcli_t *mdcli_new (char *broker);
+void mdcli_destroy (mdcli_t **self_p);
+int mdcli_send (mdcli_t *self, char *service, zmsg_t **request_p);
+zmsg_t *mdcli_recv (mdcli_t *self);
+~~~
+
+;It's literally a few minutes' work to refactor the synchronous client API to become asynchronous:
+
+同期式クライアントを非同期に書き換えるのはほんの数分の手間です。
+
+~~~{caption="mdcliapi2: Majordomo asynchronous client API in C"}
+//  mdcliapi2 class - Majordomo Protocol Client API
+//  Implements the MDP/Worker spec at http://rfc.zeromq.org/spec:7.
+
+#include "mdcliapi2.h"
+
+//  Structure of our class
+//  We access these properties only via class methods
+
+struct _mdcli_t {
+    zctx_t *ctx;                //  Our context
+    char *broker;
+    void *client;               //  Socket to broker
+    int verbose;                //  Print activity to stdout
+    int timeout;                //  Request timeout
+};
+
+//  Connect or reconnect to broker. In this asynchronous class we use a
+//  DEALER socket instead of a REQ socket; this lets us send any number
+//  of requests without waiting for a reply.
+
+void s_mdcli_connect_to_broker (mdcli_t *self)
+{
+    if (self->client)
+        zsocket_destroy (self->ctx, self->client);
+    self->client = zsocket_new (self->ctx, ZMQ_DEALER);
+    zmq_connect (self->client, self->broker);
+    if (self->verbose)
+        zclock_log ("I: connecting to broker at %s...", self->broker);
+}
+
+//  The constructor and destructor are the same as in mdcliapi, except
+//  we don't do retries, so there's no retries property.
+//  .skip
+//  ---------------------------------------------------------------------
+//  Constructor
+
+mdcli_t *
+mdcli_new (char *broker, int verbose)
+{
+    assert (broker);
+
+    mdcli_t *self = (mdcli_t *) zmalloc (sizeof (mdcli_t));
+    self->ctx = zctx_new ();
+    self->broker = strdup (broker);
+    self->verbose = verbose;
+    self->timeout = 2500;           //  msecs
+
+    s_mdcli_connect_to_broker (self);
+    return self;
+}
+
+//  Destructor
+
+void
+mdcli_destroy (mdcli_t **self_p)
+{
+    assert (self_p);
+    if (*self_p) {
+        mdcli_t *self = *self_p;
+        zctx_destroy (&self->ctx);
+        free (self->broker);
+        free (self);
+        *self_p = NULL;
+    }
+}
+
+//  Set request timeout
+
+void
+mdcli_set_timeout (mdcli_t *self, int timeout)
+{
+    assert (self);
+    self->timeout = timeout;
+}
+
+//  .until
+//  .skip
+//  The send method now just sends one message, without waiting for a
+//  reply. Since we're using a DEALER socket we have to send an empty
+//  frame at the start, to create the same envelope that the REQ socket
+//  would normally make for us:
+
+int
+mdcli_send (mdcli_t *self, char *service, zmsg_t **request_p)
+{
+    assert (self);
+    assert (request_p);
+    zmsg_t *request = *request_p;
+
+    //  Prefix request with protocol frames
+    //  Frame 0: empty (REQ emulation)
+    //  Frame 1: "MDPCxy" (six bytes, MDP/Client x.y)
+    //  Frame 2: Service name (printable string)
+    zmsg_pushstr (request, service);
+    zmsg_pushstr (request, MDPC_CLIENT);
+    zmsg_pushstr (request, "");
+    if (self->verbose) {
+        zclock_log ("I: send request to '%s' service:", service);
+        zmsg_dump (request);
+    }
+    zmsg_send (&request, self->client);
+    return 0;
+}
+
+//  .skip
+//  The recv method waits for a reply message and returns that to the 
+//  caller.
+//  ---------------------------------------------------------------------
+//  Returns the reply message or NULL if there was no reply. Does not
+//  attempt to recover from a broker failure, this is not possible
+//  without storing all unanswered requests and resending them all...
+
+zmsg_t *
+mdcli_recv (mdcli_t *self)
+{
+    assert (self);
+
+    //  Poll socket for a reply, with timeout
+    zmq_pollitem_t items [] = { { self->client, 0, ZMQ_POLLIN, 0 } };
+    int rc = zmq_poll (items, 1, self->timeout * ZMQ_POLL_MSEC);
+    if (rc == -1)
+        return NULL;            //  Interrupted
+
+    //  If we got a reply, process it
+    if (items [0].revents & ZMQ_POLLIN) {
+        zmsg_t *msg = zmsg_recv (self->client);
+        if (self->verbose) {
+            zclock_log ("I: received reply:");
+            zmsg_dump (msg);
+        }
+        //  Don't try to handle errors, just assert noisily
+        assert (zmsg_size (msg) >= 4);
+
+        zframe_t *empty = zmsg_pop (msg);
+        assert (zframe_streq (empty, ""));
+        zframe_destroy (&empty);
+
+        zframe_t *header = zmsg_pop (msg);
+        assert (zframe_streq (header, MDPC_CLIENT));
+        zframe_destroy (&header);
+
+        zframe_t *service = zmsg_pop (msg);
+        zframe_destroy (&service);
+
+        return msg;     //  Success
+    }
+    if (zctx_interrupted)
+        printf ("W: interrupt received, killing client...\n");
+    else
+    if (self->verbose)
+        zclock_log ("W: permanent error, abandoning request");
+
+    return NULL;
+}
+~~~
+
+;The differences are:
+
+変更点は、
+
+;* We use a DEALER socket instead of REQ, so we emulate REQ with an empty delimiter frame before each request and each response.
+;* We don't retry requests; if the application needs to retry, it can do this itself.
+;* We break the synchronous send method into separate send and recv methods.
+;* The send method is asynchronous and returns immediately after sending. The caller can thus send a number of messages before getting a response.
+;* The recv method waits for (with a timeout) one response and returns that to the caller.
+
+* REQソケットの代わりにDEALERソケットに置き換えましたのでエンベロープ意識する必要があります。
+* APIの中でリクエストの再試行を行いません。必要に応じてアプリケーション内で再試行を行って下さい。
+* 同期的な送受信のAPIを廃止して、送信と受信の関数に別けました。
+* send関数は非同期ですので呼び出し後直ぐに戻ってきます。
+* recv関数はタイムアウト付きでブロックし、メッセージを受信すると呼び出しに戻ります。
+
+;And here's the corresponding client test program, which sends 100,000 messages and then receives 100,000 back:
+
+そして10万メッセージを送信した後に10万メッセージを受信するテストプログラムをこのAPIを使って書き直すと以下のようになります。
+
+~~~{caption="mdclient2: Majordomo client application in C"}
+//  Majordomo Protocol client example - asynchronous
+//  Uses the mdcli API to hide all MDP aspects
+
+//  Lets us build this source without creating a library
+#include "mdcliapi2.c"
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
+
+    int count;
+    for (count = 0; count < 100000; count++) {
+        zmsg_t *request = zmsg_new ();
+        zmsg_pushstr (request, "Hello world");
+        mdcli_send (session, "echo", &request);
+    }
+    for (count = 0; count < 100000; count++) {
+        zmsg_t *reply = mdcli_recv (session);
+        if (reply)
+            zmsg_destroy (&reply);
+        else
+            break;              //  Interrupted by Ctrl-C
+    }
+    printf ("%d replies received\n", count);
+    mdcli_destroy (&session);
+    return 0;
+}
+~~~
+
+;The broker and worker are unchanged because we've not modified the protocol at all. We see an immediate improvement in performance. Here's the synchronous client chugging through 100K request-reply cycles:
+
+プロトコル自体を変更した訳ではありませんので、ブローカーとワーカーのコードに変更はありません。
+それではパフォーマンスがどれだけ改善したか見てみましょう。
+以下は同期的クライアントでに一気に10万リクエストの送受信を行った際の実行結果です。
+
+~~~
+$ time mdclient
+100000 requests/replies processed
+
+real    0m14.088s
+user    0m1.310s
+sys     0m2.670s
+~~~
+
+;And here's the asynchronous client, with a single worker:
+
+そして、こちらが非同期クライアントで1つのワーカーにリクエストを行った際の実行結果です。
+
+~~~
+$ time mdclient2
+100000 replies received
+
+real    0m8.730s
+user    0m0.920s
+sys     0m1.550s
+~~~
+
+;Twice as fast. Not bad, but let's fire up 10 workers and see how it handles the traffic
+
+2倍早くなりました、悪くありませんがワーカーを10に増やしてみましょう。
+
+~~~
+$ time mdclient2
+100000 replies received
+
+real    0m3.863s
+user    0m0.730s
+sys     0m0.470s
+~~~
+
+;It isn't fully asynchronous because workers get their messages on a strict last-used basis. But it will scale better with more workers. On my PC, after eight or so workers, it doesn't get any faster. Four cores only stretches so far. But we got a 4x improvement in throughput with just a few minutes' work. The broker is still unoptimized. It spends most of its time copying message frames around, instead of doing zero-copy, which it could. But we're getting 25K reliable request/reply calls a second, with pretty low effort.
+
+ワーカーは受け取ったメッセージを順番に処理しているのでこれは完全な非同期とは言えませんが、これはワーカーを増やすことで解決できます。
+私のPCは4Coreしか無いのでワーカーを8個以上に増やしてもそれ以上早くなりませんでした。
+しかし、まだブローカーについては最適化を行っていないにも関わらず、たった数分間の工夫で4倍ものパフォーマンスの向上が得られたのです。
+処理の大半はメッセージのコピーに費やされているので、ゼロコピーを行うことで更に早くなる余地があります。
+さして労力をかけずに2.5万回のリクエスト・応答を処理できればまあ十分でしょう。
+
+;However, the asynchronous Majordomo pattern isn't all roses. It has a fundamental weakness, namely that it cannot survive a broker crash without more work. If you look at the mdcliapi2 code you'll see it does not attempt to reconnect after a failure. A proper reconnect would require the following:
+
+ところで、非同期のMajordomoパターンに欠点が無いわけではありません。
+これにはブローカーのクラッシュから回復できないという根本的な欠点があります。
+mdcliapi2のコードを読むと再接続を行っていない事が分かるでしょう。
+正しく再接続を行うには以下のことを行う必要があります。
+
+;* A number on every request and a matching number on every reply, which would ideally require a change to the protocol to enforce.
+;* Tracking and holding onto all outstanding requests in the client API, i.e., those for which no reply has yet been received.
+;* In case of failover, for the client API to resend all outstanding requests to the broker.
+
+* 全てのリクエストに番号を振り、応答と照合します。これにはプロトコルの変更が必要です。
+* 送信する全てのリクエストをクライアントAPIでトラッキングし、受信していない応答を把握する必要があります。
+* フェイルオーバーが発生した場合はまだ応答が返ってきていないリクエストをブローカーに再送します。
+
+;It's not a deal breaker, but it does show that performance often means complexity. Is this worth doing for Majordomo? It depends on your use case. For a name lookup service you call once per session, no. For a web frontend serving thousands of clients, probably yes.
+
 
 ## Service Discovery
 ## Idempotent Services
