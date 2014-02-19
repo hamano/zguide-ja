@@ -2648,8 +2648,12 @@ mdcliapi2のコードを読むと再接続を行っていない事が分かる�
 
 ;It's not a deal breaker, but it does show that performance often means complexity. Is this worth doing for Majordomo? It depends on your use case. For a name lookup service you call once per session, no. For a web frontend serving thousands of clients, probably yes.
 
+これらは無理なことではありませんが、確実に複雑性が増えます。
+これが本当にMajordomoに必要かどうかは用途に依存するでしょう。
+数千ものクライアントが接続するWEBフロントエンドでは必要かもしれませんが、DNSの様に1リクエストでセッションが完了する様なサービスでは必要ありません。
 
-## Service Discovery
+## サービスディスカバリー
+
 ## Idempotent Services
 ## Disconnected Reliability (Titanic Pattern)
 ## High-Availability Pair (Binary Star Pattern)
