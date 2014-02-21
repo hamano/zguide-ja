@@ -2653,6 +2653,83 @@ mdcliapi2のコードを読むと再接続を行っていない事が分かる�
 数千ものクライアントが接続するWEBフロントエンドでは必要かもしれませんが、DNSの様に1リクエストでセッションが完了する様なサービスでは必要ありません。
 
 ## サービスディスカバリー
+;So, we have a nice service-oriented broker, but we have no way of knowing whether a particular service is available or not. We know whether a request failed, but we don't know why. It is useful to be able to ask the broker, "is the echo service running?" The most obvious way would be to modify our MDP/Client protocol to add commands to ask this. But MDP/Client has the great charm of being simple. Adding service discovery to it would make it as complex as the MDP/Worker protocol.
+
+素晴らしいサービス指向ブローカーを作ることが出来ましたが、まだサービスが登録済みかどうかを知る方法がありません。
+動作していないサービスへのリクエストは失敗しますが、何故失敗したのかが分かりません。
+そこで「echoサービスは動作していますか?」という様な問い合わせを行えると便利でしょう。
+最も解かりやすい方法はMDPのクライアント側のプロトコルを改修して新しいコマンドを追加することです。
+しかしこれではMDPクライアントプロトコルの最大の魅力である単純さが失われてしまいます。
+
+;Another option is to do what email does, and ask that undeliverable requests be returned. This can work well in an asynchronous world, but it also adds complexity. We need ways to distinguish returned requests from replies and to handle these properly.
+
+もうひとつの方法はEメールの様に無効なリクエストを返送することです。
+この方法は非同期の世界では上手く動作しますが、応答を受け取る際にどの様な応答かを適切に区別する必要があるため更に複雑性になってしまいます。
+
+;Let's try to use what we've already built, building on top of MDP instead of modifying it. Service discovery is, itself, a service. It might indeed be one of several management services, such as "disable service X", "provide statistics", and so on. What we want is a general, extensible solution that doesn't affect the protocol or existing applications.
+
+という訳で、既に私が用意した、MDPプロトコルを踏襲したサービスディスカバリーを使ってみましょう。
+サービスディスカバリーもそれ自体がサービスです。
+サービスを無効にしたり、サービスの利用統計提供するなどの管理サービスも必要になる可能性もあるでしょう。
+必要なのは、既存のプロトコルやアプリケーションに影響しない一般的で拡張性のあるソリューションです。
+
+;So here's a small RFC that layers this on top of MDP: the Majordomo Management Interface (MMI). We already implemented it in the broker, though unless you read the whole thing you probably missed that. I'll explain how it works in the broker:
+
+ここに[MMI: Majordomo Management Interface](http://rfc.zeromq.org/spec:8)というMDPプロトコルの上レイヤに構築した小さな仕様書があります。
+私達は既にこのプロトコルを実装しているのですが、コードをじっくり読んでいないのであれば恐らく見逃しているでしょう。
+これがどの様に動作するか説明すると。
+
+;* When a client requests a service that starts with mmi., instead of routing this to a worker, we handle it internally.
+;* We handle just one service in this broker, which is mmi.service, the service discovery service.
+;* The payload for the request is the name of an external service (a real one, provided by a worker).
+;* The broker returns "200" (OK) or "404" (Not found), depending on whether there are workers registered for that service or not.
+
+* クライアントがmmiで始まるサービスに対してリクエストを行うと、ブローカーはワーカーにルーティングせずに内部的に処理します。
+* このブローカーが行うサービスのひとつとして、mmi.serviceというサービス名でサービスディスカバリーを提供します。
+* リクエストデータは実際に問い合わせを行うサービス名を指定します。
+* ブローカーはそれが登録済みのサービスであれば「200」、存在しなければ「404」を返します。
+
+;Here's how we use the service discovery in an application:
+
+以下はアプリケーションの中でサービスディスカバリーを使用する方法です。
+
+~~~{caption="mmiecho: Service discovery over Majordomo in C"}
+//  MMI echo query example
+
+//  Lets us build this source without creating a library
+#include "mdcliapi.c"
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
+
+    //  This is the service we want to look up
+    zmsg_t *request = zmsg_new ();
+    zmsg_addstr (request, "echo");
+
+    //  This is the service we send our request to
+    zmsg_t *reply = mdcli_send (session, "mmi.service", &request);
+
+    if (reply) {
+        char *reply_code = zframe_strdup (zmsg_first (reply));
+        printf ("Lookup echo service: %s\n", reply_code);
+        free (reply_code);
+        zmsg_destroy (&reply);
+    }
+    else
+        printf ("E: no response from broker, make sure it's running\n");
+
+    mdcli_destroy (&session);
+    return 0;
+}
+~~~
+
+;Try this with and without a worker running, and you should see the little program report "200" or "404" accordingly. The implementation of MMI in our example broker is flimsy. For example, if a worker disappears, services remain "present". In practice, a broker should remove services that have no workers after some configurable timeout.
+
+ワーカーを起動していない状態でこのコードを実行すると「404」が返ってくるでしょう。
+このMMI実装は手抜きですので、ワーカーが居なくなった場合も登録されたままになってしまいます。
+実際には、ワーカーが居なくなって一定のタイムアウトが経過するとサービスを削除する必要があります。
 
 ## Idempotent Services
 ## Disconnected Reliability (Titanic Pattern)
