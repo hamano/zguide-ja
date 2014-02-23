@@ -2731,7 +2731,57 @@ int main (int argc, char *argv [])
 このMMI実装は手抜きですので、ワーカーが居なくなった場合も登録されたままになってしまいます。
 実際には、ワーカーが居なくなって一定のタイムアウトが経過するとサービスを削除する必要があります。
 
-## Idempotent Services
+## サービスの冪等性
+;Idempotency is not something you take a pill for. What it means is that it's safe to repeat an operation. Checking the clock is idempotent. Lending ones credit card to ones children is not. While many client-to-server use cases are idempotent, some are not. Examples of idempotent use cases include:
+
+冪等性と聞いてなんだか難しいものだと考える必要はありません。
+これは単に、何度繰り返し実行しても安全であるという意味です。
+時刻の確認は冪等性があります。
+クレジットカードを子供に貸す行為には冪等性はありません。
+クライアント・サーバーモデルの多くは冪等性がありますが、無いものもあります。
+例を挙げると、
+
+;* Stateless task distribution, i.e., a pipeline where the servers are stateless workers that compute a reply based purely on the state provided by a request. In such a case, it's safe (though inefficient) to execute the same request many times.
+;* A name service that translates logical addresses into endpoints to bind or connect to. In such a case, it's safe to make the same lookup request many times.
+
+* ステートレスなタスク分散処理には冪等性があります。例えばリクエストの内容のみに基づいてワーカーが計算を行うパイプラインモデルです。この様なケースでは非効率ではありますが、同じリクエストを何度実行しても安全です。
+* 論理アドレスからエンドポイントのアドレスに変換する名前解決サービスには冪等性があります。同一の名前解決リクエストを何度行っても安全です。
+
+;And here are examples of a non-idempotent use cases:
+
+冪等性の無いサービスの例を挙げると、
+
+;* A logging service. One does not want the same log information recorded more than once.
+;* Any service that has impact on downstream nodes, e.g., sends on information to other nodes. If that service gets the same request more than once, downstream nodes will get duplicate information.
+;* Any service that modifies shared data in some non-idempotent way; e.g., a service that debits a bank account is not idempotent without extra work.
+
+* ロギングサービス。同じログの内容が複数記録されていは困ります。
+* 下流に影響を与えるサービス。受け取ったメッセージを他のノードに転送するサービスはが同一のメッセージを受け取ると、下流のノードも重複したメッセージを受け取るでしょう。
+* 冪等性の無い方法で共有されているデータを更新するサービス。たとえば銀行口座の預金額を変更するサービスは工夫を行わなわない限り冪等性がありません。
+
+;When our server applications are not idempotent, we have to think more carefully about when exactly they might crash. If an application dies when it's idle, or while it's processing a request, that's usually fine. We can use database transactions to make sure a debit and a credit are always done together, if at all. If the server dies while sending its reply, that's a problem, because as far as it's concerned, it has done its work.
+
+アプリケーションに冪等性がない場合はクラッシュした際の対応はより慎重に考えなければなりません。
+アプリケーションがリクエストを受け付けていない段階で落ちた場合は特に問題ありませんが、データーベースのトランザクションの様な処理を行うアプリケーションにおいてリクエストの処理中に問題が発生した場合は問題となります。
+
+;If the network dies just as the reply is making its way back to the client, the same problem arises. The client will think the server died and will resend the request, and the server will do the same work twice, which is not what we want.
+
+クライアントに応答を返している最中にネットワーク障害が発生した場合に同じ問題が発生します。
+クライアントはサーバーが落ちたのだと思ってリクエストを再送し、サーバーは同じリクエストを2度処理します。
+これは望ましい動作ではありません。
+
+;To handle non-idempotent operations, use the fairly standard solution of detecting and rejecting duplicate requests. This means:
+
+非冪等性な操作を行う場合一般的には、重複したリクエストを処理しないような対策を行います。具体的には、
+
+;* The client must stamp every request with a unique client identifier and a unique message number.
+;* The server, before sending back a reply, stores it using the combination of client ID and message number as a key.
+;* The server, when getting a request from a given client, first checks whether it has a reply for that client ID and message number. If so, it does not process the request, but just resends the reply.
+
+* クライアントは全てのリクエストにユニークなクライアントIDとユニークなメッセージIDを付けて送信します。
+* サーバーはリクエストに対して応答する前に、クライアントIDとメッセージIDの組み合わせをキーにして保存します。
+* 次にサーバーがリクエストを受け取った際に、まずクライアントIDとメッセージIDの組み合わせを確認して同じリクエストを処理しないようにします。
+
 ## Disconnected Reliability (Titanic Pattern)
 ## High-Availability Pair (Binary Star Pattern)
 ### Detailed Requirements
