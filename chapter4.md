@@ -2782,7 +2782,561 @@ int main (int argc, char *argv [])
 * サーバーはリクエストに対して応答する前に、クライアントIDとメッセージIDの組み合わせをキーにして保存します。
 * 次にサーバーがリクエストを受け取った際に、まずクライアントIDとメッセージIDの組み合わせを確認して同じリクエストを処理しないようにします。
 
-## Disconnected Reliability (Titanic Pattern)
+## 非接続性の信頼性(タイタニックパターン)
+;Once you realize that Majordomo is a "reliable" message broker, you might be tempted to add some spinning rust (that is, ferrous-based hard disk platters). After all, this works for all the enterprise messaging systems. It's such a tempting idea that it's a little sad to have to be negative toward it. But brutal cynicism is one of my specialties. So, some reasons you don't want rust-based brokers sitting in the center of your architecture are:
+
+Majordomoが信頼性のあるメッセージブローカーとして機能する事が分かると、次にあなたはハードディスクへの永続化を行いたいと思うかもしれません。
+エンタープライズのメッセージングシステムにはそのような機能が用意されています。
+これは魅力的なアイディアですが、けして良いことばかりではありません。
+皮肉なことにこれは私の専門分野のひとつなのですが、必ずしも永続化が必須ではない幾つかの理由があります。
+
+;* As you've seen, the Lazy Pirate client performs surprisingly well. It works across a whole range of architectures, from direct client-to-server to distributed queue proxies. It does tend to assume that workers are stateless and idempotent. But we can work around that limitation without resorting to rust.
+;* Rust brings a whole set of problems, from slow performance to additional pieces that you have to manage, repair, and handle 6 a.m. panics from, as they inevitably break at the start of daily operations. The beauty of the Pirate patterns in general is their simplicity. They won't crash. And if you're still worried about the hardware, you can move to a peer-to-peer pattern that has no broker at all. I'll explain later in this chapter.
+
+* これまで見てきたように、ものぐさ海賊パターンはとてもうまく機能します。異なるアーキテクチャに跨がった分散キュープロキシーとして機能し、ワーカーはステートレスで冪等性があるとみなすことができましたが、永続化を行った場合はこうは行きません。
+* 永続化はパフォーマンスを低下させ、管理しなければならない新たな部品を増やし、障害が発生すると業務に支障が出ないように朝の6時までに修理しなければなりません。海賊パターンの美しい所は単純な所です。このパターンはクラッシュが発生しません。
+もしハードウェア障害を心配しているのであればP2Pパターンに移行してブローカーを無くせば良いでしょう。これについては次の章で説明します。
+
+;Having said this, however, there is one sane use case for rust-based reliability, which is an asynchronous disconnected network. It solves a major problem with Pirate, namely that a client has to wait for an answer in real time. If clients and workers are only sporadically connected (think of email as an analogy), we can't use a stateless network between clients and workers. We have to put state in the middle.
+
+とは言っても、永続化を行い非接続な非同期ネットワークの信頼性を高めるユースケースがひとつだけあります。
+これは海賊パターンの一般的な問題を解決します。
+クライアントとワーカーが散発的にしか接続しない場合(Eメールの様なシステムを思い浮かべて下さい)はステートレスなネットワークを利用できません。必ず中間に状態を持つ必要があります。
+
+;So, here's the Titanic pattern, in which we write messages to disk to ensure they never get lost, no matter how sporadically clients and workers are connected. As we did for service discovery, we're going to layer Titanic on top of MDP rather than extend it. It's wonderfully lazy because it means we can implement our fire-and-forget reliability in a specialized worker, rather than in the broker. This is excellent for several reasons:
+
+そこでタイタニックパターンです。
+メッセージをディスクに保存することで、散発的にクライアントやワーカーが接続して来た場合でもメッセージを失わない事を保証します。
+サービスディスカバリーと同様に、このタイタニックパターンをMDPプロトコルの上に追加実装します。
+これはブローカーに実装するのではなくワーカー側で信頼せい
+
+;* It is much easier because we divide and conquer: the broker handles message routing and the worker handles reliability.
+;* It lets us mix brokers written in one language with workers written in another.
+;* It lets us evolve the fire-and-forget technology independently.
+
+;The only downside is that there's an extra network hop between broker and hard disk. The benefits are easily worth it.
+
+* 単純な分割統治をおこなうので簡単です。
+* ブローカーを実装する言語とは別の言語でワーカーを実装することが出来ます。
+* fire-and-forgetテクノロジーを独自に進化させます。
+
+唯一の欠点は、ブローカーとハードディスクの間で幾つかのオーバーヘッドを必要とする事ですが、利点は欠点に勝るでしょう。
+
+;There are many ways to make a persistent request-reply architecture. We'll aim for one that is simple and painless. The simplest design I could come up with, after playing with this for a few hours, is a "proxy service". That is, Titanic doesn't affect workers at all. If a client wants a reply immediately, it talks directly to a service and hopes the service is available. If a client is happy to wait a while, it talks to Titanic instead and asks, "hey, buddy, would you take care of this for me while I go buy my groceries?"
+
+永続的なリクエスト・応答アーキテクチャを実現する方法はいくつもありますが、今回私達はその中で最も単純で痛みの無い方法を利用します。
+
+タイタニックパターンは全てのワーカーに影響を与えるわけではありません。
+
+![タイタニックパターン](images/fig51.eps)
+
+;Titanic is thus both a worker and a client. The dialog between client and Titanic goes along these lines:
+
+この様に、タイタニックはワーカーとクライアントとの間に位置していて、クライアントとタイタニックのやりとりは以下通りです。
+
+;* Client: Please accept this request for me. Titanic: OK, done.
+;* Client: Do you have a reply for me? Titanic: Yes, here it is. Or, no, not yet.
+;* Client: OK, you can wipe that request now, I'm happy. Titanic: OK, done.
+
+* クライアント「このリクエストを受け付けてくれる?」タイタニック「OK」
+* クライアント「こちら宛の応答を送ってくれる?」タイタニック「はい、これね」もしくは「そんなの無いよ」
+* クライアント「さっき送信したリクエストを削除してもらえるかな」タイタニック「OK」
+
+;Whereas the dialog between Titanic and broker and worker goes like this:
+
+一方、タイタニックとブローカー間でのやりとりは以下の通りです。
+
+;* Titanic: Hey, Broker, is there an coffee service? Broker: Uhm, Yeah, seems like.
+;* Titanic: Hey, coffee service, please handle this for me.
+;* Coffee: Sure, here you are.
+;* Titanic: Sweeeeet!
+
+* タイタニック「おーい、ブローカーさん。コーヒーサービスは動いてる?」ブローカー「うむ、動いているようだ」
+* タイタニック「おーい、コーヒーサービスさん・このリクエストを処理してもらえる?」
+* コーヒーサービス「はい、どうぞ」
+* タイタニック「ありがとーーーーーー！」
+
+;You can work through this and the possible failure scenarios. If a worker crashes while processing a request, Titanic retries indefinitely. If a reply gets lost somewhere, Titanic will retry. If the request gets processed but the client doesn't get the reply, it will ask again. If Titanic crashes while processing a request or a reply, the client will try again. As long as requests are fully committed to safe storage, work can't get lost.
+
+それでは起こり得る障害のシナリオを見て行きましょう。
+リクエストを処理中のワーカーがクラッシュした場合、タイタニックは何度でも再試行します。
+応答が失われてしまった場合も再試行を行います。
+リクエストが処理されたにもかかわらず、クライアントが応答を受け取れなかった場合は再度問い合わせが行われます。
+リクエストの処理中にタイタニックがクラッシュした場合、クライアントは再試行を行います。
+リクエストが確実にディスクに書き込まれていれば、メッセージを失うことはありません。
+
+;The handshaking is pedantic, but can be pipelined, i.e., clients can use the asynchronous Majordomo pattern to do a lot of work and then get the responses later.
+
+やりとりはやや複雑ですが、パイプライン化が可能です。
+例えばクライアントが非同期なMajordomoパターンをしている場合、レスポンスを受け取るまでの間に多くの処理を行うことが可能です。
+
+;We need some way for a client to request its replies. We'll have many clients asking for the same services, and clients disappear and reappear with different identities. Here is a simple, reasonably secure solution:
+
+クライアントのリクエストに対して応答を返すには工夫が必要です。
+
+異なるIDを持った多くのクライアントが同一のサービスに対してリクエストを行っているとします。
+安全で手頃な解決方法は以下の通りです。
+
+;* Every request generates a universally unique ID (UUID), which Titanic returns to the client after it has queued the request.
+;* When a client asks for a reply, it must specify the UUID for the original request.
+
+* リクエストをキューに格納した後にタイタニックはクライアントに対してUUIDを生成して返却します。
+* クライアントはこのUUIDを指定して応答を取得する必要があります。
+
+;In a realistic case, the client would want to store its request UUIDs safely, e.g., in a local database.
+
+実際のケースではクライアントはこのUUIDをローカルのデータベースなどにに保存することになるでしょう。
+
+;Before we jump off and write yet another formal specification (fun, fun!), let's consider how the client talks to Titanic. One way is to use a single service and send it three different request types. Another way, which seems simpler, is to use three services:
+
+正式な仕様を作成する楽しい作業に移る前に、まずクライアントとタイタニックがどの様な会話を行うか考えてみましょう。
+これには2種類の実装方法があります。
+ひとつ目は1つサービスで複数のリクエスト種別を扱う方法です。
+もう一方は、以下のような3つのサービスを用意する方法です。
+
+;* titanic.request: store a request message, and return a UUID for the request.
+;* titanic.reply: fetch a reply, if available, for a given request UUID.
+;* titanic.close: confirm that a reply has been stored and processed.
+
+* titanic.request: リクエストメッセージを保存し、UUIDを返却するサービス。
+* titanic.reply: UUIDに対応する応答を返却するサービス。
+* titanic.close: 応答が格納されたかどうかを確認するサービス。
+
+;We'll just make a multithreaded worker, which as we've seen from our multithreading experience with ØMQ, is trivial. However, let's first sketch what Titanic would look like in terms of ØMQ messages and frames. This gives us the Titanic Service Protocol (TSP).
+
+ここでは、単純にマルチスレッドワーカーを作成して3つのサービスを提供します。
+まずは、タイタニックがやりとりするメッセージフレームをを設計してみましょう。
+これをタイタニック・サービス・プロトコル(以下TSP)と呼びます。
+
+;Using TSP is clearly more work for client applications than accessing a service directly via MDP. Here's the shortest robust "echo" client example:
+
+はMDPと直接やり取りするのと比べて、TSPは明らかにクライアントの作業量が多くなります。
+以下に短くて堅牢な「echoクライアント」のサンプルコードを示します。
+
+~~~ {caption="ticlient: Titanic client example in C"}
+//  Titanic client example
+//  Implements client side of http://rfc.zeromq.org/spec:9
+
+//  Lets build this source without creating a library
+#include "mdcliapi.c"
+
+//  Calls a TSP service
+//  Returns response if successful (status code 200 OK), else NULL
+//
+static zmsg_t *
+s_service_call (mdcli_t *session, char *service, zmsg_t **request_p)
+{
+    zmsg_t *reply = mdcli_send (session, service, request_p);
+    if (reply) {
+        zframe_t *status = zmsg_pop (reply);
+        if (zframe_streq (status, "200")) {
+            zframe_destroy (&status);
+            return reply;
+        }
+        else
+        if (zframe_streq (status, "400")) {
+            printf ("E: client fatal error, aborting\n");
+            exit (EXIT_FAILURE);
+        }
+        else
+        if (zframe_streq (status, "500")) {
+            printf ("E: server fatal error, aborting\n");
+            exit (EXIT_FAILURE);
+        }
+    }
+    else
+        exit (EXIT_SUCCESS);    //  Interrupted or failed
+
+    zmsg_destroy (&reply);
+    return NULL;        //  Didn't succeed; don't care why not
+}
+
+//  .split main task
+//  The main task tests our service call by sending an echo request:
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
+
+    //  1. Send 'echo' request to Titanic
+    zmsg_t *request = zmsg_new ();
+    zmsg_addstr (request, "echo");
+    zmsg_addstr (request, "Hello world");
+    zmsg_t *reply = s_service_call (
+        session, "titanic.request", &request);
+
+    zframe_t *uuid = NULL;
+    if (reply) {
+        uuid = zmsg_pop (reply);
+        zmsg_destroy (&reply);
+        zframe_print (uuid, "I: request UUID ");
+    }
+    //  2. Wait until we get a reply
+    while (!zctx_interrupted) {
+        zclock_sleep (100);
+        request = zmsg_new ();
+        zmsg_add (request, zframe_dup (uuid));
+        zmsg_t *reply = s_service_call (
+            session, "titanic.reply", &request);
+
+        if (reply) {
+            char *reply_string = zframe_strdup (zmsg_last (reply));
+            printf ("Reply: %s\n", reply_string);
+            free (reply_string);
+            zmsg_destroy (&reply);
+
+            //  3. Close request
+            request = zmsg_new ();
+            zmsg_add (request, zframe_dup (uuid));
+            reply = s_service_call (session, "titanic.close", &request);
+            zmsg_destroy (&reply);
+            break;
+        }
+        else {
+            printf ("I: no reply yet, trying again...\n");
+            zclock_sleep (5000);     //  Try again in 5 seconds
+        }
+    }
+    zframe_destroy (&uuid);
+    mdcli_destroy (&session);
+    return 0;
+}
+~~~
+
+;Of course this can be, and should be, wrapped up in some kind of framework or API. It's not healthy to ask average application developers to learn the full details of messaging: it hurts their brains, costs time, and offers too many ways to make buggy complexity. Additionally, it makes it hard to add intelligence.
+
+もちろん、この様なコードはフレームワークやAPIの中に隠蔽化されるでしょう。
+ただ、隠蔽化してしまうとメッセージングを学ぼうとしているアプリケーション開発者の障害になります。
+頭を悩ませ、時間を掛けて多くのバグを解決してこそ、知性が磨かれるのです。
+
+;For example, this client blocks on each request whereas in a real application, we'd want to be doing useful work while tasks are executed. This requires some nontrivial plumbing to build a background thread and talk to that cleanly. It's the kind of thing you want to wrap in a nice simple API that the average developer cannot misuse. It's the same approach that we used for Majordomo.
+
+クライアントがリクエストを行っている間はブロックするアプリケーションが多いですが、タスクを実行している間に別のタスクを行いたい事もあるでしょう。
+このような要件を実現するには工夫が必要です。
+Majordomoの時に行ったように、うまくAPIで隠蔽化してやれば一般的なアプリケーション開発者が誤用する事は少なくなります。
+
+;Here's the Titanic implementation. This server handles the three services using three threads, as proposed. It does full persistence to disk using the most brutal approach possible: one file per message. It's so simple, it's scary. The only complex part is that it keeps a separate queue of all requests, to avoid reading the directory over and over:
+
+今度はタイタニックブローカーの実装です。
+先ほど提案した通り、このブローカーは3つのスレッドで3つのサービスを提供します。
+そしてメッセージ1つにつき1ファイルという最も単純かつ最も荒っぽい構成でディスクへの永続化を行います。
+唯一複雑な部分は、ディレクトリを何度も走査をするのを避けるために、全てのリクエストを別のキューで保持している所です。
+
+~~~ {caption="titanic: Titanic broker example in C"}
+//  Titanic service
+//  Implements server side of http://rfc.zeromq.org/spec:9
+
+//  Lets us build this source without creating a library
+#include "mdwrkapi.c"
+#include "mdcliapi.c"
+
+#include "zfile.h"
+#include <uuid/uuid.h>
+
+//  Return a new UUID as a printable character string
+//  Caller must free returned string when finished with it
+
+static char *
+s_generate_uuid (void)
+{
+    char hex_char [] = "0123456789ABCDEF";
+    char *uuidstr = zmalloc (sizeof (uuid_t) * 2 + 1);
+    uuid_t uuid;
+    uuid_generate (uuid);
+    int byte_nbr;
+    for (byte_nbr = 0; byte_nbr < sizeof (uuid_t); byte_nbr++) {
+        uuidstr [byte_nbr * 2 + 0] = hex_char [uuid [byte_nbr] >> 4];
+        uuidstr [byte_nbr * 2 + 1] = hex_char [uuid [byte_nbr] & 15];
+    }
+    return uuidstr;
+}
+
+//  Returns freshly allocated request filename for given UUID
+
+#define TITANIC_DIR ".titanic"
+
+static char *
+s_request_filename (char *uuid) {
+    char *filename = malloc (256);
+    snprintf (filename, 256, TITANIC_DIR "/%s.req", uuid);
+    return filename;
+}
+
+//  Returns freshly allocated reply filename for given UUID
+
+static char *
+s_reply_filename (char *uuid) {
+    char *filename = malloc (256);
+    snprintf (filename, 256, TITANIC_DIR "/%s.rep", uuid);
+    return filename;
+}
+
+//  .split Titanic request service
+//  The {{titanic.request}} task waits for requests to this service. It writes
+//  each request to disk and returns a UUID to the client. The client picks
+//  up the reply asynchronously using the {{titanic.reply}} service:
+
+static void
+titanic_request (void *args, zctx_t *ctx, void *pipe)
+{
+    mdwrk_t *worker = mdwrk_new (
+        "tcp://localhost:5555", "titanic.request", 0);
+    zmsg_t *reply = NULL;
+
+    while (true) {
+        //  Send reply if it's not null
+        //  And then get next request from broker
+        zmsg_t *request = mdwrk_recv (worker, &reply);
+        if (!request)
+            break;      //  Interrupted, exit
+
+        //  Ensure message directory exists
+        zfile_mkdir (TITANIC_DIR);
+
+        //  Generate UUID and save message to disk
+        char *uuid = s_generate_uuid ();
+        char *filename = s_request_filename (uuid);
+        FILE *file = fopen (filename, "w");
+        assert (file);
+        zmsg_save (request, file);
+        fclose (file);
+        free (filename);
+        zmsg_destroy (&request);
+
+        //  Send UUID through to message queue
+        reply = zmsg_new ();
+        zmsg_addstr (reply, uuid);
+        zmsg_send (&reply, pipe);
+
+        //  Now send UUID back to client
+        //  Done by the mdwrk_recv() at the top of the loop
+        reply = zmsg_new ();
+        zmsg_addstr (reply, "200");
+        zmsg_addstr (reply, uuid);
+        free (uuid);
+    }
+    mdwrk_destroy (&worker);
+}
+
+//  .split Titanic reply service
+//  The {{titanic.reply}} task checks if there's a reply for the specified
+//  request (by UUID), and returns a 200 (OK), 300 (Pending), or 400
+//  (Unknown) accordingly:
+
+static void *
+titanic_reply (void *context)
+{
+    mdwrk_t *worker = mdwrk_new (
+        "tcp://localhost:5555", "titanic.reply", 0);
+    zmsg_t *reply = NULL;
+
+    while (true) {
+        zmsg_t *request = mdwrk_recv (worker, &reply);
+        if (!request)
+            break;      //  Interrupted, exit
+
+        char *uuid = zmsg_popstr (request);
+        char *req_filename = s_request_filename (uuid);
+        char *rep_filename = s_reply_filename (uuid);
+        if (zfile_exists (rep_filename)) {
+            FILE *file = fopen (rep_filename, "r");
+            assert (file);
+            reply = zmsg_load (NULL, file);
+            zmsg_pushstr (reply, "200");
+            fclose (file);
+        }
+        else {
+            reply = zmsg_new ();
+            if (zfile_exists (req_filename))
+                zmsg_pushstr (reply, "300"); //Pending
+            else
+                zmsg_pushstr (reply, "400"); //Unknown
+        }
+        zmsg_destroy (&request);
+        free (uuid);
+        free (req_filename);
+        free (rep_filename);
+    }
+    mdwrk_destroy (&worker);
+    return 0;
+}
+
+//  .split Titanic close task
+//  The {{titanic.close}} task removes any waiting replies for the request
+//  (specified by UUID). It's idempotent, so it is safe to call more than
+//  once in a row:
+
+static void *
+titanic_close (void *context)
+{
+    mdwrk_t *worker = mdwrk_new (
+        "tcp://localhost:5555", "titanic.close", 0);
+    zmsg_t *reply = NULL;
+
+    while (true) {
+        zmsg_t *request = mdwrk_recv (worker, &reply);
+        if (!request)
+            break;      //  Interrupted, exit
+
+        char *uuid = zmsg_popstr (request);
+        char *req_filename = s_request_filename (uuid);
+        char *rep_filename = s_reply_filename (uuid);
+        zfile_delete (req_filename);
+        zfile_delete (rep_filename);
+        free (uuid);
+        free (req_filename);
+        free (rep_filename);
+
+        zmsg_destroy (&request);
+        reply = zmsg_new ();
+        zmsg_addstr (reply, "200");
+    }
+    mdwrk_destroy (&worker);
+    return 0;
+}
+
+//  .split worker task
+//  This is the main thread for the Titanic worker. It starts three child
+//  threads; for the request, reply, and close services. It then dispatches
+//  requests to workers using a simple brute force disk queue. It receives
+//  request UUIDs from the {{titanic.request}} service, saves these to a disk
+//  file, and then throws each request at MDP workers until it gets a
+//  response.
+
+static int s_service_success (char *uuid);
+
+int main (int argc, char *argv [])
+{
+    int verbose = (argc > 1 && streq (argv [1], "-v"));
+    zctx_t *ctx = zctx_new ();
+
+    void *request_pipe = zthread_fork (ctx, titanic_request, NULL);
+    zthread_new (titanic_reply, NULL);
+    zthread_new (titanic_close, NULL);
+
+    //  Main dispatcher loop
+    while (true) {
+        //  We'll dispatch once per second, if there's no activity
+        zmq_pollitem_t items [] = { { request_pipe, 0, ZMQ_POLLIN, 0 } };
+        int rc = zmq_poll (items, 1, 1000 * ZMQ_POLL_MSEC);
+        if (rc == -1)
+            break;              //  Interrupted
+        if (items [0].revents & ZMQ_POLLIN) {
+            //  Ensure message directory exists
+            zfile_mkdir (TITANIC_DIR);
+
+            //  Append UUID to queue, prefixed with '-' for pending
+            zmsg_t *msg = zmsg_recv (request_pipe);
+            if (!msg)
+                break;          //  Interrupted
+            FILE *file = fopen (TITANIC_DIR "/queue", "a");
+            char *uuid = zmsg_popstr (msg);
+            fprintf (file, "-%s\n", uuid);
+            fclose (file);
+            free (uuid);
+            zmsg_destroy (&msg);
+        }
+        //  Brute force dispatcher
+        char entry [] = "?.......:.......:.......:.......:";
+        FILE *file = fopen (TITANIC_DIR "/queue", "r+");
+        while (file && fread (entry, 33, 1, file) == 1) {
+            //  UUID is prefixed with '-' if still waiting
+            if (entry [0] == '-') {
+                if (verbose)
+                    printf ("I: processing request %s\n", entry + 1);
+                if (s_service_success (entry + 1)) {
+                    //  Mark queue entry as processed
+                    fseek (file, -33, SEEK_CUR);
+                    fwrite ("+", 1, 1, file);
+                    fseek (file, 32, SEEK_CUR);
+                }
+            }
+            //  Skip end of line, LF or CRLF
+            if (fgetc (file) == '\r')
+                fgetc (file);
+            if (zctx_interrupted)
+                break;
+        }
+        if (file)
+            fclose (file);
+    }
+    return 0;
+}
+
+//  .split try to call a service
+//  Here, we first check if the requested MDP service is defined or not,
+//  using a MMI lookup to the Majordomo broker. If the service exists,
+//  we send a request and wait for a reply using the conventional MDP
+//  client API. This is not meant to be fast, just very simple:
+
+static int
+s_service_success (char *uuid)
+{
+    //  Load request message, service will be first frame
+    char *filename = s_request_filename (uuid);
+    FILE *file = fopen (filename, "r");
+    free (filename);
+
+    //  If the client already closed request, treat as successful
+    if (!file)
+        return 1;
+
+    zmsg_t *request = zmsg_load (NULL, file);
+    fclose (file);
+    zframe_t *service = zmsg_pop (request);
+    char *service_name = zframe_strdup (service);
+
+    //  Create MDP client session with short timeout
+    mdcli_t *client = mdcli_new ("tcp://localhost:5555", false);
+    mdcli_set_timeout (client, 1000);  //  1 sec
+    mdcli_set_retries (client, 1);     //  only 1 retry
+
+    //  Use MMI protocol to check if service is available
+    zmsg_t *mmi_request = zmsg_new ();
+    zmsg_add (mmi_request, service);
+    zmsg_t *mmi_reply = mdcli_send (client, "mmi.service", &mmi_request);
+    int service_ok = (mmi_reply
+        && zframe_streq (zmsg_first (mmi_reply), "200"));
+    zmsg_destroy (&mmi_reply);
+
+    int result = 0;
+    if (service_ok) {
+        zmsg_t *reply = mdcli_send (client, service_name, &request);
+        if (reply) {
+            filename = s_reply_filename (uuid);
+            FILE *file = fopen (filename, "w");
+            assert (file);
+            zmsg_save (reply, file);
+            fclose (file);
+            free (filename);
+            result = 1;
+        }
+        zmsg_destroy (&reply);
+    }
+    else
+        zmsg_destroy (&request);
+
+    mdcli_destroy (&client);
+    free (service_name);
+    return result;
+}
+~~~
+
+;To test this, start mdbroker and titanic, and then run ticlient. Now start mdworker arbitrarily, and you should see the client getting a response and exiting happily.
+
+これをテストするには、mdbrokerとtitanicを開始してticlientを実行します。
+そして、mdworkerが動作した段階でクライアントが応答を受け取るのを確認できるでしょう。
+
+;Some notes about this code:
+
+このコードの注意点は、
+
+;* Note that some loops start by sending, others by receiving messages. This is because Titanic acts both as a client and a worker in different roles.
+;* The Titanic broker uses the MMI service discovery protocol to send requests only to services that appear to be running. Since the MMI implementation in our little Majordomo broker is quite poor, this won't work all the time.
+;* We use an inproc connection to send new request data from the titanic.request service through to the main dispatcher. This saves the dispatcher from having to scan the disk directory, load all request files, and sort them by date/time.
+
+
 ## High-Availability Pair (Binary Star Pattern)
 ### Detailed Requirements
 ### Preventing Split-Brain Syndrome
@@ -2793,3 +3347,8 @@ int main (int argc, char *argv [])
 ### Model Two: Brutal Shotgun Massacre
 ### Model Three: Complex and Nasty
 ## Conclusion
+;In this chapter, we've seen a variety of reliable request-reply mechanisms, each with certain costs and benefits. The example code is largely ready for real use, though it is not optimized. Of all the different patterns, the two that stand out for production use are the Majordomo pattern, for broker-based reliability, and the Freelance pattern, for brokerless reliability.
+
+この章では、リクエスト・応答パターンに様々な信頼性を持たせる方法を見てきました。
+サンプルコードは最適化されていませんが、十分実用に使えるレベルです。
+なにより対照的なのは、ブローカーに信頼性持たせるMajordomoパターンとブローカーの無いフリーランスパターンです。
