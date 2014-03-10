@@ -3326,7 +3326,7 @@ s_service_success (char *uuid)
 ;To test this, start mdbroker and titanic, and then run ticlient. Now start mdworker arbitrarily, and you should see the client getting a response and exiting happily.
 
 これをテストするには、mdbrokerとtitanicを開始してticlientを実行します。
-そして、mdworkerが動作した段階でクライアントが応答を受け取るのを確認できるでしょう。
+そして、mdworkerが動作した段階でクライアントは応答を受け取るのを確認できるでしょう。
 
 ;Some notes about this code:
 
@@ -3336,6 +3336,50 @@ s_service_success (char *uuid)
 ;* The Titanic broker uses the MMI service discovery protocol to send requests only to services that appear to be running. Since the MMI implementation in our little Majordomo broker is quite poor, this won't work all the time.
 ;* We use an inproc connection to send new request data from the titanic.request service through to the main dispatcher. This saves the dispatcher from having to scan the disk directory, load all request files, and sort them by date/time.
 
+* ループの開始時にメッセージを送信したり受信したりしていますが、これはタイタニックが役割の異なる、クライアントとワーカーの双方と通信するためです。
+* このタイタニックブローカーは、動作しているサービスだけにメッセージを送信する為に、MMIサービスディスカバリープロトコルを利用します。しかしこのサンプルコードで実装したMajordomoブローカーは少しお馬鹿さんなので、上手く動かない場合もあります。
+* 新規リクエストをtitanic.requestサービスからメインディスパッチャーへ送信する手段にプロセス内通信を利用しています。これによりディスパッチャーが毎回ディレクトリを走査したり、時刻でソートしたりする処理を省くことが出来ます。
+
+;The important thing about this example is not performance (which, although I haven't tested it, is surely terrible), but how well it implements the reliability contract. To try it, start the mdbroker and titanic programs. Then start the ticlient, and then start the mdworker echo service. You can run all four of these using the -v option to do verbose activity tracing. You can stop and restart any piece except the client and nothing will get lost.
+
+タイタニックで重要な事は、パフォーマンスは低いけれども、信頼性の保証された実装である事です。
+mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdworkerを起動してみて下さい。
+これら全てのプログラムは-vオプションを指定して詳細な動きトレースすることが出来ます。
+メッセージを失うこと無く、全ての部品を再起動することを確認できるはずです。
+
+;If you want to use Titanic in real cases, you'll rapidly be asking "how do we make this faster?"
+
+実際のケースでこのタイタニックパターンを利用する場合、「どうすれば早くなるか?」を考える必要があるでしょう。
+
+;Here's what I'd do, starting with the example implementation:
+
+以下は私が行った高速化の為の工夫です。
+
+;* Use a single disk file for all data, rather than multiple files. Operating systems are usually better at handling a few large files than many smaller ones.
+;* Organize that disk file as a circular buffer so that new requests can be written contiguously (with very occasional wraparound). One thread, writing full speed to a disk file, can work rapidly.
+;* Keep the index in memory and rebuild the index at startup time, from the disk buffer. This saves the extra disk head flutter needed to keep the index fully safe on disk. You would want an fsync after every message, or every N milliseconds if you were prepared to lose the last M messages in case of a system failure.
+;* Use a solid-state drive rather than spinning iron oxide platters.
+;* Pre-allocate the entire file, or allocate it in large chunks, which allows the circular buffer to grow and shrink as needed. This avoids fragmentation and ensures that most reads and writes are contiguous.
+
+* 複数のファイルではなく、単一のファイルを利用します。一般的にOSは複数の小さなファイル扱うより、大きなファイルひとつを処理したほうが効率が良いです。
+* 新規リクエストを連続した領域に書き込めるように調整してやります。
+* 起動時にメモリ上にインデックスを構築する事で余計なディスクアクセスを回避できます。障害時にメッセージを失わないようにするには、受信の後にfsyncすると良いでしょう。
+* 錆びた鉄のプラッターの代わりにSSDを利用する。
+* 必要に応じて増減可能な巨大なファイルをあらかじめ作成しておきます。これによりデータの連続性を保証し、フラグメンテーションを回避できます。
+
+;And so on. What I'd not recommend is storing messages in a database, not even a "fast" key/value store, unless you really like a specific database and don't have performance worries. You will pay a steep price for the abstraction, ten to a thousand times over a raw disk file.
+
+それと、高速なキー・バリュー・ストアではないデーターベースにメッセージを格納することはあまり推奨できません。
+特定のデーターベースが大好きだというなら話は別ですが、ディスクファイルを抽象化するために法外なコストを支払うことになります。
+
+;If you want to make Titanic even more reliable, duplicate the requests to a second server, which you'd place in a second location just far away enough to survive a nuclear attack on your primary location, yet not so far that you get too much latency.
+
+タイタニックの信頼性を更に高めたいのであれば、核攻撃の届かいない2台目のサーバーに重複したリクエストを送信すると良いでしょう。
+レイテンシが大きいでしょうけどね。
+
+;If you want to make Titanic much faster and less reliable, store requests and replies purely in memory. This will give you the functionality of a disconnected network, but requests won't survive a crash of the Titanic server itself.
+
+タイタニックの信頼性を下げて、リクエストと応答をメモリに格納する事で非接続性のネットワーク機能を実現できますが、タイタニックサーバー自体の障害でメッセージは失われてしまいます。
 
 ## High-Availability Pair (Binary Star Pattern)
 ### Detailed Requirements
