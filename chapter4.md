@@ -3382,7 +3382,90 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 タイタニックの信頼性を下げて、リクエストと応答をメモリに格納する事で非接続性のネットワーク機能を実現できますが、タイタニックサーバー自体の障害でメッセージは失われてしまいます。
 
 ## High-Availability Pair (Binary Star Pattern)
+
+![High-Availability Pair, Normal Operation](images/fig52.eps)
+
+;The Binary Star pattern puts two servers in a primary-backup high-availability pair. At any given time, one of these (the active) accepts connections from client applications. The other (the passive) does nothing, but the two servers monitor each other. If the active disappears from the network, after a certain time the passive takes over as active.
+
+バイナリー・スターパターンはプライマリー・バックアップに対応する2つのサーバーを用いて信頼性を高めます。
+ある時点では、ひとつのサーバー(active)がクライアントからの接続を受け付け、もう片方(passive)はなにもしません。
+しかし、この2つのサーバーはお互いに監視しています。
+ネットワーク上からactiveサーバーが居なくなると、すぐにpassiveがactiveの役割を引き継ぎます。
+
+;We developed the Binary Star pattern at iMatix for our OpenAMQ server. We designed it:
+
+私達はOpenAMQサーバーの頃にバイナリー・スターパターンを開発しました。
+以下の様に設計されています。
+
+;* To provide a straightforward high-availability solution.
+;* To be simple enough to actually understand and use.
+;* To fail over reliably when needed, and only when needed.
+
+* 単純な高可用性ソリューションを提供する。
+* 簡単に理解できて使いやすいこと。
+* 必要な場合のみフェイルオーバーします。
+
+;Assuming we have a Binary Star pair running, here are the different scenarios that will result in a failover:
+
+バイナリー・スターパターンでは、以下のパターンでフェイルオーバーが発生します。
+
+;* The hardware running the primary server has a fatal problem (power supply explodes, machine catches fire, or someone simply unplugs it by mistake), and disappears. Applications see this, and reconnect to the backup server.
+;* The network segment on which the primary server sits crashes—perhaps a router gets hit by a power spike—and applications start to reconnect to the backup server.
+;* The primary server crashes or is killed by the operator and does not restart automatically.
+
+* プライマリーサーバーに致命的な問題(爆発、火災、電源を引っこ抜いた、など)が発生した場合。アプリケーションはそれを確認し、バックアップサーバーに再接続を行います。
+* プライマリーサーバーの居るネットワークセグメントで障害が発生した場合。恐らくルーターが高負荷になるでしょうが、アプリケーションはバックアップサーバーに再接続を行うでしょう。
+* プライマリーサーバーがクラッシュした場合、もしくは再起動を行って自動的に起動しなかった場合。
+
+![High-availability Pair During Failover](images/fig53.eps)
+
+;Recovery from failover works as follows:
+
+フェイルオーバーから復旧するには以下の事を行います。
+
+;* The operators restart the primary server and fix whatever problems were causing it to disappear from the network.
+;* The operators stop the backup server at a moment when it will cause minimal disruption to applications.
+;* When applications have reconnected to the primary server, the operators restart the backup server.
+
+* プライマリーサーバーを起動し、ネットワークから見えるようにしてやります。
+* 一時的にバックアップサーバーを停止します。これによりアプリケーションからの接続が切断されます。
+* アプリケーションがプライマリーサーバーに再接続するのを確認し、バックアップサーバーを起動します。
+
+;Recovery (to using the primary server as active) is a manual operation. Painful experience teaches us that automatic recovery is undesirable. There are several reasons:
+
+フェイルオーバーからの復旧は手動で行います。
+復旧を自動的に行うことが良くない事を私達は経験済みです。
+これには以下の理由があります。
+
+;* Failover creates an interruption of service to applications, possibly lasting 10-30 seconds. If there is a real emergency, this is much better than total outage. But if recovery creates a further 10-30 second outage, it is better that this happens off-peak, when users have gone off the network.
+;* When there is an emergency, the absolute first priority is certainty for those trying to fix things. Automatic recovery creates uncertainty for system administrators, who can no longer be sure which server is in charge without double-checking.
+;* Automatic recovery can create situations where networks fail over and then recover, placing operators in the difficult position of analyzing what happened. There was an interruption of service, but the cause isn't clear.
+
+* フェイルオーバーは恐らく10〜30秒のサービス停止を発生させます。そして復旧にも同等の時間が掛かります。これはユーザーの少ない時間帯に行ったほうが良いでしょう。
+* 緊急事態に陥った場合、最も重要なのは確実に修復させる事です。自動復旧を行ったとしても、システム管理者のダブルチェック無しでは復旧した事を確証出来ません。
+* 例えば一時的なネットワーク障害でフェイルオーバーした場合に自動復旧を行った場合、サービス停止の原因を特定することが難しくなります。
+
+;Having said this, the Binary Star pattern will fail back to the primary server if this is running (again) and the backup server fails. In fact, this is how we provoke recovery.
+
+とは言っても、バイナリー・スターパターンではプライマリーサーバーに障害が発生し、その後、バックアップサーバーで障害が発生すると、事実上自動復旧した様になります。
+
+;The shutdown process for a Binary Star pair is to either:
+
+バイナリー・スターパターンをシャットダウンさせるには以下の方法があります。
+
+;* Stop the passive server and then stop the active server at any later time, or
+;* Stop both servers in any order but within a few seconds of each other.
+
+* まずパッシブサーバーを停止し、その後アクティブサーバーを停止する。
+* 2つのサーバーをほぼ同時に停止する。
+
+;Stopping the active and then the passive server with any delay longer than the failover timeout will cause applications to disconnect, then reconnect, and then disconnect again, which may disturb users.
+
+アクティブサーバーをを停止し、時間を空けてパッシブサーバーを停止した場合、アプリケーションは切断、再接続、切断という動作となりユーザーを混乱させてしまいます。
+
 ### Detailed Requirements
+
+
 ### Preventing Split-Brain Syndrome
 ### Binary Star Implementation
 ### Binary Star Reactor
