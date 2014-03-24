@@ -3538,9 +3538,9 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 
 バイナリー・スターパターンでは以下の情報が設定されている必要があります。
 
-;* Tell the primary server where the backup server is located.
-;* Tell the backup server where the primary server is located.
-;* Optionally, tune the failover response times, which must be the same for both servers.
+;1. Tell the primary server where the backup server is located.
+;2. Tell the backup server where the primary server is located.
+;3. Optionally, tune the failover response times, which must be the same for both servers.
 
 1. プライマリーサーバーはバックアップサーバーのアドレスを知っていること
 2. バックアップサーバーはプライマリーサーバーのアドレスを知っていること
@@ -3548,8 +3548,54 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 
 ;The main tuning concern is how frequently you want the servers to check their peering status, and how quickly you want to activate failover. In our example, the failover timeout value defaults to 2,000 msec. If you reduce this, the backup server will take over as active more rapidly but may take over in cases where the primary server could recover. For example, you may have wrapped the primary server in a shell script that restarts it if it crashes. In that case, the timeout should be higher than the time needed to restart the primary server.
 
+チューニングパラメーターとしては、フェイルオーバーを行うためにサーバー同士がお互いの状態を確認する間隔を設定します。今回の例ではフェイルオーバーのタイムアウトは既定で2秒とします。
+この数値を小さくすることでより迅速にバックアップサーバーがアクティブサーバーの役割を引き継ぐことが出来ます。
+しかし、予期しないフェイルオーバーが発生する可能性があります。
+例えば、プライマリーサーバーがクラッシュした場合に自動的に再起動を行うスクリプトを書いた場合、タイムアウトはプライマリーサーバーの再起動に要する時間より長く設定すべきでしょう。
+
+;For client applications to work properly with a Binary Star pair, they must:
+
+バイナリー・スターパターンで正しくクライアントアプリケーションが正しく動作するには、クライアントを以下の様に実装する必要があります。
+
+;1. Know both server addresses.
+;2. Try to connect to the primary server, and if that fails, to the backup server.
+;3. Detect a failed connection, typically using heartbeating.
+;4. Try to reconnect to the primary, and then backup (in that order), with a delay between retries that is at least as high as the server failover timeout.
+;5. Recreate all of the state they require on a server.
+;6. Retransmit messages lost during a failover, if messages need to be reliable.
+
+1. 2つのサーバーのアドレスを知っている必要があります。
+2. まず、プライマリーサーバーに接続し、失敗したらバックアップサーバーに接続します。
+3. コネクションの切断を検出するために、ハートビートを行います。
+4. 再接続を行う際、まずプライマリーサーバーに接続し、次にバックアップサーバーに接続します。リトライ間隔はフェイルオーバータイムアウトと同等の間隔で行います。
+5. 再接続を行う歳、セッションを再生成します。
+6. 信頼性を高めたい場合はフェイルオーバーが行われた際に失われたメッセージを再送信します。
+
+;It's not trivial work, and we'd usually wrap this in an API that hides it from real end-user applications.
+
+これらを実装するのはそれほど簡単な仕事ではありませんので、通常はAPIの中に隠蔽すると良いでしょう。
+
+;These are the main limitations of the Binary Star pattern:
+
+バイナリー・スターパターンの主な制限は以下の通りです。
+
+;* A server process cannot be part of more than one Binary Star pair.
+;* A primary server can have a single backup server, and no more.
+;* The passive server does no useful work, and is thus wasted.
+;* The backup server must be capable of handling full application loads.
+;* Failover configuration cannot be modified at runtime.
+;* Client applications must do some work to benefit from failover.
+
+* 1プロセスではバイナリー・スターパターンを構成できません。
+* プライマリー・サーバーは1つのバックアップサーバーを持ち、これ以上は増やせません。
+* 非アクティブサーバーは通常動作しません。
+* プライマリーサーバーとバックアプサーバーは各々がアプリケーションの負荷に耐えられなければなりません。
+* フェイルオーバーの設定は実行中に変更出来ません。
+* クライアントアプリケーションはフェイルオーバーに対応する為のの機能を持っている必要があります。
 
 ### Preventing Split-Brain Syndrome
+
+
 ### Binary Star Implementation
 ### Binary Star Reactor
 ## Brokerless Reliability (Freelance Pattern)
