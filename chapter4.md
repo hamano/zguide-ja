@@ -3388,9 +3388,9 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 ;The Binary Star pattern puts two servers in a primary-backup high-availability pair. At any given time, one of these (the active) accepts connections from client applications. The other (the passive) does nothing, but the two servers monitor each other. If the active disappears from the network, after a certain time the passive takes over as active.
 
 バイナリー・スターパターンはプライマリー・バックアップに対応する2つのサーバーを用いて信頼性を高めます。
-ある時点では、ひとつのサーバー(active)がクライアントからの接続を受け付け、もう片方(passive)はなにもしません。
+ある時点では、ひとつのサーバー(アクティブ)がクライアントからの接続を受け付け、もう片方(非アクティブ)はなにもしません。
 しかし、この2つのサーバーはお互いに監視しています。
-ネットワーク上からactiveサーバーが居なくなると、すぐにpassiveがactiveの役割を引き継ぎます。
+ネットワーク上からアクティブサーバーが居なくなると、すぐに非アクティブサーバーがアクティブサーバーの役割を引き継ぎます。
 
 ;We developed the Binary Star pattern at iMatix for our OpenAMQ server. We designed it:
 
@@ -3447,7 +3447,7 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 
 ;Having said this, the Binary Star pattern will fail back to the primary server if this is running (again) and the backup server fails. In fact, this is how we provoke recovery.
 
-とは言っても、バイナリー・スターパターンではプライマリーサーバーに障害が発生し、その後、バックアップサーバーで障害が発生すると、事実上自動復旧した様になります。
+とは言っても、バイナリー・スターパターンではプライマリーサーバーに障害が発生し、その後バックアップサーバーで障害が発生すると、事実上自動復旧した様になります。
 
 ;The shutdown process for a Binary Star pair is to either:
 
@@ -3456,14 +3456,97 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 ;* Stop the passive server and then stop the active server at any later time, or
 ;* Stop both servers in any order but within a few seconds of each other.
 
-* まずパッシブサーバーを停止し、その後アクティブサーバーを停止する。
+* まず非アクティブサーバーを停止し、その後アクティブサーバーを停止する。
 * 2つのサーバーをほぼ同時に停止する。
 
 ;Stopping the active and then the passive server with any delay longer than the failover timeout will cause applications to disconnect, then reconnect, and then disconnect again, which may disturb users.
 
-アクティブサーバーをを停止し、時間を空けてパッシブサーバーを停止した場合、アプリケーションは切断、再接続、切断という動作となりユーザーを混乱させてしまいます。
+アクティブサーバーをを停止し、時間を空けて非アクティブサーバーを停止した場合、アプリケーションは切断、再接続、切断という動作となりユーザーを混乱させてしまいます。
 
-### Detailed Requirements
+### 詳細な要件
+;Binary Star is as simple as it can be, while still working accurately. In fact, the current design is the third complete redesign. Each of the previous designs we found to be too complex, trying to do too much, and we stripped out functionality until we came to a design that was understandable, easy to use, and reliable enough to be worth using.
+
+バイナリー・スターパターンは出来るだけ単純に動作します。
+実は私達はこの設計を3度再設計したという経緯があります。
+以前の設計はとても複雑だと気がついたので簡単に理解して利用できるように機能を削ってきました。
+
+;These are our requirements for a high-availability architecture:
+
+高可用性アーキテクチャでは以下の要件を満たす必要があるでしょう。
+
+;* The failover is meant to provide insurance against catastrophic system failures, such as hardware breakdown, fire, accident, and so on. There are simpler ways to recover from ordinary server crashes and we already covered these.
+;* Failover time should be under 60 seconds and preferably under 10 seconds.
+;* Failover has to happen automatically, whereas recovery must happen manually. We want applications to switch over to the backup server automatically, but we do not want them to switch back to the primary server except when the operators have fixed whatever problem there was and decided that it is a good time to interrupt applications again.
+;* The semantics for client applications should be simple and easy for developers to understand. Ideally, they should be hidden in the client API.
+;* There should be clear instructions for network architects on how to avoid designs that could lead to split brain syndrome, in which both servers in a Binary Star pair think they are the active server.
+;* There should be no dependencies on the order in which the two servers are started.
+;* It must be possible to make planned stops and restarts of either server without stopping client applications (though they may be forced to reconnect).
+;* Operators must be able to monitor both servers at all times.
+;* It must be possible to connect the two servers using a high-speed dedicated network connection. That is, failover synchronization must be able to use a specific IP route.
+
+* フェイルオーバーはハードウェア障害、火災などの重大なシステム障害に対する保険です。一般的な障害から復旧するための方法は既に学んだ様に単純な方法があります。
+* フェイルオーバーに要する時間は60秒以下にすべきであり、できれば10秒以下が望ましいでしょう。
+* フェイルオーバーは自動で行いますが、フェイルオーバーからの復旧は手動で行う必要があります。バックアップサーバーへの切り替えは自動的に行われて問題ありませんが、プライマリーサーバーへの切り替えは問題が修正されているかどうかをオペレーターが確認し、適切なタイミングを見極める必要があるからです。
+* プロトコルは開発者が理解しやすいように単純かつ簡単にすべきであり、理想的にはクライアントAPIで隠蔽するのが良いでしょう。
+* ネットワークが分断された際に発生するスプリットブレイン問題を回避するための明確なネットワーク設計手順が必要です。
+* サーバーを起動する順序に依存せず動作しなければなりません。
+* クライアントが停止すること無く（再接続は発生するでしょうが）、どちらのサーバーも停止したり再起動を行ったりできるようにしなければなりません。
+* オペレーターは常に2つのサーバーを監視する必要があります。
+* 2つのサーバーは高速なネットワーク回線で接続され、フェイルオーバーは特定のIP経路で同期する必要があります。
+
+;We make the following assumptions:
+
+以下の事を仮定します。
+
+;* A single backup server provides enough insurance; we don't need multiple levels of backup.
+;* The primary and backup servers are equally capable of carrying the application load. We do not attempt to balance load across the servers.
+;* There is sufficient budget to cover a fully redundant backup server that does nothing almost all the time.
+
+* ひとつのバックアップサーバーで十分な保険であるとし、複数のバックアップサーバーを必要としません。
+* プライマリーサーバーとバックアップサーバーは各1台でアプリケーションの負荷に耐えられるとします。これらのサーバーで負荷分散しないでください。
+* 常時何も行わないバックアップサーバーを動作させるための予算を確保して下さい。
+
+;We don't attempt to cover the following:
+
+以下の事についてはここでは触れません。
+
+;* The use of an active backup server or load balancing. In a Binary Star pair, the backup server is inactive and does no useful work until the primary server goes offline.
+;* The handling of persistent messages or transactions in any way. We assume the existence of a network of unreliable (and probably untrusted) servers or Binary Star pairs.
+;* Any automatic exploration of the network. The Binary Star pair is manually and explicitly defined in the network and is known to applications (at least in their configuration data).
+;* Replication of state or messages between servers. All server-side state must be recreated by applications when they fail over.
+
+* アクティブバックアップサーバー、あるいは負荷分散を行うこと。バイナリー・スターパターンではバックアップサーバーは非アクティブであり、プライマリーサーバーが非アクティブにならない限り利用できません。
+* 信頼性の低いネットワークを利用していることを前提とした場合、何らかの方法でメッセージの永続化、もしくはトランザクションを行う必要があります。
+* サーバーの自動検出。バイナリー・スターパターンではネットワークの設定を主導で行い、アプリケーションはこの設定を知っているとします。
+* メッセージや状態のサーバー間でのレプリケーション。フェイルオーバーが発生するとセッションを1からやり直すこととします。
+
+;Here is the key terminology that we use in Binary Star:
+
+バイナリー・スターパターンで利用する用語は以下の通りです。
+
+;* Primary: the server that is normally or initially active.
+;* Backup: the server that is normally passive. It will become active if and when the primary server disappears from the network, and when client applications ask the backup server to connect.
+;* Active: the server that accepts client connections. There is at most one active server.
+;* Passive: the server that takes over if the active disappears. Note that when a Binary Star pair is running normally, the primary server is active, and the backup is passive. When a failover has happened, the roles are switched.
+
+* プライマリー: 初期または通常状態でアクティブなサーバー。
+* バックアップ: 通常状態で非アクティブなサーバー。プライマリーサーバーがネットワーク上から居なくなった際にアクティブになり、クライアントはこちらに接続します。
+* アクティブ: クライアントからの接続を受け付けているサーバー。唯一ひとつのサーバーだけがアクティブになれます。
+* 非アクティブ: アクティブが居なくなった際に役割を引き継ぐサーバー。バイナリー・スターパターンでは通常プライマリーサーバーがアクティブであり、バックアップサーバーが非アクティブです。フェイルオーバーが起こった際はこれが逆転します。
+
+;To configure a Binary Star pair, you need to:
+
+バイナリー・スターパターンでは以下の情報が設定されている必要があります。
+
+;* Tell the primary server where the backup server is located.
+;* Tell the backup server where the primary server is located.
+;* Optionally, tune the failover response times, which must be the same for both servers.
+
+1. プライマリーサーバーはバックアップサーバーのアドレスを知っていること
+2. バックアップサーバーはプライマリーサーバーのアドレスを知っていること
+3. フェイルオーバーの応答時間は2つのサーバーで同じである必要があります。
+
+;The main tuning concern is how frequently you want the servers to check their peering status, and how quickly you want to activate failover. In our example, the failover timeout value defaults to 2,000 msec. If you reduce this, the backup server will take over as active more rapidly but may take over in cases where the primary server could recover. For example, you may have wrapped the primary server in a shell script that restarts it if it crashes. In that case, the timeout should be higher than the time needed to restart the primary server.
 
 
 ### Preventing Split-Brain Syndrome
