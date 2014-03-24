@@ -3593,8 +3593,35 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 * フェイルオーバーの設定は実行中に変更出来ません。
 * クライアントアプリケーションはフェイルオーバーに対応する為のの機能を持っている必要があります。
 
-### Preventing Split-Brain Syndrome
+### スプリット・ブレイン問題の防止
+;Split-brain syndrome occurs when different parts of a cluster think they are active at the same time. It causes applications to stop seeing each other. Binary Star has an algorithm for detecting and eliminating split brain, which is based on a three-way decision mechanism (a server will not decide to become active until it gets application connection requests and it cannot see its peer server).
 
+クラスターが分断し、個々の部品が同じタイミングでアクティブになろうとするとスプリット・ブレイン問題が発生します。
+これはアプリケーションの停止を引き起こします。
+バイナリー・スターパターンはスプリット・ブレイン問題を検出し解決するアルゴリズムを持っています。
+サーバー同士がお互いに通信して判断するのではなく、クライアントからの接続を受けてから自分がアクティブであると判断します。
+
+;However, it is still possible to (mis)design a network to fool this algorithm. A typical scenario would be a Binary Star pair, that is distributed between two buildings, where each building also had a set of applications and where there was a single network link between both buildings. Breaking this link would create two sets of client applications, each with half of the Binary Star pair, and each failover server would become active.
+
+しかし、このアルゴリズムを騙す為の意図的なネットワークを構築することは可能です。
+この典型的なシナリオは、バイナリー・スターの対が2つの建物に分散されており、各々の建物にクライアントアプリケーションが存在するネットワークです。
+この時、建物間のネットワークが切断されるとバイナリー・スターの対は両方共アクティブになるでしょう。
+
+;To prevent split-brain situations, we must connect a Binary Star pair using a dedicated network link, which can be as simple as plugging them both into the same switch or, better, using a crossover cable directly between two machines.
+
+このスプリット・ブレイン問題を防ぐには、単純にバイナリー・スターの対を同じネットワークスイッチに接続するか、クロスケーブルでお互いに直接接続すると良いでしょう。
+
+;We must not split a Binary Star architecture into two islands, each with a set of applications. While this may be a common type of network architecture, you should use federation, not high-availability failover, in such cases.
+
+バイナリー・スターパターンではアプリケーションの存在するネットワークを2つの島に分けてはいけません。
+この様なネットワーク構成である場合は、フェイルオーバーではなくフェデレーションパターンを利用すべきでしょう。
+
+;A suitably paranoid network configuration would use two private cluster interconnects, rather than a single one. Further, the network cards used for the cluster would be different from those used for message traffic, and possibly even on different paths on the server hardware. The goal is to separate possible failures in the network from possible failures in the cluster. Network ports can have a relatively high failure rate.
+
+神経質なネットワークでは、単一では無く2つのクラスターを相互接続することがあります。
+さらに、場合によっては相互接続の為の通信とメッセージ処理の通信で異なるネットワークカードが利用される場合があるでしょう。
+まずはネットワーク障害とクラスター内の障害とを切り分ける事が重要です。
+ネットワークポートはかなりの頻度で壊れることがあるからです。
 
 ### Binary Star Implementation
 ### Binary Star Reactor
