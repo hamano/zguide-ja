@@ -3623,8 +3623,338 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 まずはネットワーク障害とクラスター内の障害とを切り分ける事が重要です。
 ネットワークポートはかなりの頻度で壊れることがあるからです。
 
-### Binary Star Implementation
+### バイナリー・スターの実装
+;Without further ado, here is a proof-of-concept implementation of the Binary Star server. The primary and backup servers run the same code, you choose their roles when you run the code:
+
+前置きはこれくらいにしおいて、実際に動作するバイナリー・スターサーバーの実装を見て行きましょう。
+プライマリーとバックアップの役割は実行時に指定しますので、コード自体は同じものです。
+
+~~~ {caption="bstarsrv: Binary Star server in C"}
+//  Binary Star server proof-of-concept implementation. This server does no
+//  real work; it just demonstrates the Binary Star failover model.
+
+#include "czmq.h"
+
+//  States we can be in at any point in time
+typedef enum {
+    STATE_PRIMARY = 1,          //  Primary, waiting for peer to connect
+    STATE_BACKUP = 2,           //  Backup, waiting for peer to connect
+    STATE_ACTIVE = 3,           //  Active - accepting connections
+    STATE_PASSIVE = 4           //  Passive - not accepting connections
+} state_t;
+
+//  Events, which start with the states our peer can be in
+typedef enum {
+    PEER_PRIMARY = 1,           //  HA peer is pending primary
+    PEER_BACKUP = 2,            //  HA peer is pending backup
+    PEER_ACTIVE = 3,            //  HA peer is active
+    PEER_PASSIVE = 4,           //  HA peer is passive
+    CLIENT_REQUEST = 5          //  Client makes request
+} event_t;
+
+//  Our finite state machine
+typedef struct {
+    state_t state;              //  Current state
+    event_t event;              //  Current event
+    int64_t peer_expiry;        //  When peer is considered 'dead'
+} bstar_t;
+
+//  We send state information this often
+//  If peer doesn't respond in two heartbeats, it is 'dead'
+#define HEARTBEAT 1000          //  In msecs
+
+//  .split Binary Star state machine
+//  The heart of the Binary Star design is its finite-state machine (FSM).
+//  The FSM runs one event at a time. We apply an event to the current state,
+//  which checks if the event is accepted, and if so, sets a new state:
+
+static bool
+s_state_machine (bstar_t *fsm)
+{
+    bool exception = false;
+    
+    //  These are the PRIMARY and BACKUP states; we're waiting to become
+    //  ACTIVE or PASSIVE depending on events we get from our peer:
+    if (fsm->state == STATE_PRIMARY) {
+        if (fsm->event == PEER_BACKUP) {
+            printf ("I: connected to backup (passive), ready active\n");
+            fsm->state = STATE_ACTIVE;
+        }
+        else
+        if (fsm->event == PEER_ACTIVE) {
+            printf ("I: connected to backup (active), ready passive\n");
+            fsm->state = STATE_PASSIVE;
+        }
+        //  Accept client connections
+    }
+    else
+    if (fsm->state == STATE_BACKUP) {
+        if (fsm->event == PEER_ACTIVE) {
+            printf ("I: connected to primary (active), ready passive\n");
+            fsm->state = STATE_PASSIVE;
+        }
+        else
+        //  Reject client connections when acting as backup
+        if (fsm->event == CLIENT_REQUEST)
+            exception = true;
+    }
+    else
+    //  .split active and passive states
+    //  These are the ACTIVE and PASSIVE states:
+
+    if (fsm->state == STATE_ACTIVE) {
+        if (fsm->event == PEER_ACTIVE) {
+            //  Two actives would mean split-brain
+            printf ("E: fatal error - dual actives, aborting\n");
+            exception = true;
+        }
+    }
+    else
+    //  Server is passive
+    //  CLIENT_REQUEST events can trigger failover if peer looks dead
+    if (fsm->state == STATE_PASSIVE) {
+        if (fsm->event == PEER_PRIMARY) {
+            //  Peer is restarting - become active, peer will go passive
+            printf ("I: primary (passive) is restarting, ready active\n");
+            fsm->state = STATE_ACTIVE;
+        }
+        else
+        if (fsm->event == PEER_BACKUP) {
+            //  Peer is restarting - become active, peer will go passive
+            printf ("I: backup (passive) is restarting, ready active\n");
+            fsm->state = STATE_ACTIVE;
+        }
+        else
+        if (fsm->event == PEER_PASSIVE) {
+            //  Two passives would mean cluster would be non-responsive
+            printf ("E: fatal error - dual passives, aborting\n");
+            exception = true;
+        }
+        else
+        if (fsm->event == CLIENT_REQUEST) {
+            //  Peer becomes active if timeout has passed
+            //  It's the client request that triggers the failover
+            assert (fsm->peer_expiry > 0);
+            if (zclock_time () >= fsm->peer_expiry) {
+                //  If peer is dead, switch to the active state
+                printf ("I: failover successful, ready active\n");
+                fsm->state = STATE_ACTIVE;
+            }
+            else
+                //  If peer is alive, reject connections
+                exception = true;
+        }
+    }
+    return exception;
+}
+
+//  .split main task
+//  This is our main task. First we bind/connect our sockets with our
+//  peer and make sure we will get state messages correctly. We use
+//  three sockets; one to publish state, one to subscribe to state, and
+//  one for client requests/replies:
+
+int main (int argc, char *argv [])
+{
+    //  Arguments can be either of:
+    //      -p  primary server, at tcp://localhost:5001
+    //      -b  backup server, at tcp://localhost:5002
+    zctx_t *ctx = zctx_new ();
+    void *statepub = zsocket_new (ctx, ZMQ_PUB);
+    void *statesub = zsocket_new (ctx, ZMQ_SUB);
+    zsocket_set_subscribe (statesub, "");
+    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
+    bstar_t fsm = { 0 };
+
+    if (argc == 2 && streq (argv [1], "-p")) {
+        printf ("I: Primary active, waiting for backup (passive)\n");
+        zsocket_bind (frontend, "tcp://*:5001");
+        zsocket_bind (statepub, "tcp://*:5003");
+        zsocket_connect (statesub, "tcp://localhost:5004");
+        fsm.state = STATE_PRIMARY;
+    }
+    else
+    if (argc == 2 && streq (argv [1], "-b")) {
+        printf ("I: Backup passive, waiting for primary (active)\n");
+        zsocket_bind (frontend, "tcp://*:5002");
+        zsocket_bind (statepub, "tcp://*:5004");
+        zsocket_connect (statesub, "tcp://localhost:5003");
+        fsm.state = STATE_BACKUP;
+    }
+    else {
+        printf ("Usage: bstarsrv { -p | -b }\n");
+        zctx_destroy (&ctx);
+        exit (0);
+    }
+    //  .split handling socket input
+    //  We now process events on our two input sockets, and process these
+    //  events one at a time via our finite-state machine. Our "work" for
+    //  a client request is simply to echo it back:
+
+    //  Set timer for next outgoing state message
+    int64_t send_state_at = zclock_time () + HEARTBEAT;
+    while (!zctx_interrupted) {
+        zmq_pollitem_t items [] = {
+            { frontend, 0, ZMQ_POLLIN, 0 },
+            { statesub, 0, ZMQ_POLLIN, 0 }
+        };
+        int time_left = (int) ((send_state_at - zclock_time ()));
+        if (time_left < 0)
+            time_left = 0;
+        int rc = zmq_poll (items, 2, time_left * ZMQ_POLL_MSEC);
+        if (rc == -1)
+            break;              //  Context has been shut down
+
+        if (items [0].revents & ZMQ_POLLIN) {
+            //  Have a client request
+            zmsg_t *msg = zmsg_recv (frontend);
+            fsm.event = CLIENT_REQUEST;
+            if (s_state_machine (&fsm) == false)
+                //  Answer client by echoing request back
+                zmsg_send (&msg, frontend);
+            else
+                zmsg_destroy (&msg);
+        }
+        if (items [1].revents & ZMQ_POLLIN) {
+            //  Have state from our peer, execute as event
+            char *message = zstr_recv (statesub);
+            fsm.event = atoi (message);
+            free (message);
+            if (s_state_machine (&fsm))
+                break;          //  Error, so exit
+            fsm.peer_expiry = zclock_time () + 2 * HEARTBEAT;
+        }
+        //  If we timed out, send state to peer
+        if (zclock_time () >= send_state_at) {
+            char message [2];
+            sprintf (message, "%d", fsm.state);
+            zstr_send (statepub, message);
+            send_state_at = zclock_time () + HEARTBEAT;
+        }
+    }
+    if (zctx_interrupted)
+        printf ("W: interrupted\n");
+
+    //  Shutdown sockets and context
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;And here is the client:
+
+そしてこちらがクライアントのコードです。
+
+~~~ {caption="bstarcli: Binary Star client in C"}
+//  Binary Star client proof-of-concept implementation. This client does no
+//  real work; it just demonstrates the Binary Star failover model.
+
+#include "czmq.h"
+#define REQUEST_TIMEOUT     1000    //  msecs
+#define SETTLE_DELAY        2000    //  Before failing over
+
+int main (void)
+{
+    zctx_t *ctx = zctx_new ();
+
+    char *server [] = { "tcp://localhost:5001", "tcp://localhost:5002" };
+    uint server_nbr = 0;
+
+    printf ("I: connecting to server at %s...\n", server [server_nbr]);
+    void *client = zsocket_new (ctx, ZMQ_REQ);
+    zsocket_connect (client, server [server_nbr]);
+
+    int sequence = 0;
+    while (!zctx_interrupted) {
+        //  We send a request, then we work to get a reply
+        char request [10];
+        sprintf (request, "%d", ++sequence);
+        zstr_send (client, request);
+
+        int expect_reply = 1;
+        while (expect_reply) {
+            //  Poll socket for a reply, with timeout
+            zmq_pollitem_t items [] = { { client, 0, ZMQ_POLLIN, 0 } };
+            int rc = zmq_poll (items, 1, REQUEST_TIMEOUT * ZMQ_POLL_MSEC);
+            if (rc == -1)
+                break;          //  Interrupted
+
+            //  .split main body of client
+            //  We use a Lazy Pirate strategy in the client. If there's no
+            //  reply within our timeout, we close the socket and try again.
+            //  In Binary Star, it's the client vote that decides which
+            //  server is primary; the client must therefore try to connect
+            //  to each server in turn:
+            
+            if (items [0].revents & ZMQ_POLLIN) {
+                //  We got a reply from the server, must match sequence
+                char *reply = zstr_recv (client);
+                if (atoi (reply) == sequence) {
+                    printf ("I: server replied OK (%s)\n", reply);
+                    expect_reply = 0;
+                    sleep (1);  //  One request per second
+                }
+                else
+                    printf ("E: bad reply from server: %s\n", reply);
+                free (reply);
+            }
+            else {
+                printf ("W: no response from server, failing over\n");
+                
+                //  Old socket is confused; close it and open a new one
+                zsocket_destroy (ctx, client);
+                server_nbr = (server_nbr + 1) % 2;
+                zclock_sleep (SETTLE_DELAY);
+                printf ("I: connecting to server at %s...\n",
+                        server [server_nbr]);
+                client = zsocket_new (ctx, ZMQ_REQ);
+                zsocket_connect (client, server [server_nbr]);
+
+                //  Send request again, on new socket
+                zstr_send (client, request);
+            }
+        }
+    }
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;To test Binary Star, start the servers and client in any order:
+
+バイナリー・スターのテストを行うには、以下のように2つサーバーとクライアントを起動します。起動する順序はどちらが先でも構いません。
+
+~~~
+bstarsrv -p     # Start primary
+bstarsrv -b     # Start backup
+bstarcli
+~~~
+
+;You can then provoke failover by killing the primary server, and recovery by restarting the primary and killing the backup. Note how it's the client vote that triggers failover, and recovery.
+
+この状態でプライマリーサーバーを停止することにより、フェイルオーバーを発生させることができます。
+そしてプライマリーを起動し、バックアップを停止する事で復旧が完了します。
+フェイルオーバーや復旧のタイミングはクライアントが判断する事に注意して下さい。
+
+;Binary star is driven by a finite state machine. Events are the peer state, so "Peer Active" means the other server has told us it's active. "Client Request" means we've received a client request. "Client Vote" means we've received a client request AND our peer is inactive for two heartbeats.
+
+バイナリー・スターは有限状態オートマトンにより動作します。
+「Peer Active」は相手側のサーバーがアクティブ状態であるという意味のイベントです。
+「Client Request」はクライアントからのリクエストを受け取ったことを意味するイベントです。
+「Client Vote」はパッシブ状態のサーバーがクライアントからのリクエストを受け取り、アクティブ状態に遷移します。
+
+;Note that the servers use PUB-SUB sockets for state exchange. No other socket combination will work here. PUSH and DEALER block if there is no peer ready to receive a message. PAIR does not reconnect if the peer disappears and comes back. ROUTER needs the address of the peer before it can send it a message.
+
+サーバー同士で状態を通知するためにPUB-SUBソケットを利用しています。
+他のソケットの組み合わせでは上手く動作しないでしょう。
+PUSHとDEALERソケットの組み合わせでは通信相手がメッセージを受信する準備が出来ていない場合にブロックしてしまいます。
+PAIRソケットでは通信相手と一時的に通信できなくなった場合に再接続を行いません。
+ROUTERソケットではメッセージを送信する際に通信相手のアドレスが必要です。
+
+![バイナリー・スター有限状態オートマトン](images/fig54.eps)
+
 ### Binary Star Reactor
+
 ## Brokerless Reliability (Freelance Pattern)
 ### Model One: Simple Retry and Failover
 ### Model Two: Brutal Shotgun Massacre
