@@ -4336,7 +4336,71 @@ int main (int argc, char *argv [])
 }
 ~~~
 
-## Brokerless Reliability (Freelance Pattern)
+## ブローカー不在の信頼性(フリーランスパターン)
+;It might seem ironic to focus so much on broker-based reliability, when we often explain ØMQ as "brokerless messaging". However, in messaging, as in real life, the middleman is both a burden and a benefit. In practice, most messaging architectures benefit from a mix of distributed and brokered messaging. You get the best results when you can decide freely what trade-offs you want to make. This is why I can drive twenty minutes to a wholesaler to buy five cases of wine for a party, but I can also walk ten minutes to a corner store to buy one bottle for a dinner. Our highly context-sensitive relative valuations of time, energy, and cost are essential to the real world economy. And they are essential to an optimal message-based architecture.
+
+これまでØMQは「ブローカー不在のメッセージング」であると説明してきましたので、ブローカー中心の信頼性に頼ることは皮肉に見えるかもしれません。
+しかし、大抵の場合実際のメッセージング・アーキテクチャは分散とブローカーによるメッセージングを組み合わせて利用されます。
+あなたはトレードオフを理解した上で最良の方法を選択することができます。
+例えば、パーティ用のワインを5ケース買うために遠くの卸業者まで車を20分走らせることも出来ますし、夕飯のために1本のワインを買うだけであれば歩いて近くのスーパーに買いに行くという選択も出来ます。
+時間、エネルギー、価格に対する評価は現実の世界の経済では大きく状況に依存して決まります。
+そしてこれらはメッセージングアーキテクチャの最適化の為には不可欠な事です。
+
+;This is why ØMQ does not impose a broker-centric architecture, though it does give you the tools to build brokers, aka proxies, and we've built a dozen or so different ones so far, just for practice.
+
+これが、ØMQはブローカー中心のアーキテクチャを強制しないのにも関わらず、ブローカーやプロキシーなどの例を多く説明してきた理由です。
+
+;So we'll end this chapter by deconstructing the broker-based reliability we've built so far, and turning it back into a distributed peer-to-peer architecture I call the Freelance pattern. Our use case will be a name resolution service. This is a common problem with ØMQ architectures: how do we know the endpoint to connect to? Hard-coding TCP/IP addresses in code is insanely fragile. Using configuration files creates an administration nightmare. Imagine if you had to hand-configure your web browser, on every PC or mobile phone you used, to realize that "google.com" was "74.125.230.82".
+
+それでは、これまで説明してきたブローカー中心の信頼性を解体し、フリーランスパターンと呼んでいるP2Pな分散アーキテクチャを紹介してこの章を終わります。
+このパターンは名前解決システムの様な用途で利用します。
+ØMQアーキテクチャにおいて、接続先のエンドポイントを知る方法は一般的な課題です。
+IPアドレスをハードコードなんてしたくは無いでしょうし、設定ファイルを作成すると管理者が悪夢を見るでしょう。
+あなたの利用している全てのPCや携帯電話のブラウザで「google.com」や「74.125.230.82」という文字を入力することを想像してみて下さい。
+
+;A ØMQ name service (and we'll make a simple implementation) must do the following:
+
+ここで実装する単純なØMQネームサービスは以下の事を行う必要があります。
+
+;* Resolve a logical name into at least a bind endpoint, and a connect endpoint. A realistic name service would provide multiple bind endpoints, and possibly multiple connect endpoints as well.
+;* Allow us to manage multiple parallel environments, e.g., "test" versus "production", without modifying code.
+;* Be reliable, because if it is unavailable, applications won't be able to connect to the network.
+
+* 少なくとも、論理名からbindするエンドポイントへ名前解決を行い、エンドポイントに接続します。ひとつのサービス名は複数のエンドポイントを持つかもしれません。
+* 例えば、テスト環境と本番環境のように複数の環境をコードを書き換えずに切り替えられる事が出来ます。
+* これがサービス不能になるとアプリケーションがネットワークに接続できなくなるので信頼性は高くなければなりません。
+
+;Putting a name service behind a service-oriented Majordomo broker is clever from some points of view. However, it's simpler and much less surprising to just expose the name service as a server to which clients can connect directly. If we do this right, the name service becomes the only global network endpoint we need to hard-code in our code or configuration files.
+
+サービス指向のMajordomoブローカーの背後にネームサービスを配置することはそこそこ賢い考えです。
+しかし、クライアントがネームサービスへ直接接続する様にした方がより単純になるでしょう。
+
+![フリーランスパターン](images/fig55.eps)
+
+;The types of failure we aim to handle are server crashes and restarts, server busy looping, server overload, and network issues. To get reliability, we'll create a pool of name servers so if one crashes or goes away, clients can connect to another, and so on. In practice, two would be enough. But for the example, we'll assume the pool can be any size.
+
+ここで想定する障害は、サーバーのクラッシュやリスタート、バグによるビジーループ、サーバー負荷、ネットワーク障害です。
+信頼性を高める為に、複数のネームサーバーを複数配備する事で、1台のサーバーがクラッシュしてもクライアントは別のサーバーに接続することが出来ます。
+実際には2台で十分でしょうが、この例では何台でも増やせるように設計します。
+
+;In this architecture, a large set of clients connect to a small set of servers directly. The servers bind to their respective addresses. It's fundamentally different from a broker-based approach like Majordomo, where workers connect to the broker. Clients have a couple of options:
+
+このアーキテクチャは、膨大なクライアント群が少数のサーバ群に対して直接接続を行い、サーバーは個別のアドレスをbindします。
+これはワーカーがブローカーに接続するMajordomoの様なアーキテクチャと根本的に異なります。
+クライアント側には幾つかの実装方法があります。
+
+;* Use REQ sockets and the Lazy Pirate pattern. Easy, but would need some additional intelligence so clients don't stupidly try to reconnect to dead servers over and over.
+;* Use DEALER sockets and blast out requests (which will be load balanced to all connected servers) until they get a reply. Effective, but not elegant.
+;* Use ROUTER sockets so clients can address specific servers. But how does the client know the identity of the server sockets? Either the server has to ping the client first (complex), or the server has to use a hard-coded, fixed identity known to the client (nasty).
+
+* REQソケットでものぐさ海賊パターンを利用します。これは簡単ですが落ちたサーバーに何度も再接続しないように工夫が必要です。
+* DEALERソケットを利用し、応答が得られるまで各サーバーに対してリクエストを投げ続けます。上品な方法ではありませんが効果的です。
+* ROUTERソケットを利用して特定のサーバーに接続します。しかしどうやってサーバーのソケットIDを知れば良いのでしょうか? いずれかのサーバーが最初にクライアントに対してPINGを送る複雑な方法と、サーバーに固定的なIDをハードコードするという気持ちの悪い方法があります。
+
+;We'll develop each of these in the following subsections.
+
+以下の節でそれぞれ方法を実装していきます。
+
 ### Model One: Simple Retry and Failover
 ### Model Two: Brutal Shotgun Massacre
 ### Model Three: Complex and Nasty
