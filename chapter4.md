@@ -4401,7 +4401,160 @@ IPアドレスをハードコードなんてしたくは無いでしょうし、
 
 以下の節でそれぞれ方法を実装していきます。
 
-### Model One: Simple Retry and Failover
+### Model 1つめ: 単純なリトライとフェイルオーバー
+;So our menu appears to offer: simple, brutal, complex, or nasty. Let's start with simple and then work out the kinks. We take Lazy Pirate and rewrite it to work with multiple server endpoints.
+
+私達の目の前には3種類の選択肢が提示されています。
+単純な方法か、荒っぽいやり方か、複雑で面倒な方法です。
+それではまずねじれを解いた単純な方法で実装してみましょう。
+というわけでものぐさ海賊パターンを複数のサーバーに対応するように書きなおします。
+
+;Start one or several servers first, specifying a bind endpoint as the argument:
+
+まず、引き数にエンドポイント名を指定して、1つ以上のサーバーを起動して下さい。
+
+~~~ {caption="flserver1: Freelance server, Model One in C"}
+//  Freelance server - Model 1
+//  Trivial echo service
+
+#include "czmq.h"
+
+int main (int argc, char *argv [])
+{
+    if (argc < 2) {
+        printf ("I: syntax: %s <endpoint>\n", argv [0]);
+        return 0;
+    }
+    zctx_t *ctx = zctx_new ();
+    void *server = zsocket_new (ctx, ZMQ_REP);
+    zsocket_bind (server, argv [1]);
+
+    printf ("I: echo service is ready at %s\n", argv [1]);
+    while (true) {
+        zmsg_t *msg = zmsg_recv (server);
+        if (!msg)
+            break;          //  Interrupted
+        zmsg_send (&msg, server);
+    }
+    if (zctx_interrupted)
+        printf ("W: interrupted\n");
+
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;Then start the client, specifying one or more connect endpoints as arguments:
+
+続いて1つ以上のエンドポイントを指定してクライアントを起動します。
+
+~~~ {caption="flclient1: Freelance client, Model One in C"}
+//  Freelance client - Model 1
+//  Uses REQ socket to query one or more services
+
+#include "czmq.h"
+#define REQUEST_TIMEOUT     1000
+#define MAX_RETRIES         3       //  Before we abandon
+
+static zmsg_t *
+s_try_request (zctx_t *ctx, char *endpoint, zmsg_t *request)
+{
+    printf ("I: trying echo service at %s...\n", endpoint);
+    void *client = zsocket_new (ctx, ZMQ_REQ);
+    zsocket_connect (client, endpoint);
+
+    //  Send request, wait safely for reply
+    zmsg_t *msg = zmsg_dup (request);
+    zmsg_send (&msg, client);
+    zmq_pollitem_t items [] = { { client, 0, ZMQ_POLLIN, 0 } };
+    zmq_poll (items, 1, REQUEST_TIMEOUT * ZMQ_POLL_MSEC);
+    zmsg_t *reply = NULL;
+    if (items [0].revents & ZMQ_POLLIN)
+        reply = zmsg_recv (client);
+
+    //  Close socket in any case, we're done with it now
+    zsocket_destroy (ctx, client);
+    return reply;
+}
+
+//  .split client task
+//  The client uses a Lazy Pirate strategy if it only has one server to talk
+//  to. If it has two or more servers to talk to, it will try each server just
+//  once:
+
+int main (int argc, char *argv [])
+{
+    zctx_t *ctx = zctx_new ();
+    zmsg_t *request = zmsg_new ();
+    zmsg_addstr (request, "Hello world");
+    zmsg_t *reply = NULL;
+
+    int endpoints = argc - 1;
+    if (endpoints == 0)
+        printf ("I: syntax: %s <endpoint> ...\n", argv [0]);
+    else
+    if (endpoints == 1) {
+        //  For one endpoint, we retry N times
+        int retries;
+        for (retries = 0; retries < MAX_RETRIES; retries++) {
+            char *endpoint = argv [1];
+            reply = s_try_request (ctx, endpoint, request);
+            if (reply)
+                break;          //  Successful
+            printf ("W: no response from %s, retrying...\n", endpoint);
+        }
+    }
+    else {
+        //  For multiple endpoints, try each at most once
+        int endpoint_nbr;
+        for (endpoint_nbr = 0; endpoint_nbr < endpoints; endpoint_nbr++) {
+            char *endpoint = argv [endpoint_nbr + 1];
+            reply = s_try_request (ctx, endpoint, request);
+            if (reply)
+                break;          //  Successful
+            printf ("W: no response from %s\n", endpoint);
+        }
+    }
+    if (reply)
+        printf ("Service is running OK\n");
+
+    zmsg_destroy (&request);
+    zmsg_destroy (&reply);
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;A sample run is:
+
+以下のように実行します。
+
+~~~
+flserver1 tcp://*:5555 &
+flserver1 tcp://*:5556 &
+flclient1 tcp://localhost:5555 tcp://localhost:5556
+~~~
+
+;Although the basic approach is Lazy Pirate, the client aims to just get one successful reply. It has two techniques, depending on whether you are running a single server or multiple servers:
+
+基本的にはものぐさ海賊パターンと同じですが、クライアントはただ一つの応答を得ることを目的としています。
+プログラムは動作しているサーバー数に応じて2つに分岐しています。
+
+;* With a single server, the client will retry several times, exactly as for Lazy Pirate.
+;* With multiple servers, the client will try each server at most once until it's received a reply or has tried all servers.
+
+* サーバーが1つの場合、クライアントはものぐさ海賊パターンと同様に何度かリトライを行います。
+* サーバーが複数の場合、応答が得られるまで全てのサーバーに対してリトライを行います。
+
+;This solves the main weakness of Lazy Pirate, namely that it could not fail over to backup or alternate servers.
+
+ものぐさ海賊パターンにはバックアップサーバーにもつながらない場合に問題がありましたが、ここではこの欠点を解決しています。
+
+;However, this design won't work well in a real application. If we're connecting many sockets and our primary name server is down, we're going to experience this painful timeout each time.
+
+しかし、この設計にも欠点があります。
+最初のサーバーがダウンしている場合、ユーザーは毎回痛みを伴うタイムアウトを待つことになります。
+
 ### Model Two: Brutal Shotgun Massacre
 ### Model Three: Complex and Nasty
 ## Conclusion
