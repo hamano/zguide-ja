@@ -4401,7 +4401,7 @@ IPアドレスをハードコードなんてしたくは無いでしょうし、
 
 以下の節でそれぞれ方法を実装していきます。
 
-### Model 1つめ: 単純なリトライとフェイルオーバー
+### モデル1: 単純なリトライとフェイルオーバー
 ;So our menu appears to offer: simple, brutal, complex, or nasty. Let's start with simple and then work out the kinks. We take Lazy Pirate and rewrite it to work with multiple server endpoints.
 
 私達の目の前には3種類の選択肢が提示されています。
@@ -4555,8 +4555,282 @@ flclient1 tcp://localhost:5555 tcp://localhost:5556
 しかし、この設計にも欠点があります。
 最初のサーバーがダウンしている場合、ユーザーは毎回痛みを伴うタイムアウトを待つことになります。
 
-### Model Two: Brutal Shotgun Massacre
-### Model Three: Complex and Nasty
+### モデル2: ショットガンをぶっ放せ
+;Let's switch our client to using a DEALER socket. Our goal here is to make sure we get a reply back within the shortest possible time, no matter whether a particular server is up or down. Our client takes this approach:
+
+それではDEALERソケットに切り替えてみましょう。
+ここでの私達の目的は、一部のサーバーがダウンしてしたとして可能な限り素早く応答を得ることです。
+クライアントは以下の方針で実装します。
+
+;* We set things up, connecting to all servers.
+;* When we have a request, we blast it out as many times as we have servers.
+;* We wait for the first reply, and take that.
+;* We ignore any other replies.
+
+* 全てのサーバーに接続します。
+* リクエストを行う際はサーバーに対して陸ストを何度も投げ続けます。
+* 最初の応答が得られたらこれを読みます。
+* 残りの応答は全て無視します。
+
+;What will happen in practice is that when all servers are running, ØMQ will distribute the requests so that each server gets one request and sends one reply. When any server is offline and disconnected, ØMQ will distribute the requests to the remaining servers. So a server may in some cases get the same request more than once.
+
+これを行うと何が起こるかというと、全てのサーバーが動作している場合はそれぞれのサーバーがリクエストを受け取り、応答を返します。
+どれかのサーバーが落ちている時は、動作しているサーバーに対してリクエストが送信されます。
+従って、サーバーは2度以上の重複したリクエストを受け取る可能性があります。
+
+;What's more annoying for the client is that we'll get multiple replies back, but there's no guarantee we'll get a precise number of replies. Requests and replies can get lost (e.g., if the server crashes while processing a request).
+
+クライアントにとって面倒なのは、返ってくる複数の応答を処理しなければならない事。
+しかもリクエストと応答はサーバーのクラッシュなどが原因で失われてしまう可能性があるので、いくつ返ってくるかを予め知ることは出来ません。
+
+;So we have to number requests and ignore any replies that don't match the request number. Our Model One server will work because it's an echo server, but coincidence is not a great basis for understanding. So we'll make a Model Two server that chews up the message and returns a correctly numbered reply with the content "OK". We'll use messages consisting of two parts: a sequence number and a body.
+
+従って、クライアントは要求番号と一致しない応答を全て無視する必要があります。
+echoサーバーではこのモデルの題材にふさわしくありませんので、違う動作を行うサーバーを実装してみます。
+ここでは、応答のメッセージを読み込み、要求番号と一致している事と「OK」というメッセージの本文を確認します。
+つまり、この応答メッセージは「シーケンス番号」と「本文」の2つのフレームを含んでいます。
+
+;Start one or more servers, specifying a bind endpoint each time:
+
+バインドするエンドポイントを指定して1つ以上のサーバーを起動します。
+
+~~~ {caption="flserver2: Freelance server, Model Two in C"}
+//  Freelance server - Model 2
+//  Does some work, replies OK, with message sequencing
+
+#include "czmq.h"
+
+int main (int argc, char *argv [])
+{
+    if (argc < 2) {
+        printf ("I: syntax: %s <endpoint>\n", argv [0]);
+        return 0;
+    }
+    zctx_t *ctx = zctx_new ();
+    void *server = zsocket_new (ctx, ZMQ_REP);
+    zsocket_bind (server, argv [1]);
+
+    printf ("I: service is ready at %s\n", argv [1]);
+    while (true) {
+        zmsg_t *request = zmsg_recv (server);
+        if (!request)
+            break;          //  Interrupted
+        //  Fail nastily if run against wrong client
+        assert (zmsg_size (request) == 2);
+
+        zframe_t *identity = zmsg_pop (request);
+        zmsg_destroy (&request);
+
+        zmsg_t *reply = zmsg_new ();
+        zmsg_add (reply, identity);
+        zmsg_addstr (reply, "OK");
+        zmsg_send (&reply, server);
+    }
+    if (zctx_interrupted)
+        printf ("W: interrupted\n");
+
+    zctx_destroy (&ctx);
+    return 0;
+}
+~~~
+
+;Then start the client, specifying the connect endpoints as arguments:
+
+そして、接続するエンドポイントを引き数に指定してクライアントを起動します。
+
+~~~ {caption="flclient2: Freelance client, Model Two in C"}
+//  Freelance client - Model 2
+//  Uses DEALER socket to blast one or more services
+
+#include "czmq.h"
+
+//  We design our client API as a class, using the CZMQ style
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct _flclient_t flclient_t;
+flclient_t *flclient_new (void);
+void        flclient_destroy (flclient_t **self_p);
+void        flclient_connect (flclient_t *self, char *endpoint);
+zmsg_t     *flclient_request (flclient_t *self, zmsg_t **request_p);
+
+#ifdef __cplusplus
+}
+#endif
+
+//  If not a single service replies within this time, give up
+#define GLOBAL_TIMEOUT 2500
+
+int main (int argc, char *argv [])
+{
+    if (argc == 1) {
+        printf ("I: syntax: %s <endpoint> ...\n", argv [0]);
+        return 0;
+    }
+    //  Create new freelance client object
+    flclient_t *client = flclient_new ();
+
+    //  Connect to each endpoint
+    int argn;
+    for (argn = 1; argn < argc; argn++)
+        flclient_connect (client, argv [argn]);
+
+    //  Send a bunch of name resolution 'requests', measure time
+    int requests = 10000;
+    uint64_t start = zclock_time ();
+    while (requests--) {
+        zmsg_t *request = zmsg_new ();
+        zmsg_addstr (request, "random name");
+        zmsg_t *reply = flclient_request (client, &request);
+        if (!reply) {
+            printf ("E: name service not available, aborting\n");
+            break;
+        }
+        zmsg_destroy (&reply);
+    }
+    printf ("Average round trip cost: %d usec\n",
+        (int) (zclock_time () - start) / 10);
+
+    flclient_destroy (&client);
+    return 0;
+}
+
+//  .split class implementation
+//  Here is the {{flclient}} class implementation. Each instance has a 
+//  context, a DEALER socket it uses to talk to the servers, a counter 
+//  of how many servers it's connected to, and a request sequence number:
+
+struct _flclient_t {
+    zctx_t *ctx;        //  Our context wrapper
+    void *socket;       //  DEALER socket talking to servers
+    size_t servers;     //  How many servers we have connected to
+    uint sequence;      //  Number of requests ever sent
+};
+
+//  Constructor
+
+flclient_t *
+flclient_new (void)
+{
+    flclient_t
+        *self;
+
+    self = (flclient_t *) zmalloc (sizeof (flclient_t));
+    self->ctx = zctx_new ();
+    self->socket = zsocket_new (self->ctx, ZMQ_DEALER);
+    return self;
+}
+
+//  Destructor
+
+void
+flclient_destroy (flclient_t **self_p)
+{
+    assert (self_p);
+    if (*self_p) {
+        flclient_t *self = *self_p;
+        zctx_destroy (&self->ctx);
+        free (self);
+        *self_p = NULL;
+    }
+}
+
+//  Connect to new server endpoint
+
+void
+flclient_connect (flclient_t *self, char *endpoint)
+{
+    assert (self);
+    zsocket_connect (self->socket, endpoint);
+    self->servers++;
+}
+
+//  .split request method
+//  This method does the hard work. It sends a request to all
+//  connected servers in parallel (for this to work, all connections
+//  must be successful and completed by this time). It then waits
+//  for a single successful reply, and returns that to the caller.
+//  Any other replies are just dropped:
+
+zmsg_t *
+flclient_request (flclient_t *self, zmsg_t **request_p)
+{
+    assert (self);
+    assert (*request_p);
+    zmsg_t *request = *request_p;
+
+    //  Prefix request with sequence number and empty envelope
+    char sequence_text [10];
+    sprintf (sequence_text, "%u", ++self->sequence);
+    zmsg_pushstr (request, sequence_text);
+    zmsg_pushstr (request, "");
+
+    //  Blast the request to all connected servers
+    int server;
+    for (server = 0; server < self->servers; server++) {
+        zmsg_t *msg = zmsg_dup (request);
+        zmsg_send (&msg, self->socket);
+    }
+    //  Wait for a matching reply to arrive from anywhere
+    //  Since we can poll several times, calculate each one
+    zmsg_t *reply = NULL;
+    uint64_t endtime = zclock_time () + GLOBAL_TIMEOUT;
+    while (zclock_time () < endtime) {
+        zmq_pollitem_t items [] = { { self->socket, 0, ZMQ_POLLIN, 0 } };
+        zmq_poll (items, 1, (endtime - zclock_time ()) * ZMQ_POLL_MSEC);
+        if (items [0].revents & ZMQ_POLLIN) {
+            //  Reply is [empty][sequence][OK]
+            reply = zmsg_recv (self->socket);
+            assert (zmsg_size (reply) == 3);
+            free (zmsg_popstr (reply));
+            char *sequence = zmsg_popstr (reply);
+            int sequence_nbr = atoi (sequence);
+            free (sequence);
+            if (sequence_nbr == self->sequence)
+                break;
+            zmsg_destroy (&reply);
+        }
+    }
+    zmsg_destroy (request_p);
+    return reply;
+}
+~~~
+
+;Here are some things to note about the client implementation:
+
+クライアントの実装について注意すべき点は以下の通りです。
+
+;* The client is structured as a nice little class-based API that hides the dirty work of creating ØMQ contexts and sockets and talking to the server. That is, if a shotgun blast to the midriff can be called "talking".
+;* The client will abandon the chase if it can't find any responsive server within a few seconds.
+;* The client has to create a valid REP envelope, i.e., add an empty message frame to the front of the message.
+
+* ØMQコンテキストを作成する汚れ仕事やソケット、およびサーバーとの通信は綺麗に構造化されたクラスベースのAPIにより隠蔽しています。
+* 数秒間どのサーバーからも応答が無ければ、クライアントは応答を待つのを止めます。
+* クライアントは、正しいREPエンベロープを作成する必要があります。例えばメッセージフレームの前に空のフレームを追加する事などです。
+
+;The client performs 10,000 name resolution requests (fake ones, as our server does essentially nothing) and measures the average cost. On my test box, talking to one server, this requires about 60 microseconds. Talking to three servers, it takes about 80 microseconds.
+
+クライアントで1万回の名前解決を実行し、平均コストを計測してみます。
+私のテストマシンでは1台のサーバーと通信するのに60ミリ秒、3台のサーバーと通信すると80ミリ秒掛かりました。
+
+;The pros and cons of our shotgun approach are:
+
+このショットガン方式の利点と欠点は、
+
+;* Pro: it is simple, easy to make and easy to understand.
+;* Pro: it does the job of failover, and works rapidly, so long as there is at least one server running.
+;* Con: it creates redundant network traffic.
+;* Con: we can't prioritize our servers, i.e., Primary, then Secondary.
+;* Con: the server can do at most one request at a time, period.
+
+* 利点: そこそこ単純で理解しやすいです。
+* 利点: フェイルオーバーが機能し、少なくとも1台のサーバーが動作していれば迅速に動作します。。
+* 欠点: 無駄なネットワークトラフィックが発生します。
+* 欠点: プライマリーやセカンダリなど、サーバーの優先順位を決めることが出来ません。
+* 欠点: ひとつのリクエストに対して全てのサーバーが処理を行う必要があります。
+
+### モデル3: Complex and Nasty
 ## Conclusion
 ;In this chapter, we've seen a variety of reliable request-reply mechanisms, each with certain costs and benefits. The example code is largely ready for real use, though it is not optimized. Of all the different patterns, the two that stand out for production use are the Majordomo pattern, for broker-based reliability, and the Freelance pattern, for brokerless reliability.
 
