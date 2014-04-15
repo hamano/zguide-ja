@@ -4293,7 +4293,7 @@ bstar_start (bstar_t *self)
 
 これを利用することでサーバーのメインプログラムはこんなにも短くなります。
 
-~~~ {caption="bstarsrv2: Binary Star server, using core class in C"}
+~~~ {caption="bstarsrv2: Binary Star server using core class in C"}
 //  Binary Star server, using bstar reactor
 
 //  Lets us build this source without creating a library
@@ -4413,7 +4413,7 @@ IPアドレスをハードコードなんてしたくは無いでしょうし、
 
 まず、引き数にエンドポイント名を指定して、1つ以上のサーバーを起動して下さい。
 
-~~~ {caption="flserver1: Freelance server, Model One in C"}
+~~~ {caption="flserver1: Freelance server Model One in C"}
 //  Freelance server - Model 1
 //  Trivial echo service
 
@@ -4448,7 +4448,7 @@ int main (int argc, char *argv [])
 
 続いて1つ以上のエンドポイントを指定してクライアントを起動します。
 
-~~~ {caption="flclient1: Freelance client, Model One in C"}
+~~~ {caption="flclient1: フリーランスクライアント モデル1(C言語)"}
 //  Freelance client - Model 1
 //  Uses REQ socket to query one or more services
 
@@ -4594,7 +4594,7 @@ echoサーバーではこのモデルの題材にふさわしくありません�
 
 バインドするエンドポイントを指定して1つ以上のサーバーを起動します。
 
-~~~ {caption="flserver2: Freelance server, Model Two in C"}
+~~~ {caption="flserver2: Freelance server Model Two in C"}
 //  Freelance server - Model 2
 //  Does some work, replies OK, with message sequencing
 
@@ -4638,7 +4638,7 @@ int main (int argc, char *argv [])
 
 そして、接続するエンドポイントを引き数に指定してクライアントを起動します。
 
-~~~ {caption="flclient2: Freelance client, Model Two in C"}
+~~~ {caption="flclient2: フリーランスクライアント モデル2(C言語)"}
 //  Freelance client - Model 2
 //  Uses DEALER socket to blast one or more services
 
@@ -4831,7 +4831,8 @@ flclient_request (flclient_t *self, zmsg_t **request_p)
 * 欠点: ひとつのリクエストに対して全てのサーバーが処理を行う必要があります。
 
 ### モデル3: Complex and Nasty
-## Conclusion
+
+## まとめ
 ;In this chapter, we've seen a variety of reliable request-reply mechanisms, each with certain costs and benefits. The example code is largely ready for real use, though it is not optimized. Of all the different patterns, the two that stand out for production use are the Majordomo pattern, for broker-based reliability, and the Freelance pattern, for brokerless reliability.
 
 この章では、リクエスト・応答パターンに様々な信頼性を持たせる方法を見てきました。
