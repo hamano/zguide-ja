@@ -8,7 +8,7 @@
 その他にはzap-pow-kaboomパラダイムシフトの悟りを開き、全てが明解になる瞬間を共有しようとする人もいます。
 物事は単純になります。複雑さは消え、心を開くのです…
 
-もっと他の説明を試してみましょう。それはもっと短く単純ですが馴染みやすいはずです。
+もっと他の説明を試してみましょう。こちらは短くて単純ですがもっと馴染みやすいはずです。
 個人的に何故私達がØMQを作ったかという話を覚えておいて欲しいです。
 何故かというと、ほとんどの読者も同じ問題を抱えているはずだからです。
 
@@ -33,10 +33,10 @@
 
 ;If you've done any work with threads, protocols, or networks, you'll realize this is pretty much impossible. It's a dream. Even connecting a few programs across a few sockets is plain nasty when you start to handle real life situations. Trillions? The cost would be unimaginable. Connecting computers is so difficult that software and services to do this is a multi-billion dollar business.
 
-もしあなたがスレッドやプロトコル、ネットワークを駆使してこれを自分で実装しようとした場合、到底不可能であることに気がつくでしょう。それは夢物語です。
-複数のプログラムが複数の複数のソケットを利用して接続するプログラムは現実的には地味に厄介です。
+この様なシステムをスレッドやプロトコル、ネットワークを1から構築して実装しようとした場合、到底不可能であることに気がつくでしょう。それは夢物語です。
+複数のプログラムが複数のソケットを利用して接続するプログラムは現実的には地味に厄介です。
 想像を絶するコストが掛かります。
-数十億ドル規模のビジネスでコンピューターを接続するソフトウェアやサービスを行うことは非常に困難です。
+数十億ドル規模のビジネスでコンピューターを接続するソフトウェアやサービスを行うことは非常に困難になります。
 
 ;So we live in a world where the wiring is years ahead of our ability to use it. We had a software crisis in the 1980s, when leading software engineers like Fred Brooks believed there was no "Silver Bullet" to "promise even one order of magnitude of improvement in productivity, reliability, or simplicity".
 
@@ -51,20 +51,19 @@
 最も巨大で裕福な企業のみが、接続するアプリケーションを開発する余裕があります。
 それはプロプライエタリなクラウドです。
 我々のデータと知識はパーソナルコンピューターの中からクラウドの中に消えてしまい、我々自身もアクセス出来なくなっています。
-ソーシャルネットワークを自分自身で持っている人はいますか?
+ソーシャルネットワークを自分自身で所有している人はいますか?
 これではまるでメインフレーム-パーソナルコンピューター革命を逆行しているようです。
 
 ;We can leave the political philosophy for another book. The point is that while the Internet offers the potential of massively connected code, the reality is that this is out of reach for most of us, and so large interesting problems (in health, education, economics, transport, and so on) remain unsolved because there is no way to connect the code, and thus no way to connect the brains that could work together to solve these problems.
 
-政治哲学的な話はこの辺にしておいて[他の本](http://swsi.info/)に譲る事にしますが、
-重要なのは、インターネットは潜在的に大量のコードが接続しあうにも関わらず、現実に私達には手の届かない所にあるという事です。
+政治哲学的な話はこの辺にしておいて[他の本](http://swsi.info/)に譲る事にしますが、重要なのはインターネットは潜在的に大量のコードが接続しあうにも関わらず、現実では私達の手の届かない所にあるという事です。
 そしてこれは健康、教育、経済、流通などにおいて非常に興味深い問題を引き起こしますが、コードを接続する方法が無いので未だ解決出来ていません。
 したがって、これらの問題を解決するために脳を接続出来る相手と一緒に仕事するしかありません。
 
 ;There have been many attempts to solve the challenge of connected code. There are thousands of IETF specifications, each solving part of the puzzle. For application developers, HTTP is perhaps the one solution to have been simple enough to work, but it arguably makes the problem worse by encouraging developers and architects to think in terms of big servers and thin, stupid clients.
 
-コードを接続する問題に関して多くの試みが行われてきました。
-何千ものIETFの仕様があります。これらは問題を解決するパズルの一部です。
+コードを接続するという問題に関して多くの試みが行われてきました。
+何千ものIETFの仕様はこれらの問題を解決するパズルの一部です。
 HTTPは恐らくアプリケーション開発者にとって単純明解な解決方法の一つでしょう。しかしそれは楽観的な開発者や設計者による、巨大なサーバーと貧弱なクライアントを前提とした考えであり、問題を悪化させるでしょう。
 
 ;So today people are still connecting applications using raw UDP and TCP, proprietary protocols, HTTP, and Websockets. It remains painful, slow, hard to scale, and essentially centralized. Distributed P2P architectures are mostly for play, not work. How many applications use Skype or Bittorrent to exchange data?
@@ -72,13 +71,13 @@ HTTPは恐らくアプリケーション開発者にとって単純明解な解�
 そして現在でも人々はUDPやTCP、プロプライエタリなプロトコル、HTTP、Webソケットを使用してアプリケーションを接続しています。
 それは痛みを伴うほど遅く、拡張が難しく、本質的に中央集中型です。
 分散P2Pはほとんど娯楽のためであり、ビジネスで使うには難しいでしょう。
-SkypeやBittorrentとデータを交換するアプリケーションがどれほどあるでしょうか?
+SkypeやBittorrentとデータ通信を行うアプリケーションがどれほどあるでしょうか?
 
 ;Which brings us back to the science of programming. To fix the world, we needed to do two things. One, to solve the general problem of "how to connect any code to any code, anywhere". Two, to wrap that up in the simplest possible building blocks that people could understand and use easily.
 
 プログラミングの理学の話に立ち帰ると、世界を修正するために我々は2つの事を行う必要があります。
-一つ目は一般的な問題である「何処でもコードとコードを接続出来るようにする方法」を解決すること。
-二つ目は人々が簡単に理解して利用できる単純なブロックでそれを包み込む事です。
+1つ目は「何処でもコードとコードを接続出来るようにする方法」という一般的な問題を解決すること。
+2つ目は人々が簡単に理解して利用できる単純なブロックでそれを包み込む事です。
 
 ;It sounds ridiculously simple. And maybe it is. That's kind of the whole point.
 
@@ -91,7 +90,7 @@ SkypeやBittorrentとデータを交換するアプリケーションがどれ�
 あなたが最新のØMQ バージョン 3.2を利用している事を想定しています。
 また、あなたがLinuxマシンまたは類似の何かを利用していることを想定します。
 サンプルコードの既定の言語はC言語ですので、あなたが多かれ少なかれC言語が読めることを想定しています。
-私が`PUSH`や`SUBSCRIBE`といった定数を書いた時、実際には`ZMQ_PUSH` や `ZMQ_SUBSCRIBE` という様に各プログラミング言語で使われる記述に読み替えて読んでください。
+私が`PUSH`や`SUBSCRIBE`といった定数を書いた時、実際には`ZMQ_PUSH`や`ZMQ_SUBSCRIBE` という様に各プログラミング言語で使われる記述に読み替えて読んでください。
 
 ## サンプルコードの取得
 ;The examples live in a public GitHub repository. The simplest way to get all the examples is to clone this repository:

@@ -2,7 +2,7 @@
 ;Chapter 3 - Advanced Request-Reply Patterns covered advanced uses of ØMQ's request-reply pattern with working examples. This chapter looks at the general question of reliability and builds a set of reliable messaging patterns on top of ØMQ's core request-reply pattern.
 
 第3章「リクエスト・応答パターンの応用」ではリクエスト・応答パターンの高度な活用方法を実際に動作する例と一緒に見てきました。
-このしょうでは一般的な問題である信頼性を確保する方法、および様々な信頼性のあるメッセージングパターンの構築方法を紹介します。
+この章では一般的な問題である信頼性を確保する方法、および様々な信頼性のあるメッセージングパターンの構築方法を紹介します。
 
 ;In this chapter, we focus heavily on user-space request-reply patterns, reusable models that help you design your own ØMQ architectures:
 
@@ -55,12 +55,12 @@
 
 現実世界で発生する障害の99.9%は最初の5つに分類されるでしょう。(これは私が行った十分に科学的な調査です)
 もし最後の2例の問題にお金をつぎ込みたいと考えているお金の余っている大企業が居られましたら是非とも我社にご連絡下さい。
-ビーチハウスの裏側に高級プールを作りましょう。
+ビーチハウスの裏側に高級プールを作って頂きたいです。
 
 ## 信頼性の設計
 ;So to make things brutally simple, reliability is "keeping things working properly when code freezes or crashes", a situation we'll shorten to "dies". However, the things we want to keep working properly are more complex than just messages. We need to take each core ØMQ messaging pattern and see how to make it work (if we can) even when code dies.
 
-とても単純な事なのですが、信頼性とは「コードがフリーズしたりクラッシュしてしまい、いわゆる「落ちた」という状況であっても、正しく動作し続けること」なのです。
+とても単純な事なのですが、信頼性とはコードがフリーズしたりクラッシュしてしまい、いわゆる「落ちた」という状況であっても、正しく動作し続けることです。
 しかし、正しく動作し続けるという事は思っている以上に大変な事です。
 まずはØMQメッセージングパターン毎にどの様な障害が発生し得るか考えてみる必要があるでしょう。
 
@@ -485,7 +485,7 @@ int main (void)
 そうするとワーカーがクラッシュしたり固まったりするでしょうが、キュープロキシーは機能を停止することなく動作し続けます。
 このモデルはクライアントやワーカーの数が幾つでも問題なく動作します。
 
-## Robust Reliable Queuing (神経質な海賊パターン)
+## 頑丈なキューイング (神経質な海賊パターン)
 
 ![神経質な海賊パターン](images/fig49.eps)
 
@@ -3381,9 +3381,9 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 
 タイタニックの信頼性を下げて、リクエストと応答をメモリに格納する事で非接続性のネットワーク機能を実現できますが、タイタニックサーバー自体の障害でメッセージは失われてしまいます。
 
-## High-Availability Pair (Binary Star Pattern)
+## 高可用性ペア (バイナリー・スターパターン)
 
-![High-Availability Pair, Normal Operation](images/fig52.eps)
+![高可用性ペアの通常状態](images/fig52.eps)
 
 ;The Binary Star pattern puts two servers in a primary-backup high-availability pair. At any given time, one of these (the active) accepts connections from client applications. The other (the passive) does nothing, but the two servers monitor each other. If the active disappears from the network, after a certain time the passive takes over as active.
 
@@ -3953,11 +3953,11 @@ ROUTERソケットではメッセージを送信する際に通信相手のア�
 
 ![バイナリー・スター有限状態オートマトン](images/fig54.eps)
 
-### Binary Star Reactor
+### バイナリー・スター・リアクター
 
 ;Binary Star is useful and generic enough to package up as a reusable reactor class. The reactor then runs and calls our code whenever it has a message to process. This is much nicer than copying/pasting the Binary Star code into each server where we want that capability.
 
-バイナリー・スターは再利用可能なリアクタークラスとしてパッケージングすると汎用的かつ便利です。
+バイナリー・スターを再利用可能なリアクタークラスとしてパッケージングすると汎用的で便利です。
 リアクターにはメッセージを処理する関数を渡して実行します。
 既存のサーバーに対してバイナリー・スターの機能をコピペするよりはこちらの方が良いでしょう。
 
@@ -5366,3 +5366,4 @@ flcliapi_agent (void *args, zctx_t *ctx, void *pipe)
 この章では、リクエスト・応答パターンに様々な信頼性を持たせる方法を見てきました。
 サンプルコードは最適化されていませんが、十分実用に使えるレベルです。
 なにより対照的なのは、ブローカーに信頼性持たせるMajordomoパターンとブローカーの無いフリーランスパターンです。
+

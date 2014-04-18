@@ -11,8 +11,9 @@ DVIPDFMX_OPT=-f uptex-hiragino
 NAME=zguide-ja
 TEMPLATE=$(NAME).tmpl
 
-#SRCS=meta.md preface.md chapter1.md chapter2.md chapter3.md postface.md
-SRCS=meta.md chapter3.md
+SRCS=meta.md preface.md chapter1.md chapter2.md chapter3.md chapter4.md chapter5.md chapter6.md chapter7.md chapter8.md postface.md
+SRCS=meta.md preface.md chapter1.md chapter2.md chapter3.md chapter4.md postface.md
+#SRCS=meta.md chapter4.md
 MD=$(NAME).md
 TEX=$(NAME).tex
 DVI=$(NAME).dvi
@@ -21,8 +22,8 @@ EPUB=$(NAME).epub
 HTML=$(NAME).html
 
 # filter original text
-#ORIGINAL_FILTER=|sed -e 's/^;.*//'
-ORIGINAL_FILTER=|sed -e 's/^;\(.*\)/\1/'
+ORIGINAL_FILTER=|sed -e 's/^;.*//'
+#ORIGINAL_FILTER=|sed -e 's/^;\(.*\)/\1/'
 
 %.dvi: %.tex
 	$(LATEX) $<
