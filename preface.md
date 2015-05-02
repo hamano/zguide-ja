@@ -1,11 +1,23 @@
 # まえがき {-}
+
+## 訳者より {-}
+この本はØMQというライブラリの入門書という体裁になっていますが、もっと一般的なメッセージングシステムの設計方法を学べるように書かれています。
+マルチスレッドプログラミングおよびネットワークプログラミングで起こる一般的な問題の解決方法や、分散アプリケーションの設計方法などを学ぶことが出来ます。
+たとえば、P2Pアプリケーションや分散ハッシュテーブルなどの基盤を実装したいと考えている方におすすめの本です。
+
+この本の原文は全8章で構成されており、現在4章までの翻訳が完了しています。
+β版を購入された方にはご不便をお掛けしますが、続きの章については更新情報を確認して下さい。
+
+誤字・誤訳等ありましたら[\@hamano](https://twitter.com/hamano)まで連絡下さい。
+校正を手伝ってくれた亀井亜佐夫さんに感謝します。
+
 ## ØMQとは {-}
 ;ØMQ (also known as ZeroMQ, 0MQ, or zmq) looks like an embeddable networking library but acts like a concurrency framework. It gives you sockets that carry atomic messages across various transports like in-process, inter-process, TCP, and multicast. You can connect sockets N-to-N with patterns like fan-out, pub-sub, task distribution, and request-reply. It's fast enough to be the fabric for clustered products. Its asynchronous I/O model gives you scalable multicore applications, built as asynchronous message-processing tasks. It has a score of language APIs and runs on most operating systems. ØMQ is from iMatix and is LGPLv3 open source.
 
-ØMQ(ZeroMQ, 0MQ, zmq などとも呼ばれます)は組み込みネットワークライブラリの様にも見ることもできますが、並行フレームワークの様に機能します。
-それはプロセス内通信、プロセス間通信、TCPやマルチキャストの様な幅広い通信手段を用いてアトミックにメッセージを転送する通信ソケットを提供します。
+ØMQ(ZeroMQ, 0MQ, zmq などとも呼ばれます)は組み込みネットワークライブラリと言うことも出来ますが、並行フレームワークの様にも機能します。
+ØMQはプロセス内通信、プロセス間通信、TCPやマルチキャストの様な幅広い通信手段を用いてアトミックにメッセージを転送する通信ソケットを提供します。
 ソケットをファンアウト、Pub-Sub、タスク分散、リクエスト・応答の様なパターンでN対Nで接続できます。
-非同期I/Oモデルによりアプリケーションはマルチコアスケーラブルな非同期メッセージ処理タスクとして構成されていますので、製品クラスタを構成する上で十分高速です。
+非同期I/Oモデルにより、マルチコア環境でスケーラブルな非同期メッセージ処理を行うアプリケーションを構築可能で、製品クラスタを構成する上で十分高速です。
 ØMQは多くのプログラミング言語向けのAPIを持ち、ほとんどのOSで動作します。
 ØMQは[iMatix](http://www.imatix.com/)で開発され、LGPLv3ライセンスで配布されています。
 
@@ -44,13 +56,8 @@
 ## 謝辞 {-}
 ;Thanks to Andy Oram for making the O'Reilly book happen, and editing this text.
 
-このテキストを[オライリーの書籍](http://shop.oreilly.com/product/0636920026136.do)として出版する為に企画と編集を行なってくれたAndy Oramに感謝します。
+このテキストを[書籍](http://shop.oreilly.com/product/0636920026136.do)として出版する為に企画と編集を行なってくれたAndy Oramに感謝します。
 
 以下の方々の貢献に感謝します:
 
 Bill Desmarais, Brian Dorsey, Daniel Lin, Eric Desgranges, Gonzalo Diethelm, Guido Goldstein, Hunter Ford, Kamil Shakirov, Martin Sustrik, Mike Castleman, Naveen Chawla, Nicola Peduzzi, Oliver Smith, Olivier Chamoux, Peter Alexander, Pierre Rouleau, Randy Dryburgh, John Unwin, Alex Thomas, Mihail Minkov, Jeremy Avnet, Michael Compton, Kamil Kisiel, Mark Kharitonov, Guillaume Aubert, Ian Barber, Mike Sheridan, Faruk Akgul, Oleg Sidorov, Lev Givon, Allister MacLeod, Alexander D'Archangel, Andreas Hoelzlwimmer, Han Holl, Robert G. Jakabosky, Felipe Cruz, Marcus McCurdy, Mikhail Kulemin, Dr. Gergő Érdi, Pavel Zhukov, Alexander Else, Giovanni Ruggiero, Rick "Technoweenie", Daniel Lundin, Dave Hoover, Simon Jefford, Benjamin Peterson, Justin Case, Devon Weller, Richard Smith, Alexander Morland, Wadim Grasza, Michael Jakl, Uwe Dauernheim, Sebastian Nowicki, Simone Deponti, Aaron Raddon, Dan Colish, Markus Schirp, Benoit Larroque, Jonathan Palardy, Isaiah Peng, Arkadiusz Orzechowski, Umut Aydin, Matthew Horsfall, Jeremy W. Sherman, Eric Pugh, Tyler Sellon, John E. Vincent, Pavel Mitin, Min RK, Igor Wiedler, Olof Åkesson, Patrick Lucas, Heow Goodman, Senthil Palanisami, John Gallagher, Tomas Roos, Stephen McQuay, Erik Allik, Arnaud Cogoluègnes, Rob Gagnon, Dan Williams, Edward Smith, James Tucker, Kristian Kristensen, Vadim Shalts, Martin Trojer, Tom van Leeuwen, Hiten Pandya, Harm Aarts, Marc Harter, Iskren Ivov Chernev, Jay Han, Sonia Hamilton, Nathan Stocks, Naveen Palli, Zed Shaw
-
-## 訳者より {-}
-現在翻訳作業中です。誤字・誤訳等ありましたら[\@hamano](https://twitter.com/hamano)まで連絡下さい。
-校正を手伝ってくれた亀井亜佐夫さんに感謝します。
-

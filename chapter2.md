@@ -50,13 +50,12 @@
 私達がメッセージ処理エンジンの多くを隠蔽する事に尽力したことにより、ØMQは親しみやすいソケットベースのAPIを提供しています。
 しかしその結果、分散ソフトウェアの実装や設計方法に関するあなたの考え方を変える必要があるかもしれません。
 
-;Sockets are the de facto standard API for network programming, as well as being useful for stopping your eyes from falling onto your cheeks. One thing that makes ØMQ especially tasty to developers is that it uses sockets and messages instead of some other arbitrary set of concepts. Kudos to Martin Sustrik for pulling this off.
-;It turns "Message Oriented Middleware", a phrase guaranteed to send the whole room off to Catatonia, into "Extra Spicy Sockets!", which leaves us with a strange craving for pizza and a desire to know more.
+;Sockets are the de facto standard API for network programming, as well as being useful for stopping your eyes from falling onto your cheeks. One thing that makes ØMQ especially tasty to developers is that it uses sockets and messages instead of some other arbitrary set of concepts. Kudos to Martin Sustrik for pulling this off. It turns "Message Oriented Middleware", a phrase guaranteed to send the whole room off to Catatonia, into "Extra Spicy Sockets!", which leaves us with a strange craving for pizza and a desire to know more.
 
 ソケットAPIはネットワークプログラミングの事実上の標準というだけでなく、目が飛び出るほど便利です。
 開発者にとってØMQの特に魅力的なところは、他の別の概念の代わりにソケットとメッセージを利用したという所です。
 これについてはMartin Sustrikに賞賛を送りたいと思います。
-; [TODO]
+これにより「メッセージ指向ミドルウェア」というちょっと特殊な言葉は誰もが欲しがるピザの様な言葉に変化しました。
 
 ;Like a favorite dish, ØMQ sockets are easy to digest. Sockets have a life in four parts, just like BSD sockets:
 
@@ -131,24 +130,23 @@
 サーバーノードは一つのソケットに対して複数のエンドポイントをbindする事が出来ます。(複数のプロトコルやアドレスを組み合わせる事も可能)
 これは異なる通信方式のネットワークを横断して接続を待ち受けることが出来るという事です。
 
-~~~ {language="C"}
+~~~
 zmq_bind (socket, "tcp://*:5555");
 zmq_bind (socket, "tcp://*:9999");
 zmq_bind (socket, "inproc://somename");
 ~~~
 
-;[TODO]With most transports, you cannot bind to the same endpoint twice, unlike for example in UDP. The ipc transport does, however, let one process bind to an endpoint already used by a first process. It's meant to allow a process to recover after a crash.
+;With most transports, you cannot bind to the same endpoint twice, unlike for example in UDP. The ipc transport does, however, let one process bind to an endpoint already used by a first process. It's meant to allow a process to recover after a crash.
 
-UDPとは異なり、殆どの通信方式では同じエンドポイントを2度バインドする事は出来ません。
-IPC通信方式ではこれを行うことができますが、最初にbindを行ったプロセスのソケットは無効になります。これはプロセスのクラッシュから回復する為のものです。
+UDPを除き、ほとんどの通信方式では同じエンドポイントを2度バインドする事は出来ません。
+IPC通信方式でも2度bindする事ができますが最初にbindを行ったプロセスのソケットは無効になります。これはプロセスのクラッシュから回復する為の手段です。
 
-;Although ØMQ tries to be neutral about which side binds and which side connects, there are differences. We'll see these in more detail later. The upshot is that you should usually think in terms of "servers" as static parts of your topology that bind to more or less fixed endpoints, and "clients" as dynamic parts that come and go and connect to these endpoints. Then, design your application around this model.
-;[TODO]The chances that it will "just work" are much better like that.
+;Although ØMQ tries to be neutral about which side binds and which side connects, there are differences. We'll see these in more detail later. The upshot is that you should usually think in terms of "servers" as static parts of your topology that bind to more or less fixed endpoints, and "clients" as dynamic parts that come and go and connect to these endpoints. Then, design your application around this model. The chances that it will "just work" are much better like that.
 
-とはいえ、ØMQはbindする側と接続する側について中立であろうとする事に大きな特徴があります。後でもっと詳しく説明しますが結論だけ言うと、
-通常「サーバー」と聞くと、トポロジーの静的な部品として位置づけられる固定的なエンドポイントと考えます。
-また、「クライアント」と聞くと、動的に増減する部品としてエンドポイントに接続しに来ます。
-多くの場合このモデルに基づいてアプリケーションを設計されるでしょう。
+ØMQはbindする側と接続する側について中立であろうとしますが、違いは明確です。後でもっと詳しく説明しますが結論だけ言うと、
+通常「サーバー」はトポロジーの静的な部品として位置づけられる固定的なエンドポイントと考えます。
+また、「クライアント」はエンドポイントに接続する動的に増減する部品です。
+多くの場合このモデルに基づいてアプリケーションを設計する事になるでしょう。
 
 ;Sockets have types. The socket type defines the semantics of the socket, its policies for routing messages inwards and outwards, queuing, etc. You can connect certain types of socket together, e.g., a publisher socket and a subscriber socket. Sockets work together in "messaging patterns". We'll look at this in more detail later.
 
@@ -161,7 +159,7 @@ IPC通信方式ではこれを行うことができますが、最初にbindを�
 ;It's the ability to connect sockets in these different ways that gives ØMQ its basic power as a message queuing system. There are layers on top of this, such as proxies, which we'll get to later. But essentially, with ØMQ you define your network architecture by plugging pieces together like a child's construction toy.
 
 異なる方法でソケットを接続するメッセージキューシステムこそがØMQの基本的な能力です。
-あとで出てきますが、上位レイヤに位置するプロキシー様なものがあります。
+あとで出てきますが、上位レイヤに位置するプロキシ様なものがあります。
 しかしØMQの本質はレゴ・ブロックの様に部品を組み合わせることでネットワークアーキテクチャを構築できるという事です。
 
 ### メッセージの送受信
@@ -307,7 +305,7 @@ assert (zmq_ctx_get (context, ZMQ_IO_THREADS) == io_threads);
 
 ØMQのパターンはソケット種別のペアによって実装されます。
 言い換えると、ØMQのパターンを理解するためにはソケット種別とそれがどの様に連携して動作するかを理解する必要があります。
-[TODO]
+これは単に覚えるだけですのでここでの説明はこれくらいにしておきます。
 
 ;The built-in core ØMQ patterns are:
 
@@ -527,51 +525,7 @@ libzmqのコアライブラリは、送受信を行う2つのAPIを持ってい�
 ややこしいですが、気象情報のサブスクライバーと並行処理のワーカーの両方の機能を持ったプログラムを例に使用します。
 
 ~~~ {caption="msreader: Multiple socket reader in C"}
-// 複数のソケットから受信を行います
-// この例では単純に受信ループを利用しています
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // Connect to task ventilator
-    void *context = zmq_ctx_new ();
-    void *receiver = zmq_socket (context, ZMQ_PULL);
-    zmq_connect (receiver, "tcp://localhost:5557");
-
-    // Connect to weather server
-    void *subscriber = zmq_socket (context, ZMQ_SUB);
-    zmq_connect (subscriber, "tcp://localhost:5556");
-    zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "10001 ", 6);
-
-    // Process messages from both sockets
-    // We prioritize traffic from the task ventilator
-    while (1) {
-        char msg [256];
-        while (1) {
-            int size = zmq_recv (receiver, msg, 255, ZMQ_DONTWAIT);
-            if (size != -1) {
-                // Process task
-            }
-            else
-                break;
-        }
-        while (1) {
-            int size = zmq_recv (subscriber, msg, 255, ZMQ_DONTWAIT);
-            if (size != -1) {
-                // Process weather update
-            }
-            else
-                break;
-        }
-        // No activity, so sleep for 1 msec
-        s_sleep (1);
-    }
-    zmq_close (receiver);
-    zmq_close (subscriber);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+include(examples/EXAMPLE_LANG/msreader.EXAMPLE_EXT)
 ~~~
 
 ;The cost of this approach is some additional latency on the first message (the sleep at the end of the loop, when there are no waiting messages to process). This would be a problem in applications where submillisecond latency was vital. Also, you need to check the documentation for nanosleep() or whatever function you use to make sure it does not busy-loop.
@@ -589,47 +543,7 @@ int main (void)
 さて次は、同じようなアプリケーションで`zmq_poll()`を使う例を見て行きましょう。
 
 ~~~ {caption="mspoller: Multiple socket poller in C"}
-// この例ではzmq_poll()を利用して複数のソケットから受信を行います
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // Connect to task ventilator
-    void *context = zmq_ctx_new ();
-    void *receiver = zmq_socket (context, ZMQ_PULL);
-    zmq_connect (receiver, "tcp://localhost:5557");
-
-    // Connect to weather server
-    void *subscriber = zmq_socket (context, ZMQ_SUB);
-    zmq_connect (subscriber, "tcp://localhost:5556");
-    zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "10001 ", 6);
-
-    // Process messages from both sockets
-    while (1) {
-        char msg [256];
-        zmq_pollitem_t items [] = {
-            { receiver, 0, ZMQ_POLLIN, 0 },
-            { subscriber, 0, ZMQ_POLLIN, 0 }
-        };
-        zmq_poll (items, 2, -1);
-        if (items [0].revents & ZMQ_POLLIN) {
-            int size = zmq_recv (receiver, msg, 255, 0);
-            if (size != -1) {
-                // Process task
-            }
-        }
-        if (items [1].revents & ZMQ_POLLIN) {
-            int size = zmq_recv (subscriber, msg, 255, 0);
-            if (size != -1) {
-                // Process weather update
-            }
-        }
-    }
-    zmq_close (subscriber);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+include(examples/EXAMPLE_LANG/mspoller.EXAMPLE_EXT)
 ~~~
 
 ;The items structure has these four members:
@@ -638,10 +552,10 @@ int main (void)
 
 ~~~
 typedef struct {
-    void *socket; // 0MQ socket to poll on
-    int fd; // OR, native file handle to poll on
-    short events; // Events to poll on
-    short revents; // Events returned after poll
+    void *socket; // 監視する0MQソケット
+    int fd; // もしくは、監視するファイルディスクリプタ
+    short events; // 監視するイベント
+    short revents; // イベント発生後のzmq_poll()の返り値
 } zmq_pollitem_t;
 ~~~
 
@@ -655,7 +569,7 @@ typedef struct {
 ;What we'll learn now is simply how to blindly and safely read and write multipart messages in any application (such as a proxy) that needs to forward messages without inspecting them.
 
 今から学ぶことは、単純にアプリケーションから安全にマルチパートメッセージを読み書きする方法です。
-これは中身を読まずにメッセージを転送するプロキシーの様なアプリケーションで必要になります。
+これは中身を読まずにメッセージを転送するプロキシの様なアプリケーションで必要になります。
 
 ;When you work with multipart messages, each part is a zmq_msg item. E.g., if you are sending a message with five parts, you must construct, send, and destroy five zmq_msg items. You can do this in advance (and store the zmq_msg items in an array or other structure), or as you send them, one-by-one.
 
@@ -712,14 +626,14 @@ while (1) {
  * 送信時、全てのメッセージフレームが送信され、最後のフレームが受信されるまで、メモリ上のØMQキューに保存されています。
  * 送信したメッセージフレームを部分的に取り消すには、ソケットをクローズするしか方法はありません。
 
-### 中継とプロキシー
+### 中継とプロキシ
 ;ØMQ aims for decentralized intelligence, but that doesn't mean your network is empty space in the middle. It's filled with message-aware infrastructure and quite often, we build that infrastructure with ØMQ. The ØMQ plumbing can range from tiny pipes to full-blown service-oriented brokers. The messaging industry calls this intermediation, meaning that the stuff in the middle deals with either side. In ØMQ, we call these proxies, queues, forwarders, device, or brokers, depending on the context.
 
 ØMQは知性の分散を目指しますが、ネットワークの中央に何もないというわけではありません。
 そこにはメッセージを扱うインフラやØMQで構築したインフラで満たされています。
 ØMQは小さなパイプから、完全なサービス指向ブローカーまで様々な配管を行うことが可能です。
 メッセージング業界では、中央でメッセージを取り扱う役割を仲介者と呼びます。
-ØMQではこの役割の事を文脈に依存してプロキシー、キュー、フォワーダー、デバイス、ブローカと呼びます。
+ØMQではこの役割の事を文脈に依存してプロキシ、キュー、フォワーダー、デバイス、ブローカと呼びます。
 
 ;This pattern is extremely common in the real world and is why our societies and economies are filled with intermediaries who have no other real function than to reduce the complexity and scaling costs of larger networks. Real-world intermediaries are typically called wholesalers, distributors, managers, and so on.
 
@@ -768,10 +682,10 @@ while (1) {
 ;It's better to think of intermediaries as simple stateless message switches. A good analogy is an HTTP proxy; it's there, but doesn't have any special role. Adding a pub-sub proxy solves the dynamic discovery problem in our example. We set the proxy in the "middle" of the network. The proxy opens an XSUB socket, an XPUB socket, and binds each to well-known IP addresses and ports. Then, all other processes connect to the proxy, instead of to each other. It becomes trivial to add more subscribers or publishers.
 
 仲介者はステートレスなメッセージスイッチとして考えた方が良いでしょう。
-似たような例えとしてHTTPプロキシーがあります。これは特別な役割を持っていません。
-以下のサンプルコードでは、pub-subプロキシーを追加することで動的ディスカバリー問題を解決します。
-ネットワークの中間にプロキシーを配置し、そのプロキシーはXSUBソケットを開き、公開されたIPアドレスとポートでXPUBソケットを待ち受けます。
-そして、全てのプロセスは、プロキシーに対して接続を行います。
+似たような例えとしてHTTPプロキシがあります。これは特別な役割を持っていません。
+以下のサンプルコードでは、pub-subプロキシを追加することで動的ディスカバリー問題を解決します。
+ネットワークの中間にプロキシを配置し、そのプロキシはXSUBソケットを開き、公開されたIPアドレスとポートでXPUBソケットを待ち受けます。
+そして、全てのプロセスは、プロキシに対して接続を行います。
 これにより、サブスクライバーやパブリッシャーを追加することが容易になります。
 
 ![Extended Pub-Sub](images/fig14.eps)
@@ -780,7 +694,7 @@ while (1) {
 
 接続をサブスクライバーからパブリッシャーに転送するためにはXPUBソケットとXSUBソケットが必要です。
 XSUBとXPUBは特別に生のメッセージを転送するという点を除いて、SUB, PUBソケットとまったく同じです。
-プロキシーはXSUB, XPUBソケットを読み書きする事でサブスクライバー側からのメッセージをパブリッシャー側に転送します。
+プロキシはXSUB, XPUBソケットを読み書きする事でサブスクライバー側からのメッセージをパブリッシャー側に転送します。
 これはXSUB, XPUBソケットの主要な利用方法です。
 
 ### 共有キュー(DEALER and ROUTER sockets)
@@ -852,126 +766,20 @@ DEALERとROUTERソケットの間では、ソケットに届いたメッセー�
 ブローカーの動作を確認するために、バックエンドのワーカーの数を変更してみたくなるでしょう。
 以下はリクエストを行うクライアントのコードです。
 
-~~~ {caption="rrclient: リクエスト・応答クライアント(C言語)"}
-// Hello Worldクライアント
-// Connects REQ socket to tcp://localhost:5559
-// Sends "Hello" to server, expects "World" back
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // Socket to talk to server
-    void *requester = zmq_socket (context, ZMQ_REQ);
-    zmq_connect (requester, "tcp://localhost:5559");
-
-    int request_nbr;
-    for (request_nbr = 0; request_nbr != 10; request_nbr++) {
-        s_send (requester, "Hello");
-        char *string = s_recv (requester);
-        printf ("Received reply %d [%s]\n", request_nbr, string);
-        free (string);
-    }
-    zmq_close (requester);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="rrclient: リクエスト・応答クライアント"}
+include(examples/EXAMPLE_LANG/rrclient.EXAMPLE_EXT)
 ~~~
 
 以下はワーカーのコードです。
 
-~~~ {caption="rrworker: リクエスト・応答ワーカー(C言語)"}
-// Hello Worldワーカー
-// Connects REP socket to tcp://*:5560
-// Expects "Hello" from client, replies with "World"
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // Socket to talk to clients
-    void *responder = zmq_socket (context, ZMQ_REP);
-    zmq_connect (responder, "tcp://localhost:5560");
-
-    while (1) {
-        // Wait for next request from client
-        char *string = s_recv (responder);
-        printf ("Received request: [%s]\n", string);
-        free (string);
-
-        // Do some 'work'
-        sleep (1);
-
-        // Send reply back to client
-        s_send (responder, "World");
-    }
-    // We never get here, but clean up anyhow
-    zmq_close (responder);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="rrworker: リクエスト・応答ワーカー"}
+include(examples/EXAMPLE_LANG/rrworker.EXAMPLE_EXT)
 ~~~
 
 そして以下がブローカーのコードです。マルチパートメッセージも正しく処理できます。
 
-~~~ {caption="rrbroker: リクエスト・応答ブローカー(C言語)"}
-// Simple request-reply broker
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // Prepare our context and sockets
-    void *context = zmq_ctx_new ();
-    void *frontend = zmq_socket (context, ZMQ_ROUTER);
-    void *backend = zmq_socket (context, ZMQ_DEALER);
-    zmq_bind (frontend, "tcp://*:5559");
-    zmq_bind (backend, "tcp://*:5560");
-
-    // Initialize poll set
-    zmq_pollitem_t items [] = {
-        { frontend, 0, ZMQ_POLLIN, 0 },
-        { backend, 0, ZMQ_POLLIN, 0 }
-    };
-    // Switch messages between sockets
-    while (1) {
-        zmq_msg_t message;
-        zmq_poll (items, 2, -1);
-        if (items [0].revents & ZMQ_POLLIN) {
-            while (1) {
-                // Process all parts of the message
-                zmq_msg_init (&message);
-                zmq_msg_recv (&message, frontend, 0);
-                int more = zmq_msg_more (&message);
-                zmq_msg_send (&message, backend, more? ZMQ_SNDMORE: 0);
-                zmq_msg_close (&message);
-                if (!more)
-                    break; // Last message part
-            }
-        }
-        if (items [1].revents & ZMQ_POLLIN) {
-            while (1) {
-                // Process all parts of the message
-                zmq_msg_init (&message);
-                zmq_msg_recv (&message, backend, 0);
-                int more = zmq_msg_more (&message);
-                zmq_msg_send (&message, frontend, more? ZMQ_SNDMORE: 0);
-                zmq_msg_close (&message);
-                if (!more)
-                    break; // Last message part
-            }
-        }
-    }
-    // We never get here, but clean up anyhow
-    zmq_close (frontend);
-    zmq_close (backend);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="rrbroker: リクエスト・応答ブローカー"}
+include(examples/EXAMPLE_LANG/rrbroker.EXAMPLE_EXT)
 ~~~
 
 ![Request-Reply Broker](images/fig17.eps)
@@ -981,7 +789,7 @@ int main (void)
 リクエスト・応答ブローカーを利用すると、クライアントは直接ワーカーの数を気にしなくて良くなるのでアーキテクチャを拡張し易くなります。
 これにより、静的なノードは中間にあるブローカのみとなります。
 
-### ØMQの組み込みプロキシー関数
+### ØMQの組み込みプロキシ関数
 ;It turns out that the core loop in the previous section's rrbroker is very useful, and reusable. It lets us build pub-sub forwarders and shared queues and other little intermediaries with very little effort. ØMQ wraps this up in a single method, zmq_proxy():
 
 前節のrrbrokerは非常に便利でメインループに注目すると再利用可能である事が分ります。
@@ -997,43 +805,15 @@ zmq_proxy (frontend, backend, capture);
 この関数は3つの引数をとります(3つ目の引き数はデータの採取が必要であれば)。
 `zmq_proxy()`関数を呼び出すと、まさにrrbrokerのメインループを実行します。
 それではzmq_proxyを利用して、リクエスト・応答ブローカーを書きなおしてみましょう。
-[TODO]
 
-~~~ {caption="msgqueue: Message queue broker in C"}
-// Simple message queuing broker
-// Same as request-reply broker but using QUEUE device
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // Socket facing clients
-    void *frontend = zmq_socket (context, ZMQ_ROUTER);
-    int rc = zmq_bind (frontend, "tcp://*:5559");
-    assert (rc == 0);
-
-    // Socket facing services
-    void *backend = zmq_socket (context, ZMQ_DEALER);
-    rc = zmq_bind (backend, "tcp://*:5560");
-    assert (rc == 0);
-
-    // Start the proxy
-    zmq_proxy (frontend, backend, NULL);
-
-    // We never get here…
-    zmq_close (frontend);
-    zmq_close (backend);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="msgqueue: メッセージキューブローカー"}
+include(examples/EXAMPLE_LANG/msgqueue.EXAMPLE_EXT)
 ~~~
 
 ;If you're like most ØMQ users, at this stage your mind is starting to think, "What kind of evil stuff can I do if I plug random socket types into the proxy?" The short answer is: try it and work out what is happening. In practice, you would usually stick to ROUTER/DEALER, XSUB/XPUB, or PULL/PUSH.
 
 あなたが典型的なØMQユーザーであれば、この段階でこう考えるでしょう。
-「プロキシーのソケット種別に何を指定しても良いのかな?」
+「プロキシのソケット種別に何を指定しても良いのかな?」
 簡単な答えると、「通常はROUTER/DEALER, XSUB/XPUB, PULL/PUSH の組み合わせしか利用しません。」
 
 ### ブリッジ通信
@@ -1048,57 +828,33 @@ Xはその他の通信技術やメッセージングプラットフォームの�
 
 単純な解決方法はブリッジを構築することです。ブリッジとは片方で1つのプロトコルに対応するソケットを持ち、もう片方で別のプロトコルに変換して接続を行う小さなアプリケーションです。
 これはプロトコルインタプリターと言っても構いません。
-[TODO]これは2つの異なる通信方式やネットワークをブリッジする際に役立ちます。
+ØMQでは2つの異なる通信方式やネットワークをブリッジする事が可能です。
 
 ;As an example, we're going to write a little proxy that sits in between a publisher and a set of subscribers, bridging two networks. The frontend socket (SUB) faces the internal network where the weather server is sitting, and the backend (PUB) faces subscribers on the external network. It subscribes to the weather service on the frontend socket, and republishes its data on the backend socket.
 
-例として、パブリッシャーとサブスクライバーの間の2つのネットワークをブリッジする小さなプロキシーを作ってみましょう。
+例として、パブリッシャーとサブスクライバーの間の2つのネットワークをブリッジする小さなプロキシを作ってみましょう。
 フロントエンドソケット(SUB)は気象情報サーバーが居る内部ネットワークに面しており、バックエンドソケット(PUB)は外部ネットワークに面しています。
-このプロキシーはフロントエンドソケットで気象情報の更新を受信し、バックエンドソケットにデータを再配布します。
+このプロキシはフロントエンドソケットで気象情報の更新を受信し、バックエンドソケットにデータを再配布します。
 
-~~~ {caption="wuproxy: Weather update proxy in C"}
-// Weather proxy device
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // This is where the weather server sits
-    void *frontend = zmq_socket (context, ZMQ_XSUB);
-    zmq_connect (frontend, "tcp://192.168.55.210:5556");
-
-    // This is our public endpoint for subscribers
-    void *backend = zmq_socket (context, ZMQ_XPUB);
-    zmq_bind (backend, "tcp://10.1.1.0:8100");
-
-    // Run the proxy until the user interrupts us
-    zmq_proxy (frontend, backend, NULL);
-
-    zmq_close (frontend);
-    zmq_close (backend);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="wuproxy: 気象情報更新プロキシ"}
+include(examples/EXAMPLE_LANG/wuproxy.EXAMPLE_EXT)
 ~~~
 
 ;It looks very similar to the earlier proxy example, but the key part is that the frontend and backend sockets are on two different networks. We can use this model for example to connect a multicast network (pgm transport) to a tcp publisher.
 
-これはプロキシーの時に見たサンプルコードとよく似ていますが、フロントエンドソケットとバックエンドソケットが異なるネットワークにある所がポイントです。
+これはプロキシの時に見たサンプルコードとよく似ていますが、フロントエンドソケットとバックエンドソケットが異なるネットワークにある所がポイントです。
 この方法は、TCPのサブスクライバから受け取ったメッセージをマルチキャストネットワークに流すような場合にも利用できます。
 
 ## エラー処理とETERM
 ;ØMQ's error handling philosophy is a mix of fail-fast and resilience. Processes, we believe, should be as vulnerable as possible to internal errors, and as robust as possible against external attacks and errors. To give an analogy, a living cell will self-destruct if it detects a single internal error, yet it will resist attack from the outside by all means possible.
 
 ØMQにおけるエラーハンドリングの哲学はフェイル・ファーストと回復力の組み合わせです。
-[TODO]
-システムは内部エラーに関しては出来るだけ脆弱であるべきであり、外部要因のエラーや攻撃に対しては出来るだけ強固であるべきです。
+プロセスは内部エラーに関しては出来るだけ脆弱であるべきであり、外部要因のエラーや攻撃に対しては出来るだけ強固であるべきです。
 例えば生体細胞は、単一の内部エラーが発生すると自己崩壊するように出来ていますが、外部からの攻撃に対しては出来るだけ対抗しようとします。
 
 ;Assertions, which pepper the ØMQ code, are absolutely vital to robust code; they just have to be on the right side of the cellular wall. And there should be such a wall. If it is unclear whether a fault is internal or external, that is a design flaw to be fixed. In C/C++, assertions stop the application immediately with an error. In other languages, you may get exceptions or halts.
 
-[TODO]アサーションはØMQコードを強固にする為に欠かせない調味料です。
+アサーションはØMQコードを強固にする為に欠かせない調味料です。
 これには細胞壁のような壁があるはずです。
 もし障害が内部要因か外部要因かの区別がつかない場合、それは設計上の欠陥です。
 C/C++ではアサーションはアプリケーションを直ちに停止させます。
@@ -1157,8 +913,8 @@ if (rc == -1) {
 
 ;In C/C++, asserts can be removed entirely in optimized code, so don't make the mistake of wrapping the whole ØMQ call in an assert(). It looks neat; then the optimizer removes all the asserts and the calls you want to make, and your application breaks in impressive ways.
 
-C/C++の`assert()`は最適化によって完全に取り除く事ができるので全てのØMQ内で呼び出される`assert()`をラップする必要はありません。
-[TODO]最適化に依って全ての`assert()`を削除し、見事な方法でアプリケーションを終了させます。
+C/C++の`assert()`は最適化によって完全に取り除かれますので`assert()`内でØMQ APIを呼び出してはいけません。
+最適化によって全ての`assert()`は削除され、アプリケーション上手く動作しなくなるでしょう。
 
 ![Parallel Pipeline with Kill Signaling](images/fig19.eps)
 
@@ -1193,7 +949,7 @@ It doesn't take much new code in the sink:
 void *controller = zmq_socket (context, ZMQ_PUB);
 zmq_bind (controller, "tcp://*:5559");
 …
-// Send kill signal to workers
+// ワーカーを終了させるシグナルを送信
 s_send (controller, "KILL");
 ~~~
 
@@ -1202,53 +958,8 @@ s_send (controller, "KILL");
 この場合ワーカープロセスは2つのソケットを先ほど学んだ`zmq_poll()`を使って管理します。
 1つ目はタスクを受信を行うソケット、もうひとつはKILLメッセージなどの制御コマンドを受信するソケットです。
 
-~~~ {caption="taskwork2: Parallel task worker with kill signaling in C"}
-// Task worker - design 2
-// Adds pub-sub flow to receive and respond to kill signal
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // Socket to receive messages on
-    void *context = zmq_ctx_new ();
-    void *receiver = zmq_socket (context, ZMQ_PULL);
-    zmq_connect (receiver, "tcp://localhost:5557");
-
-    // Socket to send messages to
-    void *sender = zmq_socket (context, ZMQ_PUSH);
-    zmq_connect (sender, "tcp://localhost:5558");
-
-    // Socket for control input
-    void *controller = zmq_socket (context, ZMQ_SUB);
-    zmq_connect (controller, "tcp://localhost:5559");
-    zmq_setsockopt (controller, ZMQ_SUBSCRIBE, "", 0);
-
-    // Process messages from either socket
-    while (1) {
-        zmq_pollitem_t items [] = {
-            { receiver, 0, ZMQ_POLLIN, 0 },
-            { controller, 0, ZMQ_POLLIN, 0 }
-        };
-        zmq_poll (items, 2, -1);
-        if (items [0].revents & ZMQ_POLLIN) {
-            char *string = s_recv (receiver);
-            printf ("%s.", string); // Show progress
-            fflush (stdout);
-            s_sleep (atoi (string)); // Do the work
-            free (string);
-            s_send (sender, ""); // Send results to sink
-        }
-        // Any waiting controller command acts as 'KILL'
-        if (items [1].revents & ZMQ_POLLIN)
-            break; // Exit loop
-    }
-    zmq_close (receiver);
-    zmq_close (sender);
-    zmq_close (controller);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="taskwork2: 終了シグナルを受け付ける並行タスクワーカー"}
+include(examples/EXAMPLE_LANG/taskwork2.EXAMPLE_EXT)
 ~~~
 
 ;Here is the modified sink application. When it's finished collecting results, it broadcasts a kill message to all workers:
@@ -1257,51 +968,7 @@ int main (void)
 結果の収集が完了した時に終了メッセージを全てのワーカーにブロードキャストしています。
 
 ~~~ {caption="tasksink2: Parallel task sink with kill signaling in C"}
-// Task sink - design 2
-// Adds pub-sub flow to send kill signal to workers
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // Socket to receive messages on
-    void *context = zmq_ctx_new ();
-    void *receiver = zmq_socket (context, ZMQ_PULL);
-    zmq_bind (receiver, "tcp://*:5558");
-
-    // Socket for worker control
-    void *controller = zmq_socket (context, ZMQ_PUB);
-    zmq_bind (controller, "tcp://*:5559");
-
-    // Wait for start of batch
-    char *string = s_recv (receiver);
-    free (string);
-
-    // Start our clock now
-    int64_t start_time = s_clock ();
-
-    // Process 100 confirmations
-    int task_nbr;
-    for (task_nbr = 0; task_nbr < 100; task_nbr++) {
-        char *string = s_recv (receiver);
-        free (string);
-        if ((task_nbr / 10) * 10 == task_nbr)
-        printf (":");
-    else
-        printf (".");
-        fflush (stdout);
-    }
-    printf ("Total elapsed time: %d msec\n",
-    (int) (s_clock () - start_time));
-
-    // Send kill signal to workers
-    s_send (controller, "KILL");
-
-    zmq_close (receiver);
-    zmq_close (controller);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+include(examples/EXAMPLE_LANG/tasksink2.EXAMPLE_EXT)
 ~~~
 
 ## 割り込みシグナル処理
@@ -1314,21 +981,13 @@ int main (void)
 
 以下はシグナルを処理する方法です。
 
-~~~ {caption="interrupt: Handling Ctrl-C cleanly in C"}
-while (true) {
-    zstr_send (client, "Hello");
-    char *reply = zstr_recv (client);
-    if (!reply)
-        break; // 割り込み発生
-    printf ("Client: %s\n", reply);
-    free (reply);
-    sleep (1);
-}
+~~~ {caption="interrupt: 正しくCtrl-Cを処理する方法"}
+include(examples/EXAMPLE_LANG/interrupt.EXAMPLE_EXT)
 ~~~
 
 ;The program provides s_catch_signals(), which traps Ctrl-C (SIGINT) and SIGTERM. When either of these signals arrive, the s_catch_signals() handler sets the global variable s_interrupted. Thanks to your signal handler, your application will not die automatically. Instead, you have a chance to clean up and exit gracefully. You have to now explicitly check for an interrupt and handle it properly. Do this by calling s_catch_signals() (copy this from interrupt.c) at the start of your main code. This sets up the signal handling. The interrupt will affect ØMQ calls as follows:
 
-次のプログラムは`s_catch_signals()`を呼び出してCtrl-C(SIGINT)やSIGTERMをトラップします。
+このプログラムは`s_catch_signals()`を呼び出してCtrl-C(SIGINT)やSIGTERMをトラップします。
 これらのシグナルを受信すると`s_catch_signals()`によってグローバル変数`s_interrupted`を設定します。
 この場合、アプリケーションは自動的に終了しません。シグナルハンドラに感謝して下さい。
 代わりにリソースを開放して行儀よく終了する事が出来ます。
@@ -1427,15 +1086,15 @@ valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp someprog
 ~~~
 
 ## マルチスレッドとØMQ
-;ØMQ is perhaps the nicest way ever to write multithreaded (MT) applications. Whereas ØMQ sockets require some readjustment if you are used to traditional sockets, ØMQ multithreading will take everything you know about writing MT applications, throw it into a heap in the garden, pour gasoline over it, and set it alight. It's a rare book that deserves burning, but most books on concurrent programming do.[TODO]
+;ØMQ is perhaps the nicest way ever to write multithreaded (MT) applications. Whereas ØMQ sockets require some readjustment if you are used to traditional sockets, ØMQ multithreading will take everything you know about writing MT applications, throw it into a heap in the garden, pour gasoline over it, and set it alight. It's a rare book that deserves burning, but most books on concurrent programming do.
 
-恐らくØMQはマルチスレッドアプリケーションを書く為の最適な方法です。
+ØMQはマルチスレッドアプリケーションを書く為の最適な方法を提供します。
 古典的なソケットを利用する場合と比べてØMQソケットを使う場合はちょっとした調整を行えば良いだけで、あなたが知っているマルチスレッドプログラミングに関する知識をほとんど必要としません。
 既存の知識は庭に放り投げて、油を注いで燃やして下さい。
 
 ;To make utterly perfect MT programs (and I mean that literally), we don't need mutexes, locks, or any other form of inter-thread communication except messages sent across ØMQ sockets.
 
-ØMQの場合、完璧なマルチスレッドプログラムを作る為に*mutexやロック、プロセス間通信などは必要ありません。*
+ØMQでは、完璧なマルチスレッドプログラムを作る為に*mutexやロック、プロセス間通信などは必要ありません。*
 ***ØMQソケットを通じてメッセージを送信することだけを考えれば良いのです。***
 
 ;By "perfect MT programs", I mean code that's easy to write and understand, that works with the same design approach in any programming language, and on any operating system, and that scales across any number of CPUs with zero wait states and no point of diminishing returns.
@@ -1492,7 +1151,7 @@ valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp someprog
 
 ;If you need to start more than one proxy in an application, for example, you will want to run each in their own thread. It is easy to make the error of creating the proxy frontend and backend sockets in one thread, and then passing the sockets to the proxy in another thread. This may appear to work at first but will fail randomly in real use. Remember: Do not use or close sockets except in the thread that created them.
 
-例えばアプリケーションの中で2つ以上のプロクシを動作させたい場合、それぞれのスレッドでプロキシーで動作させたいと思うかもしれません。
+例えばアプリケーションの中で2つ以上のプロキシを動作させたい場合、それぞれのスレッドでプロキシで動作させたいと思うかもしれません。
 1つのスレッド内でエラーが発生した際に、ソケットを別のスレッドに渡すことが簡単にできてしまいますが、
 実際にこれをやるとランダムに失敗します。
 ソケットの生成を行ったスレッドでのみcloseを行うということを忘れないで下さい。
@@ -1523,65 +1182,15 @@ valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp someprog
 
 ;You can, of course, do all this using a proxy broker and external worker processes, but often it's easier to start one process that gobbles up sixteen cores than sixteen processes, each gobbling up one core. Further, running workers as threads will cut out a network hop, latency, and network traffic.
 
-もちろん、プロキシーブローカーを利用して外部のワーカープロセスで全ての処理を行う事も可能ですが、16コアのCPUを使い切るために16個のプロセスを起動するよりはマルチスレッド化した1つのプロセスを起動するほうが簡単でしょう。
+もちろん、プロキシブローカーを利用して外部のワーカープロセスで全ての処理を行う事も可能ですが、16コアのCPUを使い切るために16個のプロセスを起動するよりはマルチスレッド化した1つのプロセスを起動するほうが簡単でしょう。
 また、ワーカーをマルチスレッドで実行すると、余計なネットワークトラフィックやレイテンシが無くなります。
 
 ;The MT version of the Hello World service basically collapses the broker and workers into a single process:
 
 Hello Worldサービスのマルチスレッド版にはブローカとワーカーの機能が一つのプロセスに押し込まれています。
 
-~~~ {caption="mtserver: サービスのマルチスレッド化(C言語)"}
-// Hello Worldサーバーのマルチスレッド化
-
-#include "zhelpers.h"
-#include <pthread.h>
-
-static void *
-worker_routine (void *context) {
-    // Socket to talk to dispatcher
-    void *receiver = zmq_socket (context, ZMQ_REP);
-    zmq_connect (receiver, "inproc://workers");
-
-    while (1) {
-        char *string = s_recv (receiver);
-        printf ("Received request: [%s]\n", string);
-        free (string);
-        // なんらかの仕事
-        sleep (1);
-        // Send reply back to client
-        s_send (receiver, "World");
-    }
-    zmq_close (receiver);
-    return NULL;
-}
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // Socket to talk to clients
-    void *clients = zmq_socket (context, ZMQ_ROUTER);
-    zmq_bind (clients, "tcp://*:5555");
-
-    // Socket to talk to workers
-    void *workers = zmq_socket (context, ZMQ_DEALER);
-    zmq_bind (workers, "inproc://workers");
-
-    // Launch pool of worker threads
-    int thread_nbr;
-    for (thread_nbr = 0; thread_nbr < 5; thread_nbr++) {
-        pthread_t worker;
-        pthread_create (&worker, NULL, worker_routine, context);
-    }
-    // Connect work threads to client threads via a queue proxy
-    zmq_proxy (clients, workers, NULL);
-
-    // We never get here, but clean up anyhow
-    zmq_close (clients);
-    zmq_close (workers);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="mtserver: サービスのマルチスレッド化"}
+include(examples/EXAMPLE_LANG/mtserver.EXAMPLE_EXT)
 ~~~
 
 ![サーバーのマルチスレッド化](images/fig20.eps)
@@ -1598,7 +1207,7 @@ int main (void)
 * サーバーは複数のワーカースレッドを開始し、それぞれのワーカースレッドでREPソケットを作成してこのソケット経由でリクエストを処理します。ワーカースレッドはシングルスレッド版のサーバーと同様です。唯一の違いは転送方式がTCPではなくプロセス内通信であることと、bind-接続の方向性くらいです。
 * サーバーはROUTERソケットを生成してbindを行い、外部インターフェースであるTCPを利用してクライアントと通信します。
 * サーバーはDEALERソケットを生成してbindを行い、内部インターフェースであるプロセス内通信を利用してワーカースレッドと通信します。
-* サーバーは２つのソケットをつなぐプロキシーを開始します。プロキシーは全てのクライアントから受け付けたリクエストをワーカーに均等に分担します。プロキシーは元のクライアントに対して応答を返します。
+* サーバーは２つのソケットをつなぐプロキシを開始します。プロキシは全てのクライアントから受け付けたリクエストをワーカーに均等に分担します。プロキシは元のクライアントに対して応答を返します。
 
 ;Note that creating threads is not portable in most programming languages. The POSIX library is pthreads, but on Windows you have to use a different API. In our example, the pthread_create call starts up a new thread running the worker_routine function we defined. We'll see in Chapter 3 - Advanced Request-Reply Patterns how to wrap this in a portable API.
 
@@ -1624,71 +1233,13 @@ POSIXライブラリにpthreadsがありますが、Windowsでは異なるAPIを
 それでは、3つのスレッドでお互いに準備完了を通知するコードを書いてみましょう。
 この例ではプロセス内通信を行うPAIRソケットを利用します。
 
-~~~ {caption="mtrelay: relayのマルチスレッド化(C言語)"}
-// リレーのマルチスレッド化
-
-#include "zhelpers.h"
-#include <pthread.h>
-
-static void *
-step1 (void *context) {
-    // Connect to step2 and tell it we're ready
-    void *xmitter = zmq_socket (context, ZMQ_PAIR);
-    zmq_connect (xmitter, "inproc://step2");
-    printf ("Step 1 ready, signaling step 2\n");
-    s_send (xmitter, "READY");
-    zmq_close (xmitter);
-
-    return NULL;
-}
-
-static void *
-step2 (void *context) {
-    // Bind inproc socket before starting step1
-    void *receiver = zmq_socket (context, ZMQ_PAIR);
-    zmq_bind (receiver, "inproc://step2");
-    pthread_t thread;
-    pthread_create (&thread, NULL, step1, context);
-
-    // Wait for signal and pass it on
-    char *string = s_recv (receiver);
-    free (string);
-    zmq_close (receiver);
-
-    // Connect to step3 and tell it we're ready
-    void *xmitter = zmq_socket (context, ZMQ_PAIR);
-    zmq_connect (xmitter, "inproc://step3");
-    printf ("Step 2 ready, signaling step 3\n");
-    s_send (xmitter, "READY");
-    zmq_close (xmitter);
-
-    return NULL;
-}
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // Bind inproc socket before starting step2
-    void *receiver = zmq_socket (context, ZMQ_PAIR);
-    zmq_bind (receiver, "inproc://step3");
-    pthread_t thread;
-    pthread_create (&thread, NULL, step2, context);
-
-    // Wait for signal
-    char *string = s_recv (receiver);
-    free (string);
-    zmq_close (receiver);
-
-    printf ("Test successful!\n");
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="mtrelay: マルチスレッドrelay"}
+include(examples/EXAMPLE_LANG/mtrelay.EXAMPLE_EXT)
 ~~~
 
-![The Relay Race](images/fig21.eps)
+![リレー](images/fig21.eps)
 
-This is a classic pattern for multithreading with ØMQ:
+;This is a classic pattern for multithreading with ØMQ:
 
 ØMQのマルチスレッドの古典的なパターンは以下の通りです。
 
@@ -1757,109 +1308,21 @@ PAIRソケットを利用したサンプルコードはこれが初めてです�
 このケースでは、サブスクライバーとパブリッシャーの同期を行うためにREQ-REPソケットを利用します。
 以下はパブリッシャーのコードです。
 
-~~~ {caption="syncpub: Synchronized publisher in C"}
-// Synchronized publisher
-
-#include "zhelpers.h"
-#define SUBSCRIBERS_EXPECTED 10 //// We wait for 10 subscribers //
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // Socket to talk to clients
-    void *publisher = zmq_socket (context, ZMQ_PUB);
-
-    int sndhwm = 1100000;
-    zmq_setsockopt (publisher, ZMQ_SNDHWM, &sndhwm, sizeof (int));
-
-    zmq_bind (publisher, "tcp://*:5561");
-
-    // Socket to receive signals
-    void *syncservice = zmq_socket (context, ZMQ_REP);
-    zmq_bind (syncservice, "tcp://*:5562");
-
-    // Get synchronization from subscribers
-    printf ("Waiting for subscribers\n");
-    int subscribers = 0;
-    while (subscribers < SUBSCRIBERS_EXPECTED) {
-        // - wait for synchronization request
-        char *string = s_recv (syncservice);
-        free (string);
-        // - send synchronization reply
-        s_send (syncservice, "");
-        subscribers++;
-    }
-    // Now broadcast exactly 1M updates followed by END
-    printf ("Broadcasting messages\n");
-    int update_nbr;
-    for (update_nbr = 0; update_nbr < 1000000; update_nbr++)
-        s_send (publisher, "Rhubarb");
-
-    s_send (publisher, "END");
-
-    zmq_close (publisher);
-    zmq_close (syncservice);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="syncpub: 同期パブリッシャー"}
+include(examples/EXAMPLE_LANG/syncpub.EXAMPLE_EXT)
 ~~~
 
 ;And here is the subscriber:
 
 こちらはサブスクライバーです。
 
-~~~ {caption="syncsub: Synchronized subscriber in C"}
-// Synchronized subscriber
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // First, connect our subscriber socket
-    void *subscriber = zmq_socket (context, ZMQ_SUB);
-    zmq_connect (subscriber, "tcp://localhost:5561");
-    zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "", 0);
-
-    // 0MQ is so fast, we need to wait a while…
-    sleep (1);
-
-    // Second, synchronize with publisher
-    void *syncclient = zmq_socket (context, ZMQ_REQ);
-    zmq_connect (syncclient, "tcp://localhost:5562");
-
-    // - send a synchronization request
-    s_send (syncclient, "");
-
-    // - wait for synchronization reply
-    char *string = s_recv (syncclient);
-    free (string);
-
-    // Third, get our updates and report how many we got
-    int update_nbr = 0;
-    while (1) {
-        char *string = s_recv (subscriber);
-        if (strcmp (string, "END") == 0) {
-            free (string);
-            break;
-        }
-        free (string);
-        update_nbr++;
-    }
-    printf ("Received %d updates\n", update_nbr);
-
-    zmq_close (subscriber);
-    zmq_close (syncclient);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="syncsub: 同期サブスクライバー"}
+include(examples/EXAMPLE_LANG/syncsub.EXAMPLE_EXT)
 ~~~
 
 ;This Bash shell script will start ten subscribers and then the publisher:
 
-以下のBashのシェルスクリプトで10個のサブスクライバーとパブリッシャーを起動します。
+以下のBashスクリプトで10個のサブスクライバーとパブリッシャーを起動します。
 
 ~~~
 echo "Starting subscribers..."
@@ -1970,65 +1433,16 @@ pub-subエンベロープを利用するには、ちょっとしたコードを�
 
 エンベロープはメッセージ種別を保持しています。
 
-~~~ {caption="psenvpub: Pub-Sub envelope publisher in C"}
-// Pubsub envelope publisher
-// Note that the zhelpers.h file also provides s_sendmore
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // Prepare our context and publisher
-    void *context = zmq_ctx_new ();
-    void *publisher = zmq_socket (context, ZMQ_PUB);
-    zmq_bind (publisher, "tcp://*:5563");
-
-    while (1) {
-        // Write two messages, each with an envelope and content
-        s_sendmore (publisher, "A");
-        s_send (publisher, "We don't want to see this");
-        s_sendmore (publisher, "B");
-        s_send (publisher, "We would like to see this");
-        sleep (1);
-    }
-    // We never get here, but clean up anyhow
-    zmq_close (publisher);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="psenvpub: Pub-Subエンベロープパブリッシャー"}
+include(examples/EXAMPLE_LANG/psenvpub.EXAMPLE_EXT)
 ~~~
 
 ;The subscriber wants only messages of type B:
 
 サブスクライバーはメッセージ種別Bのみを受信します。
 
-~~~ {caption="psenvsub: Pub-Sub envelope subscriber in C"}
-// Pubsub envelope subscriber
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // Prepare our context and subscriber
-    void *context = zmq_ctx_new ();
-    void *subscriber = zmq_socket (context, ZMQ_SUB);
-    zmq_connect (subscriber, "tcp://localhost:5563");
-    zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "B", 1);
-
-    while (1) {
-        // Read envelope with address
-        char *address = s_recv (subscriber);
-        // Read message contents
-        char *contents = s_recv (subscriber);
-        printf ("[%s] %s\n", address, contents);
-        free (address);
-        free (contents);
-    }
-    // We never get here, but clean up anyhow
-    zmq_close (subscriber);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="psenvsub: Pub-Subエンベロープサブスクライバー"}
+include(examples/EXAMPLE_LANG/psenvsub.EXAMPLE_EXT)
 ~~~
 
 ;When you run the two programs, the subscriber should show you this:
@@ -2076,17 +1490,16 @@ int main (void)
 ;What are the answers? One is to pass the problem upstream. A is getting the messages from somewhere else. So tell that process, "Stop!" And so on. This is called flow control. It sounds plausible, but what if you're sending out a Twitter feed? Do you tell the whole world to stop tweeting while B gets its act together?
 
 解決方法のひとつは問題を上流に伝えることです。
-プロセスAに対して「送信を止めろ」というようなメッセージを何らかの方法で伝えてやります。
-[TODO]
+つまり、プロセスAに対して「送信を止めろ」という旨を何らかの方法で伝えてやります。
 これはフロー制御と呼ばれています。
 この方法はもっともらしく見えますが、例えばTwitterのタイムラインで全世界に対して「つぶやきを止めろ」という事は妥当でしょうか?
 
-;Flow control works in some cases, but not in others. The transport layer can't tell the application layer to "stop" any more than a subway system can tell a large business, "please keep your staff at work for another half an hour. I'm too busy". The answer for messaging is to set limits on the size of buffers, and then when we reach those limits, to take some sensible action. In some cases (not for a subway system, though), the answer is to throw away messages. In others, the best strategy is to wait.[TODO]
+;Flow control works in some cases, but not in others. The transport layer can't tell the application layer to "stop" any more than a subway system can tell a large business, "please keep your staff at work for another half an hour. I'm too busy". The answer for messaging is to set limits on the size of buffers, and then when we reach those limits, to take some sensible action. In some cases (not for a subway system, though), the answer is to throw away messages. In others, the best strategy is to wait.
 
-フロー制御は場合によっては上手く行きますが、そうでない時もあります。
+フロー制御は上手く場合もありますが、上手くいかない事もあります。
 通信レイヤはアプリケーションレイヤに対して「止めろ」というようなことは出来ません。
-地下鉄はよく「仕事を始めるのを30分送らせてくれ」といった事を行ってきますが、迷惑な話です。
-メッセージングでの解決方法はバッファのサイズに上限を設定し、この上限に達した場合に合理的な動作を行います。
+例えば地下鉄は「仕事を始めるのを30分送らせてくれ」といった事を行ってきますが、迷惑な話です。
+メッセージングシステムにおけるこの解決方法はバッファサイズに上限を設定し、この上限に達した場合に合理的な動作を行う事です。
 あるケースではメッセージを投げ捨ててしまう方が良い場合もあるし、ある時は待つことが最良の戦略である場合もあります。
 
 ;ØMQ uses the concept of HWM (high-water mark) to define the capacity of its internal pipes. Each connection out of a socket or into a socket has its own pipe, and HWM for sending, and/or receiving, depending on the socket type. Some sockets (PUB, PUSH) only have send buffers. Some (SUB, PULL, REQ, REP) only have receive buffers. Some (DEALER, ROUTER, PAIR) have both send and receive buffers.
@@ -2098,11 +1511,10 @@ DEALER, ROUTER, PAIRなどのバッファに関しては送信と受信の両方
 
 ;In ØMQ v2.x, the HWM was infinite by default. This was easy but also typically fatal for high-volume publishers. In ØMQ v3.x, it's set to 1,000 by default, which is more sensible. If you're still using ØMQ v2.x, you should always set a HWM on your sockets, be it 1,000 to match ØMQ v3.x or another figure that takes into account your message sizes and expected subscriber performance.
 
-ØMQv2.xでは、HWMは既定で無制限でした。
+ØMQv2.xでは、既定でHWMは無制限でした。
 これは単純でしたが大量配信を行うパブリッシャーにとって致命的でした。
 ØMQ v3.xでは規定で1,000という合理的な値が設定されています。
-もしあなたがまだØMQ v2.xを利用しているのなら、常にHWMに1,000を設定しておいたほうが良いでしょう。
-[TODO]
+もしあなたがまだØMQ v2.xを利用しているのなら、常にHWMに1,000あるいはサブスクライバーのパフォーマンスに適切な値を設定しておいたほうが良いでしょう。
 
 ;When your socket reaches its HWM, it will either block or drop data depending on the socket type. PUB and ROUTER sockets will drop data if they reach their HWM, while other socket types will block. Over the inproc transport, the sender and receiver share the same buffers, so the real HWM is the sum of the HWM set by both sides.
 
@@ -2121,7 +1533,7 @@ HWMの上限に達した際、PUBとROUTERソケットはメッセージを捨�
 ØMQでアプリケーションを開発していると、受信するはずメッセージが喪失してしまうという問題に遭遇するでしょう。
 そこで私達はよくあるメッセージ喪失問題の解決フローをまとめました。
 
-![Missing Message Problem Solver](images/fig25.eps)
+![メッセージ喪失問題の解決フロー](images/fig25.eps)
 
 ;Here's a summary of what the graphic says:
 
@@ -2162,5 +1574,4 @@ HWMの上限に達した際、PUBとROUTERソケットはメッセージを捨�
 * ROUTERソケットで不正な形式のidentityフレームを送信してしまったり、identityフレームを送信し忘れたりしてしまうようなアクシデントによりメッセージを喪失しやすくなります。一般的に、ZMQ_ROUTER_MANDATORYオプションをROUTERソケットに設定することは良いアイディアですが、送信API呼び出しの返り値を確認するようにしてください。
 
 * 最後に、なぜうまく行かないのか判断できない場合、問題を再現させる小さなテストコードを書いてコミュニティで質問してみるとよいでしょう。
-
 

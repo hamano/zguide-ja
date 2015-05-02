@@ -29,7 +29,7 @@
 コードはコードと会話し、社交的なおしゃべりでなくてはなりません。
 コードは人間の脳にある何兆もの独立したニューロンの様にお互いにメッセージを発し、中央制御が必要なく、単一障害点の存在しない超並列ネットワークを構成して動作しなければなりません。そうしてやっと、困難な問題を解決できるようになります。
 この様なコードの未来が人間の脳と似ていることは偶然ではありません。
-ネットワークのエンドポイントは幾つかのレベルで人間の動と同じだからです。
+ネットワークのエンドポイントは幾つかのレベルで人間の脳と同じだからです。
 
 ;If you've done any work with threads, protocols, or networks, you'll realize this is pretty much impossible. It's a dream. Even connecting a few programs across a few sockets is plain nasty when you start to handle real life situations. Trillions? The cost would be unimaginable. Connecting computers is so difficult that software and services to do this is a multi-billion dollar business.
 
@@ -58,7 +58,7 @@
 
 政治哲学的な話はこの辺にしておいて[他の本](http://swsi.info/)に譲る事にしますが、重要なのはインターネットは潜在的に大量のコードが接続しあうにも関わらず、現実では私達の手の届かない所にあるという事です。
 そしてこれは健康、教育、経済、流通などにおいて非常に興味深い問題を引き起こしますが、コードを接続する方法が無いので未だ解決出来ていません。
-したがって、これらの問題を解決するために脳を接続出来る相手と一緒に仕事するしかありません。
+したがって、これらの問題を解決するには脳を接続出来る相手と一緒に仕事するしかありません。
 
 ;There have been many attempts to solve the challenge of connected code. There are thousands of IETF specifications, each solving part of the puzzle. For application developers, HTTP is perhaps the one solution to have been simple enough to work, but it arguably makes the problem worse by encouraging developers and architects to think in terms of big servers and thin, stupid clients.
 
@@ -105,45 +105,20 @@ git clone --depth=1 git://github.com/imatix/zguide.git
 ;Next, browse the examples subdirectory. You'll find examples by language. If there are examples missing in a language you use, you're encouraged to submit a translation. This is how this text became so useful, thanks to the work of many people. All examples are licensed under MIT/X11.
 
 続いてexamplesサブディレクトリを参照すると、プログラミング言語毎のディレクトリ見つけるでしょう。
-もしあなたのお気に入りのプログラミング言語が無い場合は移植して送って頂ください。
-この様にして多くの人々の協力でこのテキストは便利になりました。
+もしあなたのお気に入りのプログラミング言語が無い場合はコードを移植して送って頂ください。
+この様に多くの人々の協力でこのテキストは便利になりました。
 全てのサンプルコードはMIT/X11ライセンスで公開されています。
 
 ## 尋ねよ、さらば受け取らん
 ;So let's start with some code. We start of course with a Hello World example. We'll make a client and a server. The client sends "Hello" to the server, which replies with "World". Here's the server in C, which opens a ØMQ socket on port 5555, reads requests on it, and replies with "World" to each request:
 
 さあ、コードから始めましょう。
-まずはHello Worldのサンプルコードから始めます。
-私達はこれからクライアントとサーバーを作ります。
-クライアントが "Hello" をサーバーに送信したら、サーバーは "World" を応答します。
-ここでは、サーバーはØMQソケットをTCPポート5555番で開き、リクエストを受け取ったら "World" を応答するコードをC言語で実装しています:
+もちろん最初はHello Worldのサンプルコードから始めます。
+クライアントが「Hello」をサーバーに送信したら、サーバーは「World」を応答するクライアントとサーバーを作ってみましょう。
+ここでサーバーはØMQソケットをTCPポート5555番で待ち受け、リクエストを受け取ったら「World」を応答するコードをC言語で実装しています:
 
-~~~ {caption="hwserver.c: Hello Worldサーバー"}
-// Hello Worldサーバー
-
-#include <zmq.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <string.h>
-#include <assert.h>
-
-int main (void)
-{
-    // クライアントと通信を行うソケット
-    void *context = zmq_ctx_new ();
-    void *responder = zmq_socket (context, ZMQ_REP);
-    int rc = zmq_bind (responder, "tcp://*:5555");
-    assert (rc == 0);
-
-    while (1) {
-        char buffer [10];
-        zmq_recv (responder, buffer, 10, 0);
-        printf ("Received Hello\n");
-        sleep (1); // 何らかの処理
-        zmq_send (responder, "World", 5, 0);
-    }
-    return 0;
-}
+~~~ {caption="hwserver: Hello Worldサーバー"}
+include(examples/EXAMPLE_LANG/hwserver.EXAMPLE_EXT)
 ~~~
 
 ![リクエストと応答](images/fig2.eps)
@@ -151,13 +126,13 @@ int main (void)
 ;The REQ-REP socket pair is in lockstep. The client issues zmq_send() and then zmq_recv(), in a loop (or once if that's all it needs). Doing any other sequence (e.g., sending two messages in a row) will result in a return code of -1 from the send or recv call. Similarly, the service issues zmq_recv() and then zmq_send() in that order, as often as it needs to.
 
 REQ-REPソケットペアはロックステップ方式です。
-クライアントはループ内で`zmq_send()`してから`zmq_recv()`を発行します。
+クライアントはループ内で`zmq_send()`を呼んでから`zmq_recv()`を発行します。
 それ以外のケース、例えば2回メッセージを送信した場合などでは`zmq_send()`や`zmq_recv()`で-1が返ります。
-同様にサーバー側は`zmq_recv()`してから`zmq_send()`を発行する必要があります。
+同様にサーバー側は`zmq_recv()`を呼んでから`zmq_send()`を発行する必要があります。
 
 ;ØMQ uses C as its reference language and this is the main language we'll use for examples. If you're reading this online, the link below the example takes you to translations into other programming languages. Let's compare the same server in C++:
 
-ØMQは主要な部分にC言語を利用しているので、サンプルコードでもC言語を使います。
+ØMQはリファレンス言語としてC言語を採用しているので、サンプルコードでもC言語を使います。
 ここではC++のコードを見て比べてみましょう。
 
 ~~~ {caption="hwserver.cpp: Hello Worldサーバー"}
@@ -206,7 +181,7 @@ int main () {
 
 ;You can see that the ØMQ API is similar in C and C++. In a language like PHP or Java, we can hide even more and the code becomes even easier to read:
 
-ØMQのAPIはC言語とC++で同様だという事が解ると思います。
+ØMQのAPIはC言語とC++でほとんど同じだという事が解ると思います。
 PHPとJavaの例も見てみましょう。
 
 ~~~ {caption="hwserver.php: Hello Worldサーバー"}
@@ -271,56 +246,32 @@ public class hwserver{
 
 以下はクライアントのコードです。
 
-~~~ {caption="hwclient: Hello Worldクライアント(C言語)"}
-// Hello Worldクライアント
-#include <zmq.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-
-int main (void)
-{
-    printf ("Connecting to hello world server…\n");
-    void *context = zmq_ctx_new ();
-    void *requester = zmq_socket (context, ZMQ_REQ);
-    zmq_connect (requester, "tcp://localhost:5555");
-
-    int request_nbr;
-    for (request_nbr = 0; request_nbr != 10; request_nbr++) {
-        char buffer [10];
-        printf ("Sending Hello %d…\n", request_nbr);
-        zmq_send (requester, "Hello", 5, 0);
-        zmq_recv (requester, buffer, 10, 0);
-        printf ("Received World %d\n", request_nbr);
-    }
-    zmq_close (requester);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="hwclient: Hello Worldクライアント"}
+include(examples/EXAMPLE_LANG/hwclient.EXAMPLE_EXT)
 ~~~
 
 ;Now this looks too simple to be realistic, but ØMQ sockets have, as we already learned, superpowers. You could throw thousands of clients at this server, all at once, and it would continue to work happily and quickly. For fun, try starting the client and then starting the server, see how it all still works, then think for a second what this means.
 
 さて、この例は現実的にあまりにも単純に見えますが、これまで学んできたようにØMQソケットはとんでもない力を秘めています。
 あなたは同時に数千のクライアントでこのサーバーに接続することができ、問題なく迅速に動作し続けるでしょう。
-戯れに、サーバーを立ち上げてクライアントを実行してどんな風に動作するか試してみてください。
+戯れにサーバーを立ち上げてクライアントを実行し、どんな風に動作するか試してみてください。
 そしてこの意味を少し考えてみて下さい。
 
 ;Let us explain briefly what these two programs are actually doing. They create a ØMQ context to work with, and a socket. Don't worry what the words mean. You'll pick it up. The server binds its REP (reply) socket to port 5555. The server waits for a request in a loop, and responds each time with a reply. The client sends a request and reads the reply back from the server.
 
 これら2つのプログラムが実際に何をしているか簡潔に説明しましょう。
-これらはまずØMQコンテキストとソケットを作成します。言葉の意味については後で説明しますのでまだ心配しなくて大丈夫です。サーバーはREP(応答)ソケットをポート5555番でbindします。サーバーはループの中でリクエストを待ち、リクエスト毎に応答します。
-クライアントは、リクエストを送信し、サーバーからの応答を受け取ります。
+これらはまずØMQコンテキストとØMQソケットを作成します。言葉の意味については後で説明しますのでまだ心配しなくて大丈夫です。サーバーはREP(応答)ソケットをポート5555番でbindします。サーバーはループの中でリクエストを待ち、リクエスト毎に応答します。
+クライアントはリクエストを送信し、サーバーからの応答を受け取ります。
 
 ;If you kill the server (Ctrl-C) and restart it, the client won't recover properly. Recovering from crashing processes isn't quite that easy. Making a reliable request-reply flow is complex enough that we won't cover it until Chapter 4 - Reliable Request-Reply Patterns.
 
 サーバーをCtrl-Cで終了して再起動した場合、クライアントは適切に復旧しません。
 プロセスの異常終了からの復旧は簡単なことではありません。
-信頼性の高いリクエスト-応答フローを構成することは十分複雑なので、これについては4章の「信頼性のあるリクエスト・応答パターン」で取り上げます。
+信頼性の高いリクエスト-応答フローを構成することは十分複雑なので、これについては4章の「信頼性のあるリクエスト・応答パターン」で説明します。
 
 ;There is a lot happening behind the scenes but what matters to us programmers is how short and sweet the code is, and how often it doesn't crash, even under a heavy load. This is the request-reply pattern, probably the simplest way to use ØMQ. It maps to RPC and the classic client/server model.
 
-我々プログラマにとって、どんなに短く素敵なコードでも裏側ではたくさんの事が起こっていて、そのおかげでどれだけ負荷を掛けてもクラッシュしません。
+我々プログラマにとってどんなに短く素敵なコードでも、裏側ではたくさんの事が起こっています。そしてそのおかげでどれだけ負荷を掛けてもクラッシュしません。
 これをリクエスト・応答パターンと呼びます。
 恐らく、ØMQの最も単純な利用方法です。
 これはRPCとか、古典的なクライアント・サーバーモデルに対応します。
@@ -356,7 +307,7 @@ C言語や幾つかの言語では、文字列はNULL文字で終端してます
 ;And if you read this from a C program, you will get something that looks like a string, and might by accident act like a string (if by luck the five bytes find themselves followed by an innocently lurking null), but isn't a proper string. When your client and server don't agree on the string format, you will get weird results.
 
 そしてもしC言語のプログラムでこれを読むと、あなたは偶然文字列の様なものを受け取るでしょうが、これは正しい文字列ではありません。
-クライアントとサーバーで文字列フォーマットに関する同意がない場合、おかしな結果が得られるかもしれません。
+クライアントとサーバーで文字列フォーマットに関する合意がない場合、おかしな結果が得られるかもしれません。
 
 ;When you receive string data from ØMQ in C, you simply cannot trust that it's safely terminated. Every single time you read a string, you should allocate a new buffer with space for an extra byte, copy the string, and terminate it properly with a null.
 
@@ -370,7 +321,7 @@ C言語で文字列を受信する際、文字列が安全にNULL終端してい
 
 ;Here is what we need to do, in C, to receive a ØMQ string and deliver it to the application as a valid C string:
 
-以下の例は、C言語で受け取ったØMQ文字列を適切な文字列としてアプリケーションに受け渡す為に何を行う必要があるのかを示しています。
+以下のコードは、C言語で受け取ったØMQ文字列を適切な文字列としてアプリケーションに受け渡す為に何を行う必要があるのかを示しています。
 
 ~~~
 // ソケットから0MQ文字列を受信してC文字列に変換する
@@ -404,24 +355,14 @@ s_recv (void *socket) {
 
 ØMQには幾つかのバージョンがあり、頻繁にバージョンアップします。
 もし問題に遭遇したとしても最新のバージョンで修正されていることが多いでしょう。
-ですのでØMQのバージョンを正確に調べる方法を知っておくと役に立つでしょう。
+ですからØMQのバージョンを正確に調べる方法を知っておくと役に立ちます。
 
 ;Here is a tiny program that does that:
 
 以下はそれを行う小さなプログラムです:
 
-~~~ {caption="version: ØMQのバージョン報告(C言語)"}
-// 0MQのバージョン報告
-
-#include <zmq.h>
-
-int main (void)
-{
-    int major, minor, patch;
-    zmq_version (&major, &minor, &patch);
-    printf ("Current 0MQ version is %d.%d.%d\n", major, minor, patch);
-    return 0;
-}
+~~~ {caption="version: ØMQのバージョン報告"}
+include(examples/EXAMPLE_LANG/version.EXAMPLE_EXT)
 ~~~
 
 ## メッセージ配信
@@ -435,41 +376,8 @@ int main (void)
 
 以下がサーバーのサンプルコードです。このアプリケーションはTCP 5556番ポートを利用します。
 
-~~~ {caption="wuserver: 気象情報更新サーバー(C言語)"}
-// 気象情報更新サーバー
-// PUBソケットを tcp://*:5556 でバインドし、
-// ランダムな気象情報を配信する
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // コンテキストとパブリッシャーの準備
-    void *context = zmq_ctx_new ();
-    void *publisher = zmq_socket (context, ZMQ_PUB);
-    int rc = zmq_bind (publisher, "tcp://*:5556");
-    assert (rc == 0);
-    rc = zmq_bind (publisher, "ipc://weather.ipc");
-    assert (rc == 0);
-
-    // 乱数生成器の初期化
-    srandom ((unsigned) time (NULL));
-    while (1) {
-        // インチキな気象観測データ
-        int zipcode, temperature, relhumidity;
-        zipcode = randof (100000);
-        temperature = randof (215) - 80;
-        relhumidity = randof (50) + 10;
-
-        // 全サブスクライバーにメッセージを送信
-        char update [20];
-        sprintf (update, "%05d %d %d", zipcode, temperature, relhumidity);
-        s_send (publisher, update);
-    }
-    zmq_close (publisher);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="wuserver: 気象情報更新サーバー"}
+include(examples/EXAMPLE_LANG/wuserver.EXAMPLE_EXT)
 ~~~
 
 ;There's no start and no end to this stream of updates, it's like a never ending broadcast.
@@ -480,47 +388,8 @@ int main (void)
 
 以下のクライアントアプリケーションはストリームの配信を聞き取り、特定の郵便番号に関するデータを収集します。デフォルトではニューヨークを指定しています。なぜならそこは冒険を始めるには絶好の場所だからです。
 
-~~~ {caption="wuclient: 気象情報更新クライアント(C言語)"}
-// 気象情報更新クライアント
-// SUBソケットで tcp://localhost:5556 に接続
-// 気象情報を収集し、対象郵便番号の平均値を求める
-
-#include "zhelpers.h"
-
-int main (int argc, char *argv [])
-{
-    // サーバーと通信するソケット
-    printf ("Collecting updates from weather server…\n");
-    void *context = zmq_ctx_new ();
-    void *subscriber = zmq_socket (context, ZMQ_SUB);
-    int rc = zmq_connect (subscriber, "tcp://localhost:5556");
-    assert (rc == 0);
-
-    // Subscribe to zipcode, default is NYC, 10001
-    char *filter = (argc > 1)? argv [1]: "10001 ";
-    rc = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE,
-                         filter, strlen (filter));
-    assert (rc == 0);
-
-    // Process 100 updates
-    int update_nbr;
-    long total_temp = 0;
-    for (update_nbr = 0; update_nbr < 100; update_nbr++) {
-        char *string = s_recv (subscriber);
-
-        int zipcode, temperature, relhumidity;
-        sscanf (string, "%d %d %d",
-                &zipcode, &temperature, &relhumidity);
-        total_temp += temperature;
-        free (string);
-    }
-    printf ("Average temperature for zipcode '%s' was %dF\n",
-            filter, (int) (total_temp / update_nbr));
-
-    zmq_close (subscriber);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="wuclient: 気象情報更新クライアント"}
+include(examples/EXAMPLE_LANG/wuclient.EXAMPLE_EXT)
 ~~~
 
 ![パブリッシュ・サブスクライブ](images/fig4.eps)
@@ -530,17 +399,17 @@ int main (int argc, char *argv [])
 SUBソケットを利用する際、このコードの様に`zmq_setsockopt()`で`SUBSCRIBE`を*設定しなければならない*ことに注意して下さい。もし設定しなかった場合メッセージを受信できません。これはよくある初歩的なミスです。サブスクライバーは複数のサブスクリプションを設定できます。その際サブスクリプションに一致した更新のみ受信します。
 サブスクライバーは特定のサブスクリプションをキャンセルすることも出来ます。
 サブスクリプションは必ずしも印字可能な文字とは限りません。
-これがどの様に動作するかは`zmq_setsockopt()`を読んで下さい。
+これがどの様に動作するかは`zmq_setsockopt()`のソースコードを読んで下さい。
 
 ;The PUB-SUB socket pair is asynchronous. The client does zmq_recv(), in a loop (or once if that's all it needs). Trying to send a message to a SUB socket will cause an error. Similarly, the service does zmq_send() as often as it needs to, but must not do zmq_recv() on a PUB socket.
 
-PUB-SUBソケットのペアは非同期で動作し、クライアントは通常ループ内で`zmq_recv()`を呼び出します。
+PUB-SUBソケットのペアは非同期で動作し、通常クライアントはループ内で`zmq_recv()`を呼び出します。
 SUBソケットでメッセージを送信しようとするとエラーが発生します。
 同様に、PUBソケットで`zmq_recv()`を呼んではいけません。
 
 ;In theory with ØMQ sockets, it does not matter which end connects and which end binds. However, in practice there are undocumented differences that I'll come to later. For now, bind the PUB and connect the SUB, unless your network design makes that impossible.
 
-理論上は、どちらがbindしてどちらが接続しても問題ないはずです。
+理論上はどちらがbindしてどちらが接続しても問題ないはずです。
 しかし今の所ドキュメント化されていないので出来ればPUBでbindしてSUBで接続して下さい。
 
 ;There is one more important thing to know about PUB-SUB sockets: you do not know precisely when a subscriber starts to get messages. Even if you start a subscriber, wait a while, and then start the publisher, the subscriber will always miss the first messages that the publisher sends. This is because as the subscriber connects to the publisher (something that takes a small but non-zero time), the publisher may already be sending messages out.
@@ -572,7 +441,7 @@ PUB-SUBソケットについて知るべき重要なことがもうひとつあ�
 
 TCPコネクションの作成およびハンドシェイクはネットワークやピア間のホップ数に応じて数ミリ秒の遅延を発生させます。
 ØMQはこの間に多くのメッセージを送信できます。
-便宜上、コネクションの確立に5ミリ秒かかり、1秒間に1Mメッセージを処理できると仮定すると、パブリッシャーはサブスクライバが接続しているわずか5ミリ秒の間に、5Kのメッセージを送信出来ることになります。
+便宜上、コネクションの確立に5ミリ秒かかり、1秒間に100万メッセージを処理できると仮定すると、パブリッシャーはサブスクライバが接続しているわずか5ミリ秒の間に、5000メッセージを送信出来ることになります。
 
 ;In Chapter 2 - Sockets and Patterns we'll explain how to synchronize a publisher and subscribers so that you don't start to publish data until the subscribers really are connected and ready. There is a simple and stupid way to delay the publisher, which is to sleep. Don't do this in a real application, though, because it is extremely fragile as well as inelegant and slow. Use sleeps to prove to yourself what's happening, and then wait for Chapter 2 - Sockets and Patterns to see how to do this right.
 
@@ -595,7 +464,7 @@ TCPコネクションの作成およびハンドシェイクはネットワー�
 
 ;Some points about the publish-subscribe (pub-sub) pattern:
 
-パブリッシュ・サブスクライブ(pub-sub)パターンの要点は以下の通りです。
+パブリッシュ・サブスクライブ(PUB-SUB)パターンの要点は以下の通りです。
 
 ;* A subscriber can connect to more than one publisher, using one connect call each time. Data will then arrive and be interleaved ("fair-queued") so that no single publisher drowns out the others.
 ;* If a publisher has no connected subscribers, then it will simply drop all messages.
@@ -606,7 +475,7 @@ TCPコネクションの作成およびハンドシェイクはネットワー�
 
  * パブリッシャーに接続しているサブスクライバーが居ない時、全てのメッセージは単純に破棄されます。
 
- * TCPを利用していて、サブスクライバが遅い場合、メッセージがパブリッシャーのキューに入れられます。「HWM(満杯マーク)」を利用してどの様にしてパブリッシャーを保護するかは後で説明します。
+ * TCPを利用していてサブスクライバが遅い場合、メッセージはパブリッシャーのキューに入れられます。「HWM(満杯マーク)」を利用してパブリッシャーを保護する方法については後で説明します。
 
  * ØMQ v3.x以降、ステートフルプロトコル(tcp: もしくは ipc:)を利用している場合にパブリッシャー側でフィルタリング出来るようになりました。epgm:// プロトコルを利用する場合は、サブスクライバ側でフィルタリングします。ØMQ v2.xでは全てのフィルタリングはサブスクライバ側で行います。
 
@@ -638,154 +507,37 @@ sys     0m0.008s
 ;* A set of workers that process tasks
 ;* A sink that collects results back from the worker processes
 
- * ベンチレーターは並行に処理できるタスクを生成します。
- * ワーカー群はタスクを処理します。
- * シンクはワーカーの処理結果を収集します。
+ * 「ベンチレーター」は並行に処理できるタスクを生成します。
+ * 「ワーカー」群はタスクを処理します。
+ * 「シンク」は「ワーカー」の処理結果を収集します。
 
 ;In reality, workers run on superfast boxes, perhaps using GPUs (graphic processing units) to do the hard math. Here is the ventilator. It generates 100 tasks, each a message telling the worker to sleep for some number of milliseconds:
 
-実際にはワーカーはGPUなどを搭載した高速マシンで実行されます。
+実践ではワーカーはGPUなどを搭載した高速マシンで実行されます。
 ベンチレーターは100のタスクを生成しワーカーに送信します。
-ワーカーは受け取った数×ミリ秒のsleepを行います。
+ワーカーは受け取った数値×ミリ秒のsleepを行います。
 
-~~~ {caption="taskvent: 並行タスクベンチレーター(C言語)"}
-// タスクベンチレーター
-// PUSHソケット tcp://localhost:5557 をバインド
-// ソケットを経由して、ワーカーに処理タスクを送信する
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-
-    // メッセージの送信用ソケット
-    void *sender = zmq_socket (context, ZMQ_PUSH);
-    zmq_bind (sender, "tcp://*:5557");
-
-    // シンクに処理の開始を通知するソケット
-    void *sink = zmq_socket (context, ZMQ_PUSH);
-    zmq_connect (sink, "tcp://localhost:5558");
-
-    printf ("Press Enter when the workers are ready: ");
-    getchar ();
-    printf ("Sending tasks to workers…\n");
-
-    // 処理の開始を示す「0」というメッセージを送信
-    s_send (sink, "0");
-
-    // 乱数生成器の初期化
-    srandom ((unsigned) time (NULL));
-
-    // 100個のタスクを送信
-    int task_nbr;
-    int total_msec = 0; // 期待する合計処理時間(ミリ秒)
-    for (task_nbr = 0; task_nbr < 100; task_nbr++) {
-        int workload;
-        // 1〜100ミリ秒かかるランダムな仕事
-        workload = randof (100) + 1;
-        total_msec += workload;
-        char string [10];
-        sprintf (string, "%d", workload);
-        s_send (sender, string);
-    }
-    printf ("Total expected cost: %d msec\n", total_msec);
-
-    zmq_close (sink);
-    zmq_close (sender);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="taskvent: 並行タスクベンチレーター"}
+include(examples/EXAMPLE_LANG/taskvent.EXAMPLE_EXT)
 ~~~
 
 ;Here is the worker application. It receives a message, sleeps for that number of seconds, and then signals that it's finished:
 
 以下はワーカーアプリケーションです。
-メッセージを受信した数の秒数sleepし、完了を通知します。
+受信したメッセージの秒数分sleepし、完了を通知します。
 
-~~~ {caption="taskwork: 並行タスクワーカー(C言語)"}
-// タスクワーカー
-// PULLソケットでtcp://localhost:5557に接続
-// ベンチレーターから仕事を貰う
-// PUSHソケットでtcp://localhost:5558に接続
-// シンクに対して処理結果を送信
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // メッセージ受信用ソケット
-    void *context = zmq_ctx_new ();
-    void *receiver = zmq_socket (context, ZMQ_PULL);
-    zmq_connect (receiver, "tcp://localhost:5557");
-
-    // メッセージ送信用ソケット
-    void *sender = zmq_socket (context, ZMQ_PUSH);
-    zmq_connect (sender, "tcp://localhost:5558");
-
-    // タスクを処理し続ける
-    while (1) {
-        char *string = s_recv (receiver);
-        printf ("%s.", string); // 進行状況を表示
-        fflush (stdout);
-        s_sleep (atoi (string)); // なんらかの仕事
-        free (string);
-        s_send (sender, ""); // シンクに処理結果を送信
-    }
-    zmq_close (receiver);
-    zmq_close (sender);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="taskwork: 並行タスクワーカー"}
+include(examples/EXAMPLE_LANG/taskwork.EXAMPLE_EXT)
 ~~~
 
 ;Here is the sink application. It collects the 100 tasks, then calculates how long the overall processing took, so we can confirm that the workers really were running in parallel if there are more than one of them:
 
 以下はシンクアプリケーションです。
-100のタスクを収集し、処理にどれくらいの時間が掛かったかを求めます。
-これにより、本当に並行処理が行われたどうかを確認できます。
+100のタスクを収集し、処理にどれくらいの時間が掛かったかを計算します。
+この結果により、本当に並行処理が行われたどうかを確認できます。
 
-~~~ {caption="tasksink: Parallel task sink in C"}
-// シンクタスク
-// Binds PULL socket to tcp://localhost:5558
-// PULLソケットをtcp://localhost:5558でbindします
-// ソケット経由で処理結果を収集
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    // コンテキストとソケットの準備
-    void *context = zmq_ctx_new ();
-    void *receiver = zmq_socket (context, ZMQ_PULL);
-    zmq_bind (receiver, "tcp://*:5558");
-
-    // 処理の開始まで待機
-    char *string = s_recv (receiver);
-    free (string);
-
-    // 計測の開始
-    int64_t start_time = s_clock ();
-
-    // 100個の処理結果を確認
-    int task_nbr;
-    for (task_nbr = 0; task_nbr < 100; task_nbr++) {
-    char *string = s_recv (receiver);
-        free (string);
-        if ((task_nbr / 10) * 10 == task_nbr)
-            printf (":");
-        else
-            printf (".");
-        fflush (stdout);
-    }
-    // 処理時間を計測して表示
-    printf ("Total elapsed time: %d msec\n",
-    (int) (s_clock () - start_time));
-
-    zmq_close (receiver);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="tasksink: 並行タスクシンク"}
+include(examples/EXAMPLE_LANG/tasksink.EXAMPLE_EXT)
 ~~~
 
 ;The average cost of a batch is 5 seconds. When we start 1, 2, or 4 workers we get results like this from the sink:
@@ -803,7 +555,7 @@ int main (void)
 
 ;Let's look at some aspects of this code in more detail:
 
-それでは、もっと詳しくコードの性質を見ていきましょう。
+それでは、もっと詳しくコードの特徴を見ていきましょう。
 
 ;* The workers connect upstream to the ventilator, and downstream to the sink. This means you can add workers arbitrarily. If the workers bound to their endpoints, you would need (a) more endpoints and (b) to modify the ventilator and/or the sink each time you added a worker. We say that the ventilator and sink are stable parts of our architecture and the workers are dynamic parts of it.
 
@@ -815,9 +567,9 @@ int main (void)
 
  * ワーカーは上流のベンチレーターと下流のシンクに接続します。これは自由にワーカーを追加できる機能を持っているという事を意味しています。もしワーカーがbindを行ったとすると、ワーカーを追加する度にベンチレーターとシンクの動作を変更しなければなりません。ベンチレーターとシンクがアーキテクチャの固定部品であり、ワーカーは動的な部品であると言えます。
 
- * 全てのワーカーが起動するまで、処理の開始を同期させる必要があります。これはØMQのよくある落とし穴であり、簡単な解決方法はありません。どうしてもzmq_connectメソッドはある程度の時間がかかってしまいます。複数のワーカーがベンチレーターに接続する際、最初のワーカーが正常に接続してメッセージを受信しても、他のワーカーはまだ接続中の状態になります。何らかの方法で、処理の開始を同期しなければシステムは並行に動作しません。試しにgetcharによる一時停止を削除して、何が起こるか確認してみましょう。
+ * 全てのワーカーが起動するまで、処理の開始を同期させる必要があります。これはØMQのよくある落とし穴であり簡単な解決方法はありません。`zmq_connect()`関数はどうしてもある程度の時間がかかってしまいます。複数のワーカーがベンチレーターに接続する際、最初のワーカーが正常に接続してメッセージを受信しても、他のワーカーはまだ接続中の状態になります。何らかの方法で、処理の開始を同期しなければシステムは並行に動作しません。試しにgetcharによる一時停止を削除して、何が起こるか確認してみましょう。
 
- * ベンチレーターのPUSHソケットはタスクを均等にワーカーに分散します(処理が開始されるまでに全てのワーカーは接続済みであると仮定します)。これはロードバランシングと呼ばれ、後ほど改めて詳細を見ていきます。
+ * ベンチレーターのPUSHソケットはタスクを均等にワーカーに分散します(処理が開始されるまでに全てのワーカーは接続済みであると仮定します)。これはロードバランシングと呼ばれ、詳細は後ほど改めて説明します。
 
  * シンクのPULLソケットはワーカーからの処理結果を均等に収集します。これは*平衡キューイング*と呼びます。
 
@@ -826,7 +578,7 @@ int main (void)
 ;The pipeline pattern also exhibits the "slow joiner" syndrome, leading to accusations that PUSH sockets don't load balance properly. If you are using PUSH and PULL, and one of your workers gets way more messages than the others, it's because that PULL socket has joined faster than the others, and grabs a lot of messages before the others manage to connect. If you want proper load balancing, you probably want to look at the The load balancing pattern in Chapter 3 - Advanced Request-Reply Patterns.
 
 この様なパターンで「参加遅延病」が発症した場合、PUSHソケットが適切にロードバランスしなくなる現象を引き起こします。
-PUSHとPULLを利用している場合、あるワーカーが他のワーカーより多くのメッセージを受け取ることになります。なぜならばあるPULLソケットは早く接続していて、その他のソケットが接続している間に多くのメッセージを受け取るからです。もしあなたが正確なロードバランシングを行いたいと考えている場合、「第3章 - Advanced Request-Reply Patterns」を参照して下さい。
+PUSHとPULLを利用している場合、あるワーカーが他のワーカーより多くのメッセージを受け取ることになります。なぜならばあるPULLソケットは早く接続していて、その他のソケットが接続している間に多くのメッセージを受け取るからです。もし正確なロードバランシングを行いたい場合は「第3章 - Advanced Request-Reply Patterns」を参照して下さい。
 
 ## ØMQプログラミング
 ;Having seen some examples, you must be eager to start using ØMQ in some apps. Before you start that, take a deep breath, chillax, and reflect on some basic advice that will save you much stress and confusion.
@@ -844,7 +596,7 @@ PUSHとPULLを利用している場合、あるワーカーが他のワーカー
 
  * 素敵なコードを書いて下さい。醜いコードは問題を隠蔽し、他の人があなたを助けることを困難にします。変数名に無意味な名前を利用すると誰もあなたのコードを読めなくなるでしょう。変数の意味を伝えるのに適切な現実の世界の言葉を使って下さい。一貫したインデントと綺麗なレイアウトを使って下さい。素敵なコードを書くとあなたの世界はより快適になります。
 
- * あなたが作ったものをテストして下さい。プログラムが動作しない時あなたのコードに責任があることを知るべきです。ØMQを初めて使い始めたばかりで上手く動作しない時はは特にこれが当てはまります。
+ * あなたが作ったものをテストして下さい。プログラムが動作しない時は何処に原因があるか特定する必要があります。ØMQを初めて使い始めたばかりで上手く動作しない時は特に十分テストして下さい。
 
  * 上手く動作しない所を見つけた時、個別にテストして切り分けを行って下さい。ØMQは基本的なモジュールコードを作成できます。これはあなたの助けになるでしょう。
 
@@ -853,21 +605,21 @@ PUSHとPULLを利用している場合、あるワーカーが他のワーカー
 ### 正しくコンテキストを取得する
 ;ØMQ applications always start by creating a context, and then using that for creating sockets. In C, it's the zmq_ctx_new() call. You should create and use exactly one context in your process. Technically, the context is the container for all sockets in a single process, and acts as the transport for inproc sockets, which are the fastest way to connect threads in one process. If at runtime a process has two contexts, these are like separate ØMQ instances. If that's explicitly what you want, OK, but otherwise remember:
 
-ØMQアプリケーションはいつもコンテキストを作成し、それを利用してソケットを作成します。
+ØMQアプリケーションは常にコンテキストを作成し、それを利用してソケットを作成します。
 C言語では`zmq_ctx_new()`を呼び出します。
-あなたはプロセス内に一つのコンテキストを作成してそれを利用します。
+プロセス内に一つのコンテキストを作成し、それを利用します。
 技術的に言うと、コンテキストは単一プロセス内で全てのソケットをまとめるコンテナであり、プロセス内で高速にスレッド間を接続するプロセス内ソケットとして振る舞います。
 もし、1つの実行プロセスが2つのコンテキスト持つと、それはØMQインスタンスが2に分離しているように見えます。
 あえてこうしたいのであれば問題ありませんが、そうでないのなら注意して下さい。
 
 ;*Do one zmq_ctx_new() at the start of your main line code, and one zmq_ctx_destroy() at the end.*
 
-*メインコードの最初で`zmq_ctx_new()`呼び出して、終わりに`zmq_ctx_destroy()`を呼び出して下さい。*
+*メインコードの最初で* `zmq_ctx_new()` *呼び出して、終わりに* `zmq_ctx_destroy()` *を呼び出して下さい。*
 
 ;If you're using the fork() system call, each process needs its own context. If you do zmq_ctx_new() in the main process before calling fork(), the child processes get their own contexts. In general, you want to do the interesting stuff in the child processes and just manage these from the parent process.
 
 `fork()`システムコールを利用している場合、各プロセスは独自のコンテキストを必要とします。
-メインプロセスで`zmq_ctx_new()`を呼び出した後に`fork()`した場合、子プロセスは独自のコンテキストを得ます。一般的に、子プロセスで主な処理を行い親プロセスは子プロセスを管理するだけでしょう。
+メインプロセスで`zmq_ctx_new()`を呼び出した後に`fork()`した場合、子プロセスは独自のコンテキストを得ます。一般的に、主な処理は子プロセスで行い、親プロセスは子プロセスを管理するだけでしょう。
 
 ### 正しく終了する
 ;Classy programmers share the same motto as classy hit men: always clean-up when you finish the job. When you use ØMQ in a language like Python, stuff gets automatically freed for you. But when using C, you have to carefully free objects when you're finished with them or else you get memory leaks, unstable applications, and generally bad karma.
@@ -881,23 +633,23 @@ C言語では`zmq_ctx_new()`を呼び出します。
 
 メモリリークもその一つです。
 ØMQはアプリケーションを終了することに関してとても気難しいです。
-理由は、技術的かつ痛みを伴いますが、もしソケットをオープンしたまま`zmq_ctx_destroy()`関数を呼び出した場合、永久にハングします。
+その理由は、技術的かつ痛みを伴いますが、もしソケットをオープンしたまま`zmq_ctx_destroy()`関数を呼び出した場合、永久にハングします。
 そしてもし、LINGERを0に設定せずに全てのソケットクローズした場合でも、`zmq_ctx_destroy()`で待たされるでしょう。
 
 ;The ØMQ objects we need to worry about are messages, sockets, and contexts. Luckily it's quite simple, at least in simple programs:
 
-ØMQで気にする必要があるオブジェクトはメッセージとソケットとコンテキストの3つです。
-幸いなことに、単純なプログラムでこれを扱うのは非常に簡単です。
+ØMQで気配りする必要があるオブジェクトはメッセージとソケットとコンテキストの3つです。
+幸いなことに、単純なプログラムでこれらを扱うのはとても簡単です。
 
 ;* Use zmq_send() and zmq_recv() when you can, as it avoids the need to work with zmq_msg_t objects.
 ;* If you do use zmq_msg_recv(), always release the received message as soon as you're done with it, by calling zmq_msg_close().
 ;* If you are opening and closing a lot of sockets, that's probably a sign that you need to redesign your application. In some cases socket handles won't be freed until you destroy the context.
 ;* When you exit the program, close your sockets and then call zmq_ctx_destroy(). This destroys the context.
 
- * できるだけ、`zmq_send()`と`zmq_recv()`を使って下さい。これらはzmq_msg_tオブジェクトの利用を避けることが出来ます。
+ * 可能な限り`zmq_send()`と`zmq_recv()`を使って下さい。これらはzmq_msg_tオブジェクトの利用を避けることが出来ます。
  * `zmq_msg_recv()`を使う場合、メッセージを受信したら`zmq_msg_close()`を呼ぶ前に出来るだけ早く開放して下さい。
  * 多くのソケットをオープンしてクローズする場合、アプリケーションを再設計する必要性がある兆候です。幾つかのケースでは、コンテキストを開放するまでソケットが開放されなくなります。
- * プログラムを終了する際、ソケットを閉じてから`zmq_ctx_destroy()`を呼んで下さい。こうしないとコンテキストが壊れます。
+ * プログラムを終了する際、ソケットを閉じてから`zmq_ctx_destroy()`を呼んで下さい。これはコンテキストを破棄する関数です。
 
 ;This is at least the case for C development. In a language with automatic object destruction, sockets and contexts will be destroyed as you leave the scope. If you use exceptions you'll have to do the clean-up in something like a "final" block, the same as for any resource.
 
@@ -908,7 +660,7 @@ C言語では`zmq_ctx_new()`を呼び出します。
 ;If you're doing multithreaded work, it gets rather more complex than this. We'll get to multithreading in the next chapter, but because some of you will, despite warnings, try to run before you can safely walk, below is the quick and dirty guide to making a clean exit in a multithreaded ØMQ application.
 
 マルチスレッドを利用している場合、これはもっと複雑になります。
-マルチスレッドに関しては次の章で扱いますが、警告を無視しして試して見る人もいるでしょう。
+マルチスレッドに関しては次の章で扱いますが、警告を無視して試してみたい人もいるでしょう。
 以下は、マルチスレッドのØMQアプリケーションで正しく終了するための急しのぎのガイドです。
 
 ;First, do not try to use the same socket from multiple threads. Please don't explain why you think this would be excellent fun, just please don't do it. Next, you need to shut down each socket that has ongoing requests. The proper way is to set a low LINGER value (1 second), and then close the socket. If your language binding doesn't do this for you automatically when you destroy a context, I'd suggest sending a patch.
@@ -1014,7 +766,7 @@ AMQPはその他の設計より上手く動作していましたが[比較的複
 
 そして中央ブローカーのセットアップには、専用の運用チームが必要でした。
 そして、ブローカーを昼夜構わず監視し、素行の悪いヤツを見つけて棒で叩く必要がありました。
-新しいサーバーが必要になり、さらにそのバックアップサーバーが必要になり、そのサーバーを管理する人材が必要になります。この様な状況は、幾つものチームで数年に渡って運用する大規模なアプリケーションにおいては価値があります。
+新しいサーバーが必要になり、さらにそのバックアップサーバーが必要になり、そのサーバーを管理する人材が必要になりました。この様な状況は、幾つものチームで数年に渡って運用する大規模なアプリケーションにおいては価値があるでしょう。
 
 ![Messaging as it Becomes](images/fig8.eps)
 
@@ -1023,8 +775,8 @@ AMQPはその他の設計より上手く動作していましたが[比較的複
 つまり、中小規模のアプリケーション開発者にとってこれは罠なのです。
 ネットワークプログラミングを避けて一枚岩なアプリケーションを作るか、
 ネットワークプログラミングに挑戦して不安定で複雑なアプリケーションを作り、メンテナンスに苦しむか、
-メッセージング製品に頼ってスケーラブルだけど、高価で壊れやすいアプリケーションとなるか、という選択肢があります。
-何故、前世紀のメッセージングが巨大であったかを考えると、これらは本当に良い選択肢ではありません。
+メッセージング製品に頼り、スケーラブルだけど高価で壊れやすい技術を利用するという選択肢があります。
+前世紀のメッセージングが何故巨大であったかを考えると、これらは本当に良い選択肢ではありません。
 サポートやライセンス販売する人は大喜びでしょうが、ユーザーにとって良い事は一つもないからです。
 
 ;What we need is something that does the job of messaging, but does it in such a simple and cheap way that it can work in any application, with close to zero cost. It should be a library which you just link, without any other dependencies. No additional moving pieces, so no additional risk. It should run on any OS and work with any programming language.
@@ -1037,7 +789,7 @@ AMQPはその他の設計より上手く動作していましたが[比較的複
 ;And this is ØMQ: an efficient, embeddable library that solves most of the problems an application needs to become nicely elastic across a network, without much cost.
 
 そうして出来たのがØMQです。
-ØMQはアプリケーションがネットワークを縦横無尽にまたぐ為に必要な問題を解決する、低コストで効率的な組み込みライブラリです。
+ØMQはアプリケーションがネットワークを縦横無尽に横断する為に必要な問題を解決する、低コストで効率的な組み込みライブラリです。
 
 ;Specifically:
 
@@ -1064,13 +816,13 @@ AMQPはその他の設計より上手く動作していましたが[比較的複
 
  * HWM(満杯マーク)と呼ばれる方法でキューが溢れないようにします。キューが一杯になった時、ØMQは自動的に送信側をブロックするか、あるいはメッセージを捨てるかどうかをメッセージの種類によってコントロールできます。(これを「パターン」と呼びます。)
 
- * アプリケーションは様々な通信手段を利用して、通信する事が出来ます。例えば、TCP, マルチキャスト、プロセス間通信、プロセス内通信など。異なる通信手段を利用するためにコードを修正する必要はありません。
+ * アプリケーションは様々な通信手段を利用する事が出来ます。例えば、TCP, マルチキャスト、プロセス間通信、プロセス内通信など。異なる通信手段を利用するためにコードを修正する必要はありません。
 
  * 受信側の読み込みが遅かったりブロックされている場合でも、メッセージパターンによって異なる戦略を利用して安全に処理します。
 
  * リクエスト-応答パターンや、pub-subパターンなど、様々なパターンを利用してメッセージをルーティング出来ます。これらのパターンによりネットワーク構造のトポロジーを構成できます。
 
- * キューのプロクシを構成したり、メッセージを採取したり転送したり出来ます。プロクシは相互接続によるネットワークの複雑性を緩和します。
+ * キューのプロキシを構成したり、メッセージを採取したり転送したり出来ます。プロキシは相互接続によるネットワークの複雑性を緩和します。
 
  * 配送されたメッセージはフレーム境界を維持してそのまま送信されます。10Kバイトのメッセージを書き込んだ場合、受信側では10Kバイトのメッセージを受け取ります。
 
@@ -1109,7 +861,7 @@ wuclient 56789 &
 
 ;As the clients run, we take a look at the active processes using the top command', and we see something like (on a 4-core box):
 
-4コアのマシンでクライアントの実行中に、topコマンドを利用すると以下のようなプロセス情報を確認できます。
+4コアのマシンでクライアントの実行中に、topコマンドを利用すると以下のようなプロセス情報を確認できるでしょう。
 
 ~~~
 PID  USER  PR  NI  VIRT  RES  SHR S %CPU %MEM   TIME+  COMMAND
@@ -1127,8 +879,8 @@ PID  USER  PR  NI  VIRT  RES  SHR S %CPU %MEM   TIME+  COMMAND
 天気情報サーバーは1つのソケットを持ち、5つのクライアントにデータを並行に送信しています。
 私達は並行クライアントを数千ほどに増やすことが出来ます。
 サーバーアプリケーションにこれらのコードは直接記述されていません。
-静かにクライアントのリクエストを受け付け、出来るだけ素早くネットワークにデータを配信する小さなサーバとして機能振る舞っています。
-そして、それはマルチスレッドサーバーであり、CPUリソースを無駄なく絞りとれています。
+クライアントのリクエストを静かに受け付け、出来るだけ素早くネットワークにデータを配信する小さなサーバとして機能振る舞います。
+そしてそれはマルチスレッドサーバーであり、CPUリソースを無駄なく絞りとります。
 
 ## ØMQ v2.2 から ØMQ v3.2 へのアップグレード
 ### 互換性のある変更
@@ -1139,12 +891,13 @@ PID  USER  PR  NI  VIRT  RES  SHR S %CPU %MEM   TIME+  COMMAND
 ;* Pub-sub filtering is now done at the publisher side instead of subscriber side. This improves performance significantly in many pub-sub use cases. You can mix v3.2 and v2.1/v2.2 publishers and subscribers safely.
 ;* ØMQ v3.2 has many new API methods (zmq_disconnect(), zmq_unbind(), zmq_monitor(), zmq_ctx_set(), etc.)
 
- * Pub-subフィルタリングをサブスクライバ側だけでなくパブリッシャーサイドでも行えるようになった。これは多くのpub-subユースケースでパフォーマンスを大きく改善します。v3.2とv2.1/v2.2を組み合わせても安全です。
+ * PUB-SUBフィルタリングをサブスクライバ側だけでなくパブリッシャーサイドでも行えるようになりました。これは多くのpub-subユースケースでパフォーマンスを大きく改善します。v3.2とv2.1/v2.2を組み合わせても安全です。
 
  * ØMQ v3.2 で多くの新しいAPIが追加されました。(`zmq_disconnect()`, `zmq_unbind()`, `zmq_monitor()`, `zmq_ctx_set()`, など)
 
 ### 互換性の無い変更
 ;These are the main areas of impact on applications and language bindings:
+
 アプリケーションや言語バインディングが影響を受ける主な変更です。
 
 ;* Changed send/recv methods: zmq_send() and zmq_recv() have a different, simpler interface, and the old functionality is now provided by zmq_msg_send() and zmq_msg_recv(). Symptom: compile errors. Solution: fix up your code.
@@ -1167,9 +920,9 @@ PID  USER  PR  NI  VIRT  RES  SHR S %CPU %MEM   TIME+  COMMAND
 
  * 全てではありませんが、ほとんどの`zmq_getsockopt()`オプションの値は整数値です。症状: `zmq_setsockopt()`や`zmq_getsockopt()`の実行時にエラーが発生します。
 
- * `ZMQ_SWAP`オプションは削除されました。症状: コンパイルエラー。解決方法: この機能を利用したコードを再設計して下さい。
+ * `ZMQ_SWAP`オプションは廃止されました。症状: コンパイルエラー。解決方法: この機能を利用したコードを再設計して下さい。
 
-### 調整マクロの推奨
+### 互換性維持マクロ
 ;For applications that want to run on both v2.x and v3.2, such as language bindings, our advice is to emulate c3.2 as far as possible. Here are C macro definitions that help your C/C++ code to work across both versions (taken from CZMQ):
 
 アプリケーションをv2.xとv3.2の両方で動作させたい場合があります。
@@ -1197,7 +950,7 @@ PID  USER  PR  NI  VIRT  RES  SHR S %CPU %MEM   TIME+  COMMAND
 従来のネットワークプログラミングは一般的に1ソケットに対して1つの接続、1ピアと会話することを前提にして構築されています。
 マルチキャストプロトコルがありますが、これらはちょっと風変わりです。
 私達は「1ソケット = 1コネクション」を前提としたアーキテクチャを有る意味で拡張しました。
-論理的なスレッドを作成しそれぞれのスレッドが1ソケット, 1ピアとして機能します。
+論理的なスレッドを作成しそれぞれのスレッドが1ソケット、1ピアとして機能します。
 これらのスレッドに情報や状態を格納します。
 
 ;In the ØMQ universe, sockets are doorways to fast little background communications engines that manage a whole set of connections automagically for you. You can't see, work with, open, close, or attach state to these connections. Whether you use blocking send or receive, or poll, all you can talk to is the socket, not the connections it manages for you. The connections are private and invisible, and this is the key to ØMQ's scalability.
@@ -1214,7 +967,7 @@ PID  USER  PR  NI  VIRT  RES  SHR S %CPU %MEM   TIME+  COMMAND
 
 ;So the general assumption no longer applies. As you read the code examples, your brain will try to map them to what you know. You will read "socket" and think "ah, that represents a connection to another node". That is wrong. You will read "thread" and your brain will again think, "ah, a thread represents a connection to another node", and again your brain will be wrong.
 
-ですので一般的な仮定は通用しなくなりました。
+ですので一般的な仮定が通用しない場合があります。
 サンプルコードを読む時に、あなたの頭の中で、既存の知識とマッピングしようとするかもしれません。
 「ソケット」という言葉を見た時、「ああ、これは別のノードへのコネクションを表すのね」と思うでしょうが誤りです。
 「スレッド」という言葉を見た時、「ああ、スレッドが別ノードへのコネクションを制御しているのね」と思うかもしれませんが、これもまた誤りです。

@@ -1,8 +1,8 @@
 # リクエスト・応答パターンの応用
 ;In Chapter 2 - Sockets and Patterns we worked through the basics of using ØMQ by developing a series of small applications, each time exploring new aspects of ØMQ. We'll continue this approach in this chapter as we explore advanced patterns built on top of ØMQ's core request-reply pattern.
 
-「第2章 - ソケットとパターン」ではØMQを使った一連の小さなアプリケーションを開発する事でØMQの新しい側面を探って来ました。
-この章では引き続き同様の方法で、ØMQのコアとなるリクエスト・応答パターンの応用方法について探っていきます。
+「第2章 - ソケットとパターン」ではØMQを使った一連の小さなアプリケーションを開発しながらØMQの新しい側面を探って来ました。
+この章では引き続き同じような方法でØMQのコアとなるリクエスト・応答パターンの応用方法について探っていきます。
 
 ;We'll cover:
 この章では、
@@ -80,14 +80,14 @@ hwclientとhwserverの間を流れるネットワークデータを監視して�
 ### 拡張された応答エンベロープ
 ;Now let's extend the REQ-REP pair with a ROUTER-DEALER proxy in the middle and see how this affects the reply envelope. This is the extended request-reply pattern we already saw in Chapter 2 - Sockets and Patterns. We can, in fact, insert any number of proxy steps. The mechanics are the same.
 
-それでは、REQ-REPソケットペアを拡張したROUTER-DEALERプロキシーで応答エンベロープにどの様な影響があるか見て行きましょう。
-これは第2章の「ソケットとパターン」で既に見た、拡張されたリクエスト・応答パターンと同じ仕組みで、プロキシーを幾つでも挿入することが出来ます。
+それでは、REQ-REPソケットペアを拡張したROUTER-DEALERプロキシで応答エンベロープにどの様な影響があるか見て行きましょう。
+これは第2章の「ソケットとパターン」で既に見た、拡張されたリクエスト・応答パターンと同じ仕組みで、プロキシを幾つでも挿入することが出来ます。
 
 ![拡張されたリクエスト・応答パターン](images/fig27.eps)
 
 ;The proxy does this, in pseudo-code:
 
-プロキシーは擬似コードで以下の様に動作します。
+プロキシは擬似コードで以下の様に動作します。
 
 ~~~
 prepare context, frontend and backend sockets
@@ -121,7 +121,7 @@ ROUTERソケット経由でメッセージを送信すると、まずこのIDフ
 ;As a historical note, ØMQ v2.2 and earlier use UUIDs as identities, and ØMQ v3.0 and later use short integers. There's some impact on network performance, but only when you use multiple proxy hops, which is rare. Mostly the change was to simplify building libzmq by removing the dependency on a UUID library.
 
 歴史的な情報ですが、ØMQ v2.2以前はこのIDにUUIDを利用していましたが、ØMQ 3.0以降からは短い整数を利用しています。
-これはネットワークパフォーマンスに少なからず影響を与えますが、多段のプロキシーを利用している場合は影響は微々たるものでしょう。
+これはネットワークパフォーマンスに少なからず影響を与えますが、多段のプロキシを利用している場合は影響は微々たるものでしょう。
 最も大きな影響はlibzmqがUUIDライブラリに依存しなくなったことくらいです。
 
 ;Identies are a difficult concept to understand, but it's essential if you want to become a ØMQ expert. The ROUTER socket invents a random identity for each connection with which it works. If there are three REQ sockets connected to a ROUTER socket, it will invent three random identities, one for each REQ socket.
@@ -142,7 +142,7 @@ ROUTERソケットからメッセージを受信すると3つのフレームを�
 
 ;The core of the proxy loop is "read from one socket, write to the other", so we literally send these three frames out on the DEALER socket. If you now sniffed the network traffic, you would see these three frames flying from the DEALER socket to the REP socket. The REP socket does as before, strips off the whole envelope including the new reply address, and once again delivers the "Hello" to the caller.
 
-プロキシーのメインループでは「ソケットから読み取ったメッセージを他の相手に転送する処理」を繰り返していますので、DEALERソケットからは3つのフレームが出ていく事になります。
+プロキシのメインループでは「ソケットから読み取ったメッセージを他の相手に転送する処理」を繰り返していますので、DEALERソケットからは3つのフレームが出ていく事になります。
 ネットワークトラフィックを監視すると、DEALERソケットからREPソケットに向けて3つのフレームが飛び出してくるのを確認できるでしょう。
 REPソケットは新しい応答アドレスを含むエンベロープ全体を取り除き、「Hello」というメッセージをアプリケーションに返します。
 
@@ -306,7 +306,7 @@ ROUTERソケットは明確に2つの用途で利用できます。
 ;* As a proxy that switches messages between frontend and backend sockets.
 ;* As an application that reads the message and acts on it.
 
-* フロントエンドとバックエンドソケットの間でメッセージを中継するプロキシーとして
+* フロントエンドとバックエンドソケットの間でメッセージを中継するプロキシとして
 * メッセージ受信するアプリケーションとして
 
 ;In the first case, the ROUTER simply reads all frames, including the artificial identity frame, and passes them on blindly. In the second case the ROUTER must know the format of the reply envelope it's being sent. As the other peer is a REQ socket, the ROUTER gets the identity frame, an empty frame, and then the data frame.
@@ -388,19 +388,16 @@ ROUTERソケットについてもう少し詳しく見ていきましょう。
 ØMQにおけるIDはROUTERソケットが他のソケットへのコネクションを識別するための概念です。
 もっと大ざっぱに言うと、IDは応答エンベロープのアドレスとして利用されます。
 多くの場合、このIDはROUTERがハッシュテーブルの検索に利用するための局所的なものです。
-[TODO]
-ところで、アドレスにはネットワークのエンドポイント「tcp://192.168.55.117:5670」の様な物理的なものとUUID、メールアドレスやユニークなキーの様に論理的なものがあります。
+IDはネットワークのエンドポイント「tcp://192.168.55.117:5670」の様な物理的なアドレスとは独立した論理的なアドレスになります。
 
 ;An application that uses a ROUTER socket to talk to specific peers can convert a logical address to an identity if it has built the necessary hash table. Because ROUTER sockets only announce the identity of a connection (to a specific peer) when that peer sends a message, you can only really reply to a message, not spontaneously talk to a peer.
 
-
-アプリケーションがROUTERソケットを利用して特定の相手に対して通信を行う際、ハッシュテーブルを構築することで、論理的なアドレスをIDに変換することが出来ます。
-なぜなら、ROUTERソケットだけがメッセージを送信する際に接続IDを知ることができるからです。
-[TODO]
+ROUTERソケットはメッセージの全てを読み込める為、ROUTERソケットを利用した場合のみ接続相手が送信した接続IDを知ることが出来ます。
+これを利用して、必要に応じて論理的なアドレスからIDに変換するハッシュテーブルを構築することが出来ます。
 
 ;This is true even if you flip the rules and make the ROUTER connect to the peer rather than wait for the peer to connect to the ROUTER. However you can force the ROUTER socket to use a logical address in place of its identity. The zmq_setsockopt reference page calls this setting the socket identity. It works as follows:
 
-これとは逆に、ROUTER側から接続を行う場合も同様です。
+これとは反対に、ROUTER側から接続を行う場合も同様です。
 そして、このIDの代わりに論理的なIDを強制的に利用する事も可能です。
 zmq_setsockoptのmanページではこれを「ソケットIDの設定」と呼んでいます。
 これは以下の様に動作します。
@@ -423,36 +420,8 @@ zmq_setsockoptのmanページではこれを「ソケットIDの設定」と呼�
 
 以下のサンプルコードは、2つのソケットでルーターソケットに対して接続を行い、片方のソケットに「PEER2」という論理アドレスを設定する単純な例です。
 
-~~~ {caption="identity: Identity check in C"}
-// Demonstrate request-reply identities
-
-#include "zhelpers.h"
-
-int main (void)
-{
-   void *context = zmq_ctx_new ();
-   void *sink = zmq_socket (context, ZMQ_ROUTER);
-   zmq_bind (sink, "inproc://example");
-
-   // First allow 0MQ to set the identity
-   void *anonymous = zmq_socket (context, ZMQ_REQ);
-   zmq_connect (anonymous, "inproc://example");
-   s_send (anonymous, "ROUTER uses a generated UUID");
-   s_dump (sink);
-
-   // Then set the identity ourselves
-   void *identified = zmq_socket (context, ZMQ_REQ);
-   zmq_setsockopt (identified, ZMQ_IDENTITY, "PEER2", 5);
-   zmq_connect (identified, "inproc://example");
-   s_send (identified, "ROUTER socket uses REQ's socket identity");
-   s_dump (sink);
-
-   zmq_close (sink);
-   zmq_close (anonymous);
-   zmq_close (identified);
-   zmq_ctx_destroy (context);
-   return 0;
-}
+~~~ {caption="identity: IDチェック"}
+include(examples/EXAMPLE_LANG/identity.EXAMPLE_EXT)
 ~~~
 
 このプログラムは以下の出力を行います。
@@ -543,86 +512,8 @@ PUSHとDEALERソケットがこの様な単純な方式を利用するのは単�
 
 これはROUTERブローカーを利用してREQワーカー群と通信を行う負荷分散パターンのサンプルコードです。
 
-~~~ {caption="rtreq: ROUTER-to-REQ in C"}
-// ROUTER-to-REQ example
-
-#include "zhelpers.h"
-#include <pthread.h>
-#define NBR_WORKERS 10
-
-static void *
-worker_task (void *args)
-{
-    void *context = zmq_ctx_new ();
-    void *worker = zmq_socket (context, ZMQ_REQ);
-    s_set_id (worker); // Set a printable identity
-    zmq_connect (worker, "tcp://localhost:5671");
-
-    int total = 0;
-    while (1) {
-        // Tell the broker we're ready for work
-        s_send (worker, "Hi Boss");
-
-        // Get workload from broker, until finished
-        char *workload = s_recv (worker);
-        int finished = (strcmp (workload, "Fired!") == 0);
-        free (workload);
-        if (finished) {
-            printf ("Completed: %d tasks\n", total);
-            break;
-        }
-        total++;
-
-        // Do some random work
-        s_sleep (randof (500) + 1);
-    }
-    zmq_close (worker);
-    zmq_ctx_destroy (context);
-    return NULL;
-}
-
-// While this example runs in a single process, that is only to make
-// it easier to start and stop the example. Each thread has its own
-// context and conceptually acts as a separate process.
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-    void *broker = zmq_socket (context, ZMQ_ROUTER);
-
-    zmq_bind (broker, "tcp://*:5671");
-    srandom ((unsigned) time (NULL));
-
-    int worker_nbr;
-    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++) {
-        pthread_t worker;
-        pthread_create (&worker, NULL, worker_task, NULL);
-    }
-    // Run for five seconds and then tell workers to end
-    int64_t end_time = s_clock () + 5000;
-    int workers_fired = 0;
-    while (1) {
-        // Next message gives us least recently used worker
-        char *identity = s_recv (broker);
-        s_sendmore (broker, identity);
-        free (identity);
-        free (s_recv (broker)); // Envelope delimiter
-        free (s_recv (broker)); // Response from worker
-        s_sendmore (broker, "");
-
-        // Encourage workers until it's time to fire them
-        if (s_clock () < end_time)
-            s_send (broker, "Work harder");
-        else {
-            s_send (broker, "Fired!");
-        if (++workers_fired == NBR_WORKERS)
-            break;
-        }
-    }
-    zmq_close (broker);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="rtreq: ROUTERソケット対REQソケット"}
+include(examples/EXAMPLE_LANG/rtreq.EXAMPLE_EXT)
 ~~~
 
 ;The example runs for five seconds and then each worker prints how many tasks they handled. If the routing worked, we'd expect a fair distribution of work:
@@ -669,90 +560,10 @@ REQソケットの代わりにDEALERソケットを利用することも可能�
 
 ;Now let's look at exactly the same example but with the REQ socket replaced by a DEALER socket:
 
-それでは、REQソケットをDEALERソケットに置き換えたまったく同じ動作を行うサンプルコードを見てみましょう。
+それではREQソケットをDEALERソケットに置き換えたまったく同じ動作を行うサンプルコードを見てみましょう。
 
-~~~ {caption="rtdealer: ROUTER-to-DEALER in C"}
-// ROUTER-to-DEALER example
-
-#include "zhelpers.h"
-#include <pthread.h>
-#define NBR_WORKERS 10
-
-static void *
-worker_task (void *args)
-{
-    void *context = zmq_ctx_new ();
-    void *worker = zmq_socket (context, ZMQ_DEALER);
-    s_set_id (worker); // Set a printable identity
-    zmq_connect (worker, "tcp://localhost:5671");
-
-    int total = 0;
-    while (1) {
-        // Tell the broker we're ready for work
-        s_sendmore (worker, "");
-        s_send (worker, "Hi Boss");
-
-        // Get workload from broker, until finished
-        free (s_recv (worker)); // Envelope delimiter
-        char *workload = s_recv (worker);
-        int finished = (strcmp (workload, "Fired!") == 0);
-        free (workload);
-        if (finished) {
-            printf ("Completed: %d tasks\n", total);
-            break;
-        }
-        total++;
-
-        // Do some random work
-        s_sleep (randof (500) + 1);
-    }
-    zmq_close (worker);
-    zmq_ctx_destroy (context);
-    return NULL;
-}
-
-// While this example runs in a single process, that is just to make
-// it easier to start and stop the example. Each thread has its own
-// context and conceptually acts as a separate process.
-
-int main (void)
-{
-    void *context = zmq_ctx_new ();
-    void *broker = zmq_socket (context, ZMQ_ROUTER);
-
-    zmq_bind (broker, "tcp://*:5671");
-    srandom ((unsigned) time (NULL));
-
-    int worker_nbr;
-    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++) {
-        pthread_t worker;
-        pthread_create (&worker, NULL, worker_task, NULL);
-    }
-    // Run for five seconds and then tell workers to end
-    int64_t end_time = s_clock () + 5000;
-    int workers_fired = 0;
-    while (1) {
-        // Next message gives us least recently used worker
-        char *identity = s_recv (broker);
-        s_sendmore (broker, identity);
-        free (identity);
-        free (s_recv (broker)); // Envelope delimiter
-        free (s_recv (broker)); // Response from worker
-        s_sendmore (broker, "");
-
-        // Encourage workers until it's time to fire them
-        if (s_clock () < end_time)
-            s_send (broker, "Work harder");
-        else {
-            s_send (broker, "Fired!");
-        if (++workers_fired == NBR_WORKERS)
-            break;
-        }
-    }
-    zmq_close (broker);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="rtdealer: ROUTER対DEALER"}
+include(examples/EXAMPLE_LANG/rtdealer.EXAMPLE_EXT)
 ~~~
 
 ;The code is almost identical except that the worker uses a DEALER socket, and reads and writes that empty frame before the data frame. This is the approach I use when I want to keep compatibility with REQ workers.
@@ -775,7 +586,7 @@ int main (void)
 
 前回のサンプルコードは複数のワーカーを管理し、擬似的なリクエストと応答を行うことが出来ましたが、これだけでは十分で無い場合があります。
 ワーカーからクライアントに対して問い合わせを行うことが出来ないからです。
-2つ目のフロントエンドROUTERソケットを追加し、これでクライアントからのリクエストを受け付け、フロントエンドからバックエンドにメッセージを転送するプロキシーを用意します。
+2つ目のフロントエンドROUTERソケットを追加し、これでクライアントからのリクエストを受け付け、フロントエンドからバックエンドにメッセージを転送するプロキシを用意します。
 こうすることで、便利で再利用可能な負荷分散メッセージブローカーを作成することが出来ます。
 
 ![負荷分散ブローカー](images/fig32.eps)
@@ -802,193 +613,8 @@ int main (void)
 
 このサンプルコードはそこそこ長いですが、理解する価値はあるでしょう。
 
-~~~ {caption="lbbroker: Load balancing broker in C"}
-// Load-balancing broker
-// Clients and workers are shown here in-process
-
-#include "zhelpers.h"
-#include <pthread.h>
-#define NBR_CLIENTS 10
-#define NBR_WORKERS 3
-
-// Dequeue operation for queue implemented as array of anything
-#define DEQUEUE(q) memmove (&(q)[0], &(q)[1], sizeof (q) - sizeof (q [0]))
-
-// Basic request-reply client using REQ socket
-// Because s_send and s_recv can't handle 0MQ binary identities, we
-// set a printable text identity to allow routing.
-//
-static void *
-client_task (void *args)
-{
-    void *context = zmq_ctx_new ();
-    void *client = zmq_socket (context, ZMQ_REQ);
-    s_set_id (client); // Set a printable identity
-    zmq_connect (client, "ipc://frontend.ipc");
-
-    // Send request, get reply
-    s_send (client, "HELLO");
-    char *reply = s_recv (client);
-    printf ("Client: %s\n", reply);
-    free (reply);
-    zmq_close (client);
-    zmq_ctx_destroy (context);
-    return NULL;
-}
-
-// While this example runs in a single process, that is just to make
-// it easier to start and stop the example. Each thread has its own
-// context and conceptually acts as a separate process.
-// This is the worker task, using a REQ socket to do load-balancing.
-// Because s_send and s_recv can't handle 0MQ binary identities, we
-// set a printable text identity to allow routing.
-
-
-
-static void *
-worker_task (void *args)
-{
-    void *context = zmq_ctx_new ();
-    void *worker = zmq_socket (context, ZMQ_REQ);
-    s_set_id (worker); // Set a printable identity
-    zmq_connect (worker, "ipc://backend.ipc");
-
-    // Tell broker we're ready for work
-    s_send (worker, "READY");
-
-    while (1) {
-        // Read and save all frames until we get an empty frame
-        // In this example there is only 1, but there could be more
-        char *identity = s_recv (worker);
-        char *empty = s_recv (worker);
-        assert (*empty == 0);
-        free (empty);
-
-        // Get request, send reply
-        char *request = s_recv (worker);
-        printf ("Worker: %s\n", request);
-        free (request);
-
-        s_sendmore (worker, identity);
-        s_sendmore (worker, "");
-        s_send (worker, "OK");
-        free (identity);
-    }
-    zmq_close (worker);
-    zmq_ctx_destroy (context);
-    return NULL;
-}
-
-// This is the main task. It starts the clients and workers, and then
-// routes requests between the two layers. Workers signal READY when
-// they start; after that we treat them as ready when they reply with
-// a response back to a client. The load-balancing data structure is
-// just a queue of next available workers.
-
-int main (void)
-{
-    // Prepare our context and sockets
-    void *context = zmq_ctx_new ();
-    void *frontend = zmq_socket (context, ZMQ_ROUTER);
-    void *backend = zmq_socket (context, ZMQ_ROUTER);
-    zmq_bind (frontend, "ipc://frontend.ipc");
-    zmq_bind (backend, "ipc://backend.ipc");
-
-    int client_nbr;
-    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++) {
-        pthread_t client;
-        pthread_create (&client, NULL, client_task, NULL);
-    }
-    int worker_nbr;
-    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++) {
-        pthread_t worker;
-        pthread_create (&worker, NULL, worker_task, NULL);
-    }
-    // Here is the main loop for the least-recently-used queue. It has two
-    // sockets; a frontend for clients and a backend for workers. It polls
-    // the backend in all cases, and polls the frontend only when there are
-    // one or more workers ready. This is a neat way to use 0MQ's own queues
-    // to hold messages we're not ready to process yet. When we get a client
-    // reply, we pop the next available worker and send the request to it,
-    // including the originating client identity. When a worker replies, we
-    // requeue that worker and forward the reply to the original client
-    // using the reply envelope.
-
-    // Queue of available workers
-    int available_workers = 0;
-    char *worker_queue [10];
-
-    while (1) {
-        zmq_pollitem_t items [] = {
-            { backend, 0, ZMQ_POLLIN, 0 },
-            { frontend, 0, ZMQ_POLLIN, 0 }
-        };
-        // Poll frontend only if we have available workers
-        int rc = zmq_poll (items, available_workers ? 2 : 1, -1);
-        if (rc == -1)
-            break; // Interrupted
-
-        // Handle worker activity on backend
-        if (items [0].revents & ZMQ_POLLIN) {
-            // Queue worker identity for load-balancing
-            char *worker_id = s_recv (backend);
-            assert (available_workers < NBR_WORKERS);
-            worker_queue [available_workers++] = worker_id;
-
-            // Second frame is empty
-            char *empty = s_recv (backend);
-            assert (empty [0] == 0);
-            free (empty);
-
-            // Third frame is READY or else a client reply identity
-            char *client_id = s_recv (backend);
-
-            // If client reply, send rest back to frontend
-            if (strcmp (client_id, "READY") != 0) {
-                empty = s_recv (backend);
-                assert (empty [0] == 0);
-                free (empty);
-                char *reply = s_recv (backend);
-                s_sendmore (frontend, client_id);
-                s_sendmore (frontend, "");
-                s_send (frontend, reply);
-                free (reply);
-                if (--client_nbr == 0)
-                    break; // Exit after N messages
-                }
-                free (client_id);
-            }
-            // Here is how we handle a client request:
-
-            if (items [1].revents & ZMQ_POLLIN) {
-            // Now get next client request, route to last-used worker
-            // Client request is [identity][empty][request]
-            char *client_id = s_recv (frontend);
-            char *empty = s_recv (frontend);
-            assert (empty [0] == 0);
-            free (empty);
-            char *request = s_recv (frontend);
-
-            s_sendmore (backend, worker_queue [0]);
-            s_sendmore (backend, "");
-            s_sendmore (backend, client_id);
-            s_sendmore (backend, "");
-            s_send (backend, request);
-
-            free (client_id);
-            free (request);
-
-            // Dequeue and drop the next worker identity
-            free (worker_queue [0]);
-            DEQUEUE (worker_queue);
-            available_workers--;
-        }
-    }
-    zmq_close (frontend);
-    zmq_close (backend);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="lbbroker: 負荷分散ブローカー"}
+include(examples/EXAMPLE_LANG/lbbroker.EXAMPLE_EXT)
 ~~~
 
 ;The difficult part of this program is (a) the envelopes that each socket reads and writes, and (b) the load balancing algorithm. We'll take these in turn, starting with the message envelope formats.
@@ -1201,133 +827,8 @@ CZMQはソースコードを親しみやすくする、エレガントなオブ�
 
 以下は、負荷分散ブローカーをC言語の高級API(CZMQ)で書き直したものです。
 
-~~~ {caption="lbbroker2: Load balancing broker using high-level API in C"}
-// Load-balancing broker
-// Demonstrates use of the CZMQ API
-
-#include "czmq.h"
-
-#define NBR_CLIENTS 10
-#define NBR_WORKERS 3
-#define WORKER_READY "\001" // Signals worker is ready
-
-// Basic request-reply client using REQ socket
-//
-static void *
-client_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *client = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (client, "ipc://frontend.ipc");
-
-    // Send request, get reply
-    while (true) {
-        zstr_send (client, "HELLO");
-        char *reply = zstr_recv (client);
-        if (!reply)
-            break;
-        printf ("Client: %s\n", reply);
-        free (reply);
-        sleep (1);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-// Worker using REQ socket to do load-balancing
-//
-static void *
-worker_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *worker = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (worker, "ipc://backend.ipc");
-
-    // Tell broker we're ready for work
-    zframe_t *frame = zframe_new (WORKER_READY, 1);
-    zframe_send (&frame, worker, 0);
-
-    // Process messages as they arrive
-    while (true) {
-        zmsg_t *msg = zmsg_recv (worker);
-        if (!msg)
-            break; // Interrupted
-        zframe_reset (zmsg_last (msg), "OK", 2);
-        zmsg_send (&msg, worker);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-// Now we come to the main task. This has the identical functionality to
-// the previous lbbroker broker example, but uses CZMQ to start child
-// threads, to hold the list of workers, and to read and send messages:
-
-int main (void)
-{
-    zctx_t *ctx = zctx_new ();
-    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
-    void *backend = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (frontend, "ipc://frontend.ipc");
-    zsocket_bind (backend, "ipc://backend.ipc");
-
-    int client_nbr;
-    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++)
-        zthread_new (client_task, NULL);
-    int worker_nbr;
-    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++)
-        zthread_new (worker_task, NULL);
-
-    // Queue of available workers
-    zlist_t *workers = zlist_new ();
-
-    // Here is the main loop for the load balancer. It works the same way
-    // as the previous example, but is a lot shorter because CZMQ gives
-    // us an API that does more with fewer calls:
-    while (true) {
-        zmq_pollitem_t items [] = {
-            { backend, 0, ZMQ_POLLIN, 0 },
-            { frontend, 0, ZMQ_POLLIN, 0 }
-        };
-        // Poll frontend only if we have available workers
-        int rc = zmq_poll (items, zlist_size (workers)? 2: 1, -1);
-        if (rc == -1)
-            break; // Interrupted
-
-        // Handle worker activity on backend
-        if (items [0].revents & ZMQ_POLLIN) {
-            // Use worker identity for load-balancing
-            zmsg_t *msg = zmsg_recv (backend);
-            if (!msg)
-                break; // Interrupted
-            zframe_t *identity = zmsg_unwrap (msg);
-            zlist_append (workers, identity);
-
-            // Forward message to client if it's not a READY
-            zframe_t *frame = zmsg_first (msg);
-            if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
-                zmsg_destroy (&msg);
-            else
-                zmsg_send (&msg, frontend);
-        }
-        if (items [1].revents & ZMQ_POLLIN) {
-            // Get client request, route to first available worker
-            zmsg_t *msg = zmsg_recv (frontend);
-            if (msg) {
-                zmsg_wrap (msg, (zframe_t *) zlist_pop (workers));
-                zmsg_send (&msg, backend);
-            }
-        }
-    }
-    // When we're done, clean up properly
-    while (zlist_size (workers)) {
-        zframe_t *frame = (zframe_t *) zlist_pop (workers);
-        zframe_destroy (&frame);
-    }
-    zlist_destroy (&workers);
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="lbbroker2: 高級APIを利用した負荷分散ブローカー"}
+include(examples/EXAMPLE_LANG/lbbroker2.EXAMPLE_EXT)
 ~~~
 
 ;One thing CZMQ provides is clean interrupt handling. This means that Ctrl-C will cause any blocking ØMQ call to exit with a return code -1 and errno set to EINTR. The high-level recv methods will return NULL in such cases. So, you can cleanly exit a loop like this:
@@ -1403,161 +904,8 @@ zloop_destroy (&reactor);
 ;Here is the load balancing broker rewritten once again, this time to use zloop:
 以下の負荷分散ブローカーはzloopを利用して改めて書きなおしたものです。
 
-~~~ {caption="lbbroker3: Load balancing broker using zloop in C"}
-// Load-balancing broker
-// Demonstrates use of the CZMQ API and reactor style
-//
-// The client and worker tasks are identical from the previous example.
-
-#include "czmq.h"
-#define NBR_CLIENTS 10
-#define NBR_WORKERS 3
-#define WORKER_READY "\001" // Signals worker is ready
-
-// Basic request-reply client using REQ socket
-//
-static void *
-client_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *client = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (client, "ipc://frontend.ipc");
-
-    // Send request, get reply
-    while (true) {
-        zstr_send (client, "HELLO");
-        char *reply = zstr_recv (client);
-        if (!reply)
-            break;
-        printf ("Client: %s\n", reply);
-        free (reply);
-        sleep (1);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-// Worker using REQ socket to do load-balancing
-//
-static void *
-worker_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *worker = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (worker, "ipc://backend.ipc");
-
-    // Tell broker we're ready for work
-    zframe_t *frame = zframe_new (WORKER_READY, 1);
-    zframe_send (&frame, worker, 0);
-
-    // Process messages as they arrive
-    while (true) {
-        zmsg_t *msg = zmsg_recv (worker);
-        if (!msg)
-            break; // Interrupted
-        //zframe_print (zmsg_last (msg), "Worker: ");
-        zframe_reset (zmsg_last (msg), "OK", 2);
-        zmsg_send (&msg, worker);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-// Our load-balancer structure, passed to reactor handlers
-typedef struct {
-    void *frontend; // Listen to clients
-    void *backend; // Listen to workers
-    zlist_t *workers; // List of ready workers
-} lbbroker_t;
-
-// In the reactor design, each time a message arrives on a socket, the
-// reactor passes it to a handler function. We have two handlers; one
-// for the frontend, one for the backend:
-
-// Handle input from client, on frontend
-int s_handle_frontend (zloop_t *loop, zmq_pollitem_t *poller, void *arg)
-{
-    lbbroker_t *self = (lbbroker_t *) arg;
-    zmsg_t *msg = zmsg_recv (self->frontend);
-    if (msg) {
-        zmsg_wrap (msg, (zframe_t *) zlist_pop (self->workers));
-        zmsg_send (&msg, self->backend);
-
-        // Cancel reader on frontend if we went from 1 to 0 workers
-        if (zlist_size (self->workers) == 0) {
-            zmq_pollitem_t poller = { self->frontend, 0, ZMQ_POLLIN };
-            zloop_poller_end (loop, &poller);
-        }
-    }
-    return 0;
-}
-
-// Handle input from worker, on backend
-int s_handle_backend (zloop_t *loop, zmq_pollitem_t *poller, void *arg)
-{
-    // Use worker identity for load-balancing
-    lbbroker_t *self = (lbbroker_t *) arg;
-    zmsg_t *msg = zmsg_recv (self->backend);
-    if (msg) {
-        zframe_t *identity = zmsg_unwrap (msg);
-        zlist_append (self->workers, identity);
-
-        // Enable reader on frontend if we went from 0 to 1 workers
-        if (zlist_size (self->workers) == 1) {
-            zmq_pollitem_t poller = { self->frontend, 0, ZMQ_POLLIN };
-            zloop_poller (loop, &poller, s_handle_frontend, self);
-        }
-        // Forward message to client if it's not a READY
-        zframe_t *frame = zmsg_first (msg);
-        if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
-            zmsg_destroy (&msg);
-        else
-            zmsg_send (&msg, self->frontend);
-    }
-    return 0;
-}
-
-// And the main task now sets up child tasks, then starts its reactor.
-// If you press Ctrl-C, the reactor exits and the main task shuts down.
-// Because the reactor is a CZMQ class, this example may not translate
-// into all languages equally well.
-
-int main (void)
-{
-    zctx_t *ctx = zctx_new ();
-    lbbroker_t *self = (lbbroker_t *) zmalloc (sizeof (lbbroker_t));
-    self->frontend = zsocket_new (ctx, ZMQ_ROUTER);
-    self->backend = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (self->frontend, "ipc://frontend.ipc");
-    zsocket_bind (self->backend, "ipc://backend.ipc");
-
-    int client_nbr;
-    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++)
-        zthread_new (client_task, NULL);
-    int worker_nbr;
-    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++)
-        zthread_new (worker_task, NULL);
-
-    // Queue of available workers
-    self->workers = zlist_new ();
-
-    // Prepare reactor and fire it up
-    zloop_t *reactor = zloop_new ();
-    zmq_pollitem_t poller = { self->backend, 0, ZMQ_POLLIN };
-    zloop_poller (reactor, &poller, s_handle_backend, self);
-    zloop_start (reactor);
-    zloop_destroy (&reactor);
-
-    // When we're done, clean up properly
-    while (zlist_size (self->workers)) {
-        zframe_t *frame = (zframe_t *) zlist_pop (self->workers);
-        zframe_destroy (&frame);
-    }
-    zlist_destroy (&self->workers);
-    zctx_destroy (&ctx);
-    free (self);
-    return 0;
-}
+~~~ {caption="lbbroker3: zloopを利用した負荷分散ブローカー"}
+include(examples/EXAMPLE_LANG/lbbroker3.EXAMPLE_EXT)
 ~~~
 
 ;Getting applications to properly shut down when you send them Ctrl-C can be tricky. If you use the zctx class it'll automatically set up signal handling, but your code still has to cooperate. You must break any loop if zmq_poll returns -1 or if any of the zstr_recv, zframe_recv, or zmsg_recv methods return NULL. If you have nested loops, it can be useful to make the outer ones conditional on !zctx_interrupted.
@@ -1604,124 +952,8 @@ ROUTERからDEALERに接続する例では、単一のサーバーが複数の�
 
 以下にサンプルコードを示します。
 
-~~~ {caption="asyncsrv: Asynchronous client/server in C"}
-// Asynchronous client-to-server (DEALER to ROUTER)
-//
-// While this example runs in a single process, that is to make
-// it easier to start and stop the example. Each task has its own
-// context and conceptually acts as a separate process.
-
-#include "czmq.h"
-
-// This is our client task
-// It connects to the server, and then sends a request once per second
-// It collects responses as they arrive, and it prints them out. We will
-// run several client tasks in parallel, each with a different random ID.
-
-static void *
-client_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *client = zsocket_new (ctx, ZMQ_DEALER);
-
-    // Set random identity to make tracing easier
-    char identity [10];
-    sprintf (identity, "%04X-%04X", randof (0x10000), randof (0x10000));
-    zsocket_set_identity (client, identity);
-    zsocket_connect (client, "tcp://localhost:5570");
-
-    zmq_pollitem_t items [] = { { client, 0, ZMQ_POLLIN, 0 } };
-    int request_nbr = 0;
-    while (true) {
-        // Tick once per second, pulling in arriving messages
-        int centitick;
-        for (centitick = 0; centitick < 100; centitick++) {
-            zmq_poll (items, 1, 10 * ZMQ_POLL_MSEC);
-            if (items [0].revents & ZMQ_POLLIN) {
-                zmsg_t *msg = zmsg_recv (client);
-                zframe_print (zmsg_last (msg), identity);
-                zmsg_destroy (&msg);
-            }
-        }
-        zstr_send (client, "request #%d", ++request_nbr);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-// This is our server task.
-// It uses the multithreaded server model to deal requests out to a pool
-// of workers and route replies back to clients. One worker can handle
-// one request at a time but one client can talk to multiple workers at
-// once.
-
-static void server_worker (void *args, zctx_t *ctx, void *pipe);
-
-void *server_task (void *args)
-{
-    // Frontend socket talks to clients over TCP
-    zctx_t *ctx = zctx_new ();
-    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (frontend, "tcp://*:5570");
-
-    // Backend socket talks to workers over inproc
-    void *backend = zsocket_new (ctx, ZMQ_DEALER);
-    zsocket_bind (backend, "inproc://backend");
-
-    // Launch pool of worker threads, precise number is not critical
-    int thread_nbr;
-    for (thread_nbr = 0; thread_nbr < 5; thread_nbr++)
-        zthread_fork (ctx, server_worker, NULL);
-
-    // Connect backend to frontend via a proxy
-    zmq_proxy (frontend, backend, NULL);
-
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-// Each worker task works on one request at a time and sends a random number
-// of replies back, with random delays between replies:
-
-static void
-server_worker (void *args, zctx_t *ctx, void *pipe)
-{
-    void *worker = zsocket_new (ctx, ZMQ_DEALER);
-    zsocket_connect (worker, "inproc://backend");
-
-    while (true) {
-        // The DEALER socket gives us the reply envelope and message
-        zmsg_t *msg = zmsg_recv (worker);
-        zframe_t *identity = zmsg_pop (msg);
-        zframe_t *content = zmsg_pop (msg);
-        assert (content);
-        zmsg_destroy (&msg);
-
-        // Send 0..4 replies back
-        int reply, replies = randof (5);
-        for (reply = 0; reply < replies; reply++) {
-            // Sleep for some fraction of a second
-            zclock_sleep (randof (1000) + 1);
-            zframe_send (&identity, worker, ZFRAME_REUSE + ZFRAME_MORE);
-            zframe_send (&content, worker, ZFRAME_REUSE);
-        }
-        zframe_destroy (&identity);
-        zframe_destroy (&content);
-    }
-}
-
-// The main thread simply starts several clients and a server, and then
-// waits for the server to finish.
-
-int main (void)
-{
-    zthread_new (client_task, NULL);
-    zthread_new (client_task, NULL);
-    zthread_new (client_task, NULL);
-    zthread_new (server_task, NULL);
-    zclock_sleep (5 * 1000); // Run for 5 seconds then quit
-    return 0;
-}
+~~~ {caption="asyncsrv: 非同期なクライアント・サーバー"}
+include(examples/EXAMPLE_LANG/asyncsrv.EXAMPLE_EXT)
 ~~~
 
 ;The example runs in one process, with multiple threads simulating a real multiprocess architecture. When you run the example, you'll see three clients (each with a random ID), printing out the replies they get from the server. Look carefully and you'll see each client task gets 0 or more replies per request.
@@ -1797,7 +1029,7 @@ int main (void)
 これらを一歩一歩説明しながら作っていきます。
 私達の顧客が緊急に私達を呼び出して大規模なクラウドコンピューティング施設を設計するように要求してきたとします。
 彼らは多くのデータセンターにわたって動作するクライアントとワーカーのクラスターが協調することで全体が機能するクラウドを構想しています。
-我々には理論に裏付けされた知識と経験が十分にあるので、私達はØMQを使用してシュミレーションを行うことを提案します。
+我々には理論に裏付けされた知識と経験が十分にあるので、私達はØMQを使用してシミュレーションを行うことを提案します。
 その顧客は自分の上司が心変わりする前に、Twitter上でのØMQの賞賛を読ませて予算を確保することに同意させます。
 
 ### 要件の確認
@@ -2057,68 +1289,8 @@ int main (void)
 
 これがコードです。
 
-~~~ {caption="peering1: Prototype state flow in C"}
-// Broker peering simulation (part 1)
-// Prototypes the state flow
-
-#include "czmq.h"
-
-int main (int argc, char *argv [])
-{
-    // First argument is this broker's name
-    // Other arguments are our peers' names
-    //
-    if (argc < 2) {
-        printf ("syntax: peering1 me {you}…\n");
-        return 0;
-    }
-    char *self = argv [1];
-    printf ("I: preparing broker at %s…\n", self);
-    srandom ((unsigned) time (NULL));
-
-    zctx_t *ctx = zctx_new ();
-
-    // Bind state backend to endpoint
-    void *statebe = zsocket_new (ctx, ZMQ_PUB);
-    zsocket_bind (statebe, "ipc://%s-state.ipc", self);
-
-    // Connect statefe to all peers
-    void *statefe = zsocket_new (ctx, ZMQ_SUB);
-    zsocket_set_subscribe (statefe, "");
-    int argn;
-    for (argn = 2; argn < argc; argn++) {
-        char *peer = argv [argn];
-        printf ("I: connecting to state backend at '%s'\n", peer);
-        zsocket_connect (statefe, "ipc://%s-state.ipc", peer);
-    }
-    // The main loop sends out status messages to peers, and collects
-    // status messages back from peers. The zmq_poll timeout defines
-    // our own heartbeat:
-
-    while (true) {
-        // Poll for activity, or 1 second timeout
-        zmq_pollitem_t items [] = { { statefe, 0, ZMQ_POLLIN, 0 } };
-        int rc = zmq_poll (items, 1, 1000 * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break; // Interrupted
-
-        // Handle incoming status messages
-        if (items [0].revents & ZMQ_POLLIN) {
-            char *peer_name = zstr_recv (statefe);
-            char *available = zstr_recv (statefe);
-            printf ("%s - %s workers free\n", peer_name, available);
-            free (peer_name);
-            free (available);
-        }
-        else {
-            // Send random values for worker availability
-            zstr_sendm (statebe, self);
-            zstr_send (statebe, "%d", randof (10));
-        }
-    }
-    zctx_destroy (&ctx);
-    return EXIT_SUCCESS;
-}
+~~~ {caption="peering1: state flowのプロトタイプ"}
+include(examples/EXAMPLE_LANG/peering1.EXAMPLE_EXT)
 ~~~
 
 ;Notes about this code:
@@ -2201,7 +1373,7 @@ peering1 DC3 DC1 DC2  #  Start DC3 and connect to DC1 and DC2
 
 ;Randomly sending tasks to a peer broker rather than a worker simulates work distribution across the cluster. It's dumb, but that is fine for this stage.
 
-他のブローカーをワーカーと見なして分散させるのではなく、単純にランダムで選択するというのはあまり賢く無いですが、ここではこれで行きます。
+他のブローカーをワーカーと見なして分散させるのではなく、単純にランダムで選択するというのはあまり賢く無いですが、ここではこれを行います。
 
 ;We use broker identities to route messages between brokers. Each broker has a name that we provide on the command line in this simple prototype. As long as these names don't overlap with the ØMQ-generated UUIDs used for client nodes, we can figure out whether to route a reply back to a client or to a broker.
 
@@ -2214,224 +1386,8 @@ peering1 DC3 DC1 DC2  #  Start DC3 and connect to DC1 and DC2
 ここからが実際に動作するコードです。
 注目に値する部分は、「ここからが面白い」とコメントで書いてあります。
 
-~~~ {caption="peering2: Prototype local and cloud flow in C"}
-// Broker peering simulation (part 2)
-// Prototypes the request-reply flow
-
-#include "czmq.h"
-#define NBR_CLIENTS 10
-#define NBR_WORKERS 3
-#define WORKER_READY "\001" // Signals worker is ready
-
-// Our own name; in practice this would be configured per node
-static char *self;
-
-// The client task does a request-reply dialog using a standard
-// synchronous REQ socket:
-
-static void *
-client_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *client = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (client, "ipc://%s-localfe.ipc", self);
-
-    while (true) {
-        // Send request, get reply
-        zstr_send (client, "HELLO");
-        char *reply = zstr_recv (client);
-        if (!reply)
-            break; // Interrupted
-        printf ("Client: %s\n", reply);
-        free (reply);
-        sleep (1);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-// The worker task plugs into the load-balancer using a REQ
-// socket:
-
-static void *
-worker_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *worker = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (worker, "ipc://%s-localbe.ipc", self);
-
-    // Tell broker we're ready for work
-    zframe_t *frame = zframe_new (WORKER_READY, 1);
-    zframe_send (&frame, worker, 0);
-
-    // Process messages as they arrive
-    while (true) {
-        zmsg_t *msg = zmsg_recv (worker);
-        if (!msg)
-            break; // Interrupted
-
-        zframe_print (zmsg_last (msg), "Worker: ");
-        zframe_reset (zmsg_last (msg), "OK", 2);
-        zmsg_send (&msg, worker);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-// The main task begins by setting-up its frontend and backend sockets
-// and then starting its client and worker tasks:
-
-int main (int argc, char *argv [])
-{
-    // First argument is this broker's name
-    // Other arguments are our peers' names
-    //
-    if (argc < 2) {
-        printf ("syntax: peering2 me {you}…\n");
-        return 0;
-    }
-    self = argv [1];
-    printf ("I: preparing broker at %s…\n", self);
-    srandom ((unsigned) time (NULL));
-
-    zctx_t *ctx = zctx_new ();
-
-    // Bind cloud frontend to endpoint
-    void *cloudfe = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_set_identity (cloudfe, self);
-    zsocket_bind (cloudfe, "ipc://%s-cloud.ipc", self);
-
-    // Connect cloud backend to all peers
-    void *cloudbe = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_set_identity (cloudbe, self);
-    int argn;
-    for (argn = 2; argn < argc; argn++) {
-        char *peer = argv [argn];
-        printf ("I: connecting to cloud frontend at '%s'\n", peer);
-        zsocket_connect (cloudbe, "ipc://%s-cloud.ipc", peer);
-    }
-    // Prepare local frontend and backend
-    void *localfe = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (localfe, "ipc://%s-localfe.ipc", self);
-    void *localbe = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (localbe, "ipc://%s-localbe.ipc", self);
-
-    // Get user to tell us when we can start…
-    printf ("Press Enter when all brokers are started: ");
-    getchar ();
-
-    // Start local workers
-    int worker_nbr;
-    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++)
-        zthread_new (worker_task, NULL);
-
-    // Start local clients
-    int client_nbr;
-    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++)
-        zthread_new (client_task, NULL);
-
-    // ここからが面白い
-    // Here, we handle the request-reply flow. We're using load-balancing
-    // to poll workers at all times, and clients only when there are one //
-    // or more workers available.//
-
-    // Least recently used queue of available workers
-    int capacity = 0;
-    zlist_t *workers = zlist_new ();
-
-    while (true) {
-        // First, route any waiting replies from workers
-        zmq_pollitem_t backends [] = {
-            { localbe, 0, ZMQ_POLLIN, 0 },
-            { cloudbe, 0, ZMQ_POLLIN, 0 }
-        };
-        // If we have no workers, wait indefinitely
-        int rc = zmq_poll (backends, 2,
-        capacity? 1000 * ZMQ_POLL_MSEC: -1);
-        if (rc == -1)
-        break; // Interrupted
-
-        // Handle reply from local worker
-        zmsg_t *msg = NULL;
-        if (backends [0].revents & ZMQ_POLLIN) {
-            msg = zmsg_recv (localbe);
-            if (!msg)
-                break; // Interrupted
-            zframe_t *identity = zmsg_unwrap (msg);
-            zlist_append (workers, identity);
-            capacity++;
-
-         // If it's READY, don't route the message any further
-         zframe_t *frame = zmsg_first (msg);
-         if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
-             zmsg_destroy (&msg);
-    }
-    // Or handle reply from peer broker
-    else
-    if (backends [1].revents & ZMQ_POLLIN) {
-        msg = zmsg_recv (cloudbe);
-        if (!msg)
-            break; // Interrupted
-        // We don't use peer broker identity for anything
-        zframe_t *identity = zmsg_unwrap (msg);
-        zframe_destroy (&identity);
-    }
-    // Route reply to cloud if it's addressed to a broker
-    for (argn = 2; msg && argn < argc; argn++) {
-        char *data = (char *) zframe_data (zmsg_first (msg));
-        size_t size = zframe_size (zmsg_first (msg));
-        if (size == strlen (argv [argn])
-            && memcmp (data, argv [argn], size) == 0)
-            zmsg_send (&msg, cloudfe);
-    }
-    // Route reply to client if we still need to
-    if (msg)
-        zmsg_send (&msg, localfe);
-
-    // Now we route as many client requests as we have worker capacity
-    // for. We may reroute requests from our local frontend, but not from //
-    // the cloud frontend. We reroute randomly now, just to test things
-    // out. In the next version, we'll do this properly by calculating
-    // cloud capacity://
-
-    while (capacity) {
-        zmq_pollitem_t frontends [] = {
-            { localfe, 0, ZMQ_POLLIN, 0 },
-            { cloudfe, 0, ZMQ_POLLIN, 0 }
-        };
-        rc = zmq_poll (frontends, 2, 0);
-        assert (rc >= 0);
-        int reroutable = 0;
-        // We'll do peer brokers first, to prevent starvation
-        if (frontends [1].revents & ZMQ_POLLIN) {
-            msg = zmsg_recv (cloudfe);
-            reroutable = 0;
-        }
-        else
-        if (frontends [0].revents & ZMQ_POLLIN) {
-            msg = zmsg_recv (localfe);
-            reroutable = 1;
-        }
-        else
-            break; // No work, go back to backends
-
-        // If reroutable, send to cloud 20% of the time
-        // Here we'd normally use cloud status information
-        //
-        if (reroutable && argc > 2 && randof (5) == 0) {
-            // Route to random broker peer
-            int peer = randof (argc - 2) + 2;
-            zmsg_pushmem (msg, argv [peer], strlen (argv [peer]));
-            zmsg_send (&msg, cloudbe);
-        }
-        else {
-            zframe_t *frame = (zframe_t *) zlist_pop (workers);
-            zmsg_wrap (msg, frame);
-            zmsg_send (&msg, localbe);
-            capacity--;
-        }
-    }
-}
+~~~ {caption="peering2: localとcloud flowのプロトタイプ"}
+include(examples/EXAMPLE_LANG/peering2.EXAMPLE_EXT)
 ~~~
 
 ;Run this by, for instance, starting two instances of the broker in two windows:
@@ -2472,309 +1428,8 @@ peering2 you me
 これはクライアントとワーカーを含む負荷分散クラスターを上手くシミュレートしています。
 コードはこちらです。
 
-~~~ {caption="peering3: Full cluster simulation in C"}
-//  Broker peering simulation (part 3)
-//  Prototypes the full flow of status and tasks
-
-#include "czmq.h"
-#define NBR_CLIENTS 10
-#define NBR_WORKERS 5
-#define WORKER_READY   "\001"      //  Signals worker is ready
-
-//  Our own name; in practice, this would be configured per node
-static char *self;
-
-//  .split client task
-//  This is the client task. It issues a burst of requests and then
-//  sleeps for a few seconds. This simulates sporadic activity; when
-//  a number of clients are active at once, the local workers should
-//  be overloaded. The client uses a REQ socket for requests and also
-//  pushes statistics to the monitor socket:
-
-static void *
-client_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *client = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (client, "ipc://%s-localfe.ipc", self);
-    void *monitor = zsocket_new (ctx, ZMQ_PUSH);
-    zsocket_connect (monitor, "ipc://%s-monitor.ipc", self);
-
-    while (true) {
-        sleep (randof (5));
-        int burst = randof (15);
-        while (burst--) {
-            char task_id [5];
-            sprintf (task_id, "%04X", randof (0x10000));
-
-            //  Send request with random hex ID
-            zstr_send (client, task_id);
-
-            //  Wait max ten seconds for a reply, then complain
-            zmq_pollitem_t pollset [1] = { { client, 0, ZMQ_POLLIN, 0 } };
-            int rc = zmq_poll (pollset, 1, 10 * 1000 * ZMQ_POLL_MSEC);
-            if (rc == -1)
-                break;          //  Interrupted
-
-            if (pollset [0].revents & ZMQ_POLLIN) {
-                char *reply = zstr_recv (client);
-                if (!reply)
-                    break;              //  Interrupted
-                //  Worker is supposed to answer us with our task id
-                assert (streq (reply, task_id));
-                zstr_send (monitor, "%s", reply);
-                free (reply);
-            }
-            else {
-                zstr_send (monitor,
-                    "E: CLIENT EXIT - lost task %s", task_id);
-                return NULL;
-            }
-        }
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-//  .split worker task
-//  This is the worker task, which uses a REQ socket to plug into the
-//  load-balancer. It's the same stub worker task that you've seen in 
-//  other examples:
-
-static void *
-worker_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *worker = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (worker, "ipc://%s-localbe.ipc", self);
-
-    //  Tell broker we're ready for work
-    zframe_t *frame = zframe_new (WORKER_READY, 1);
-    zframe_send (&frame, worker, 0);
-
-    //  Process messages as they arrive
-    while (true) {
-        zmsg_t *msg = zmsg_recv (worker);
-        if (!msg)
-            break;              //  Interrupted
-
-        //  Workers are busy for 0/1 seconds
-        sleep (randof (2));
-        zmsg_send (&msg, worker);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-//  .split main task
-//  The main task begins by setting up all its sockets. The local frontend
-//  talks to clients, and our local backend talks to workers. The cloud
-//  frontend talks to peer brokers as if they were clients, and the cloud
-//  backend talks to peer brokers as if they were workers. The state
-//  backend publishes regular state messages, and the state frontend
-//  subscribes to all state backends to collect these messages. Finally,
-//  we use a PULL monitor socket to collect printable messages from tasks:
-
-int main (int argc, char *argv [])
-{
-    //  First argument is this broker's name
-    //  Other arguments are our peers' names
-    if (argc < 2) {
-        printf ("syntax: peering3 me {you}...\n");
-        return 0;
-    }
-    self = argv [1];
-    printf ("I: preparing broker at %s...\n", self);
-    srandom ((unsigned) time (NULL));
-
-    //  Prepare local frontend and backend
-    zctx_t *ctx = zctx_new ();
-    void *localfe = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (localfe, "ipc://%s-localfe.ipc", self);
-
-    void *localbe = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (localbe, "ipc://%s-localbe.ipc", self);
-
-    //  Bind cloud frontend to endpoint
-    void *cloudfe = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_set_identity (cloudfe, self);
-    zsocket_bind (cloudfe, "ipc://%s-cloud.ipc", self);
-    
-    //  Connect cloud backend to all peers
-    void *cloudbe = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_set_identity (cloudbe, self);
-    int argn;
-    for (argn = 2; argn < argc; argn++) {
-        char *peer = argv [argn];
-        printf ("I: connecting to cloud frontend at '%s'\n", peer);
-        zsocket_connect (cloudbe, "ipc://%s-cloud.ipc", peer);
-    }
-    //  Bind state backend to endpoint
-    void *statebe = zsocket_new (ctx, ZMQ_PUB);
-    zsocket_bind (statebe, "ipc://%s-state.ipc", self);
-
-    //  Connect state frontend to all peers
-    void *statefe = zsocket_new (ctx, ZMQ_SUB);
-    zsocket_set_subscribe (statefe, "");
-    for (argn = 2; argn < argc; argn++) {
-        char *peer = argv [argn];
-        printf ("I: connecting to state backend at '%s'\n", peer);
-        zsocket_connect (statefe, "ipc://%s-state.ipc", peer);
-    }
-    //  Prepare monitor socket
-    void *monitor = zsocket_new (ctx, ZMQ_PULL);
-    zsocket_bind (monitor, "ipc://%s-monitor.ipc", self);
-
-    //  .split start child tasks
-    //  After binding and connecting all our sockets, we start our child
-    //  tasks - workers and clients:
-
-    int worker_nbr;
-    for (worker_nbr = 0; worker_nbr < NBR_WORKERS; worker_nbr++)
-        zthread_new (worker_task, NULL);
-
-    //  Start local clients
-    int client_nbr;
-    for (client_nbr = 0; client_nbr < NBR_CLIENTS; client_nbr++)
-        zthread_new (client_task, NULL);
-
-    //  Queue of available workers
-    int local_capacity = 0;
-    int cloud_capacity = 0;
-    zlist_t *workers = zlist_new ();
-
-    //  .split main loop
-    //  The main loop has two parts. First, we poll workers and our two service
-    //  sockets (statefe and monitor), in any case. If we have no ready workers,
-    //  then there's no point in looking at incoming requests. These can remain
-    //  on their internal 0MQ queues:
-
-    while (true) {
-        zmq_pollitem_t primary [] = {
-            { localbe, 0, ZMQ_POLLIN, 0 },
-            { cloudbe, 0, ZMQ_POLLIN, 0 },
-            { statefe, 0, ZMQ_POLLIN, 0 },
-            { monitor, 0, ZMQ_POLLIN, 0 }
-        };
-        //  If we have no workers ready, wait indefinitely
-        int rc = zmq_poll (primary, 4,
-            local_capacity? 1000 * ZMQ_POLL_MSEC: -1);
-        if (rc == -1)
-            break;              //  Interrupted
-
-        //  Track if capacity changes during this iteration
-        int previous = local_capacity;
-        zmsg_t *msg = NULL;     //  Reply from local worker
-
-        if (primary [0].revents & ZMQ_POLLIN) {
-            msg = zmsg_recv (localbe);
-            if (!msg)
-                break;          //  Interrupted
-            zframe_t *identity = zmsg_unwrap (msg);
-            zlist_append (workers, identity);
-            local_capacity++;
-
-            //  If it's READY, don't route the message any further
-            zframe_t *frame = zmsg_first (msg);
-            if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
-                zmsg_destroy (&msg);
-        }
-        //  Or handle reply from peer broker
-        else
-        if (primary [1].revents & ZMQ_POLLIN) {
-            msg = zmsg_recv (cloudbe);
-            if (!msg)
-                break;          //  Interrupted
-            //  We don't use peer broker identity for anything
-            zframe_t *identity = zmsg_unwrap (msg);
-            zframe_destroy (&identity);
-        }
-        //  Route reply to cloud if it's addressed to a broker
-        for (argn = 2; msg && argn < argc; argn++) {
-            char *data = (char *) zframe_data (zmsg_first (msg));
-            size_t size = zframe_size (zmsg_first (msg));
-            if (size == strlen (argv [argn])
-            &&  memcmp (data, argv [argn], size) == 0)
-                zmsg_send (&msg, cloudfe);
-        }
-        //  Route reply to client if we still need to
-        if (msg)
-            zmsg_send (&msg, localfe);
-
-        //  .split handle state messages
-        //  If we have input messages on our statefe or monitor sockets, we
-        //  can process these immediately:
-
-        if (primary [2].revents & ZMQ_POLLIN) {
-            char *peer = zstr_recv (statefe);
-            char *status = zstr_recv (statefe);
-            cloud_capacity = atoi (status);
-            free (peer);
-            free (status);
-        }
-        if (primary [3].revents & ZMQ_POLLIN) {
-            char *status = zstr_recv (monitor);
-            printf ("%s\n", status);
-            free (status);
-        }
-        //  .split route client requests
-        //  Now route as many clients requests as we can handle. If we have
-        //  local capacity, we poll both localfe and cloudfe. If we have cloud
-        //  capacity only, we poll just localfe. We route any request locally
-        //  if we can, else we route to the cloud.
-
-        while (local_capacity + cloud_capacity) {
-            zmq_pollitem_t secondary [] = {
-                { localfe, 0, ZMQ_POLLIN, 0 },
-                { cloudfe, 0, ZMQ_POLLIN, 0 }
-            };
-            if (local_capacity)
-                rc = zmq_poll (secondary, 2, 0);
-            else
-                rc = zmq_poll (secondary, 1, 0);
-            assert (rc >= 0);
-
-            if (secondary [0].revents & ZMQ_POLLIN)
-                msg = zmsg_recv (localfe);
-            else
-            if (secondary [1].revents & ZMQ_POLLIN)
-                msg = zmsg_recv (cloudfe);
-            else
-                break;      //  No work, go back to primary
-
-            if (local_capacity) {
-                zframe_t *frame = (zframe_t *) zlist_pop (workers);
-                zmsg_wrap (msg, frame);
-                zmsg_send (&msg, localbe);
-                local_capacity--;
-            }
-            else {
-                //  Route to random broker peer
-                int peer = randof (argc - 2) + 2;
-                zmsg_pushmem (msg, argv [peer], strlen (argv [peer]));
-                zmsg_send (&msg, cloudbe);
-            }
-        }
-        //  .split broadcast capacity
-        //  We broadcast capacity messages to other peers; to reduce chatter,
-        //  we do this only if our capacity changed.
-
-        if (local_capacity != previous) {
-            //  We stick our own identity onto the envelope
-            zstr_sendm (statebe, self);
-            //  Broadcast new capacity
-            zstr_send (statebe, "%d", local_capacity);
-        }
-    }
-    //  When we're done, clean up properly
-    while (zlist_size (workers)) {
-        zframe_t *frame = (zframe_t *) zlist_pop (workers);
-        zframe_destroy (&frame);
-    }
-    zlist_destroy (&workers);
-    zctx_destroy (&ctx);
-    return EXIT_SUCCESS;
-}
+~~~ {caption="peering3: 完全なクラスターシミュレーション"}
+include(examples/EXAMPLE_LANG/peering3.EXAMPLE_EXT)
 ~~~
 
 ;It's a nontrivial program and took about a day to get working. These are the highlights:

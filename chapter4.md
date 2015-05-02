@@ -1,7 +1,7 @@
 # 信頼性のあるリクエスト・応答パターン
 ;Chapter 3 - Advanced Request-Reply Patterns covered advanced uses of ØMQ's request-reply pattern with working examples. This chapter looks at the general question of reliability and builds a set of reliable messaging patterns on top of ØMQ's core request-reply pattern.
 
-第3章「リクエスト・応答パターンの応用」ではリクエスト・応答パターンの高度な活用方法を実際に動作する例と一緒に見てきました。
+第3章「リクエスト・応答パターンの応用」ではリクエスト・応答パターンの高度な応用方法を実際に動作する例と共に見てきました。
 この章では一般的な問題である信頼性を確保する方法、および様々な信頼性のあるメッセージングパターンの構築方法を紹介します。
 
 ;In this chapter, we focus heavily on user-space request-reply patterns, reusable models that help you design your own ØMQ architectures:
@@ -104,8 +104,8 @@ REQソケットがREPソケットに対して同期的に送受信を行うリ�
 ;* Multiple clients talking to multiple servers with no intermediary proxies. Use case: distributed services such as name resolution. Types of failure we aim to handle: service crashes and restarts, service busy looping, service overload, and network disconnects.
 
 * 複数のクライアントが単一のサーバーと直接通信する場合。考えられる障害はサーバーの再起動やクラッシュ、ネットワークの切断です。
-* 複数のクライアントがブローカーなどのプロキシーを経由して複数のワーカーと通信する場合。これはサービス指向のトランザクションを処理する場合などに使われます。考えられる障害はワーカーの再起動やクラッシュ、ワーカーのビジーループ、ワーカーの高負荷、キューのクラッシュや再起動、ネットワークの切断です。
-* 複数のクライアントが複数のサーバーとプロキシーを経由せずに通信する場合。名前解決などによるサービスの分散方法です。考えられる障害はサービスのビジーループ、サービスの高負荷、ネットワークの切断です。
+* 複数のクライアントがブローカーなどのプロキシを経由して複数のワーカーと通信する場合。これはサービス指向のトランザクションを処理する場合などに使われます。考えられる障害はワーカーの再起動やクラッシュ、ワーカーのビジーループ、ワーカーの高負荷、キューのクラッシュや再起動、ネットワークの切断です。
+* 複数のクライアントが複数のサーバーとプロキシを経由せずに通信する場合。名前解決などによるサービスの分散方法です。考えられる障害はサービスのビジーループ、サービスの高負荷、ネットワークの切断です。
 
 ;Each of these approaches has its trade-offs and often you'll mix them. We'll look at all three in detail.
 
@@ -135,128 +135,15 @@ REQソケットを利用して厳密に送信・受信の順序を守らなか�
 
 この問題の強引で手っ取り早い解決方法は、REQソケットでエラーが発生したら、一旦クローズして再接続する事です。
 
-~~~ {caption="lpclient: Lazy Pirate client in C"}
-//  Lazy Pirate client
-//  Use zmq_poll to do a safe request-reply
-//  To run, start lpserver and then randomly kill/restart it
-
-#include "czmq.h"
-#define REQUEST_TIMEOUT     2500    //  msecs, (> 1000!)
-#define REQUEST_RETRIES     3       //  Before we abandon
-#define SERVER_ENDPOINT     "tcp://localhost:5555"
-
-int main (void)
-{
-    zctx_t *ctx = zctx_new ();
-    printf ("I: connecting to server...\n");
-    void *client = zsocket_new (ctx, ZMQ_REQ);
-    assert (client);
-    zsocket_connect (client, SERVER_ENDPOINT);
-
-    int sequence = 0;
-    int retries_left = REQUEST_RETRIES;
-    while (retries_left && !zctx_interrupted) {
-        //  We send a request, then we work to get a reply
-        char request [10];
-        sprintf (request, "%d", ++sequence);
-        zstr_send (client, request);
-
-        int expect_reply = 1;
-        while (expect_reply) {
-            //  Poll socket for a reply, with timeout
-            zmq_pollitem_t items [] = { { client, 0, ZMQ_POLLIN, 0 } };
-            int rc = zmq_poll (items, 1, REQUEST_TIMEOUT * ZMQ_POLL_MSEC);
-            if (rc == -1)
-                break;          //  Interrupted
-
-            //  .split process server reply
-            //  Here we process a server reply and exit our loop if the
-            //  reply is valid. If we didn't a reply we close the client
-            //  socket and resend the request. We try a number of times
-            //  before finally abandoning:
-            
-            if (items [0].revents & ZMQ_POLLIN) {
-                //  We got a reply from the server, must match sequence
-                char *reply = zstr_recv (client);
-                if (!reply)
-                    break;      //  Interrupted
-                if (atoi (reply) == sequence) {
-                    printf ("I: server replied OK (%s)\n", reply);
-                    retries_left = REQUEST_RETRIES;
-                    expect_reply = 0;
-                }
-                else
-                    printf ("E: malformed reply from server: %s\n",
-                        reply);
-
-                free (reply);
-            }
-            else
-            if (--retries_left == 0) {
-                printf ("E: server seems to be offline, abandoning\n");
-                break;
-            }
-            else {
-                printf ("W: no response from server, retrying...\n");
-                //  Old socket is confused; close it and open a new one
-                zsocket_destroy (ctx, client);
-                printf ("I: reconnecting to server...\n");
-                client = zsocket_new (ctx, ZMQ_REQ);
-                zsocket_connect (client, SERVER_ENDPOINT);
-                //  Send request again, on new socket
-                zstr_send (client, request);
-            }
-        }
-    }
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="lpclient: ものぐさ海賊クライアント"}
+include(examples/EXAMPLE_LANG/lpclient.EXAMPLE_EXT)
 ~~~
 
 ;Run this together with the matching server:
 こちらのサーバーも実行してください。
 
-~~~ {caption="lpserver: Lazy Pirate server in C"}
-//  Lazy Pirate server
-//  Binds REQ socket to tcp://*:5555
-//  Like hwserver except:
-//   - echoes request as-is
-//   - randomly runs slowly, or exits to simulate a crash.
-
-#include "zhelpers.h"
-
-int main (void)
-{
-    srandom ((unsigned) time (NULL));
-
-    void *context = zmq_ctx_new ();
-    void *server = zmq_socket (context, ZMQ_REP);
-    zmq_bind (server, "tcp://*:5555");
-
-    int cycles = 0;
-    while (1) {
-        char *request = s_recv (server);
-        cycles++;
-
-        //  Simulate various problems, after a few cycles
-        if (cycles > 3 && randof (3) == 0) {
-            printf ("I: simulating a crash\n");
-            break;
-        }
-        else
-        if (cycles > 3 && randof (3) == 0) {
-            printf ("I: simulating CPU overload\n");
-            sleep (2);
-        }
-        printf ("I: normal request (%s)\n", request);
-        sleep (1);              //  Do some heavy work
-        s_send (server, request);
-        free (request);
-    }
-    zmq_close (server);
-    zmq_ctx_destroy (context);
-    return 0;
-}
+~~~ {caption="lpserver: ものぐさ海賊サーバー"}
+include(examples/EXAMPLE_LANG/lpclient.EXAMPLE_EXT)
 ~~~
 
 ![ものぐさ海賊パターン](images/fig47.eps)
@@ -325,99 +212,34 @@ E: server seems to be offline, abandoning
 ## 信頼性のあるキューイング(単純な海賊パターン)
 ;Our second approach extends the Lazy Pirate pattern with a queue proxy that lets us talk, transparently, to multiple servers, which we can more accurately call "workers". We'll develop this in stages, starting with a minimal working model, the Simple Pirate pattern.
 
-2番目に紹介する方法は複数のサーバーと透過的に通信を行うキュープロキシーを用いてものぐさ海賊パターンを拡張します。
+2番目に紹介する方法は複数のサーバーと透過的に通信を行うキュープロキシを用いてものぐさ海賊パターンを拡張します。
 まずは単純な海賊パターンが最低限動作する小さなモデルで実装していきます。
 
 ;In all these Pirate patterns, workers are stateless. If the application requires some shared state, such as a shared database, we don't know about it as we design our messaging framework. Having a queue proxy means workers can come and go without clients knowing anything about it. If one worker dies, another takes over. This is a nice, simple topology with only one real weakness, namely the central queue itself, which can become a problem to manage, and a single point of failure.
 
 全ての海賊パターンにおいて、ワーカーはステートレスで動作します。
-もしアプリケーションがデーターベースなどを利用して状態を共有したい場合でもメッセージングフレームワークはこれに関知しません。
-キュープロキシーはクライアントについて何も知らずにやってくるメッセージをそのまま転送するだけの役割を持っています。
+もしアプリケーションがデーターベースなどに状態を保存したい場合でもメッセージングフレームワークはこれに関知しません。
+キュープロキシはクライアントについて何も知らずにやってくるメッセージをそのまま転送するだけの役割を持っています。
 こうした方がワーカーが落ちてしまった場合でも別のワーカーにメッセージを渡すだけで良いので都合が良いのです。
-これは単純でなかなか良いトポロジーですが中央キューが単一故障点になってしまうという欠点があります。
+これはなかなか単純で良いトポロジーですが中央キューが単一故障点になってしまうという欠点があります。
 
 ![単純な海賊パターン](images/fig48.eps)
 
 ;The basis for the queue proxy is the load balancing broker from Chapter 3 - Advanced Request-Reply Patterns. What is the very minimum we need to do to handle dead or blocked workers? Turns out, it's surprisingly little. We already have a retry mechanism in the client. So using the load balancing pattern will work pretty well. This fits with ØMQ's philosophy that we can extend a peer-to-peer pattern like request-reply by plugging naive proxies in the middle.
 
-負荷分散を行うキュープロキシーについては第3章「リクエスト・応答パターンの応用」で見てきました。
-ワーカーが落ちたりブロックしたりする障害に対して最低限どの様な対応を行う必要があるでしょうか?
+キュープロキシの基本的な仕組みは第3章「リクエスト・応答パターンの応用」で紹介した負荷分散ブローカーと同じです。
+ワーカーが落ちたりブロックしたりする障害に対して、どの様な対応を最低限行う必要があるでしょうか?
 クライアントには再試行が実装されていますので、負荷分散パターンが効果的に機能します。
-;[TODO]
-;これはまさしくØMQの哲学に適合し、中間にプロキシーを介する事でP2Pパターンに拡張することが可能です。
+これはまさしくØMQの哲学に適合し、中間にプロキシを介する事でP2Pパターンに拡張することが可能です。
 
 ;We don't need a special client; we're still using the Lazy Pirate client. Here is the queue, which is identical to the main task of the load balancing broker:
 
 これには特別なクライアントは必要ありません。
 先程のものぐさ海賊パターンと同じクライアントを利用します。
-こちらが負荷分散ブローカーと同等の機能を持ったキュープロキシーのコードです。
+こちらが負荷分散ブローカーと同等の機能を持ったキュープロキシのコードです。
 
-~~~ {caption="spqueue: Simple Pirate queue in C"}
-//  Simple Pirate broker
-//  This is identical to load-balancing pattern, with no reliability
-//  mechanisms. It depends on the client for recovery. Runs forever.
-
-#include "czmq.h"
-#define WORKER_READY   "\001"      //  Signals worker is ready
-
-int main (void)
-{
-    zctx_t *ctx = zctx_new ();
-    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
-    void *backend = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (frontend, "tcp://*:5555");    //  For clients
-    zsocket_bind (backend,  "tcp://*:5556");    //  For workers
-
-    //  Queue of available workers
-    zlist_t *workers = zlist_new ();
-    
-    //  The body of this example is exactly the same as lbbroker2.
-    //  .skip
-    while (true) {
-        zmq_pollitem_t items [] = {
-            { backend,  0, ZMQ_POLLIN, 0 },
-            { frontend, 0, ZMQ_POLLIN, 0 }
-        };
-        //  Poll frontend only if we have available workers
-        int rc = zmq_poll (items, zlist_size (workers)? 2: 1, -1);
-        if (rc == -1)
-            break;              //  Interrupted
-
-        //  Handle worker activity on backend
-        if (items [0].revents & ZMQ_POLLIN) {
-            //  Use worker identity for load-balancing
-            zmsg_t *msg = zmsg_recv (backend);
-            if (!msg)
-                break;          //  Interrupted
-            zframe_t *identity = zmsg_unwrap (msg);
-            zlist_append (workers, identity);
-
-            //  Forward message to client if it's not a READY
-            zframe_t *frame = zmsg_first (msg);
-            if (memcmp (zframe_data (frame), WORKER_READY, 1) == 0)
-                zmsg_destroy (&msg);
-            else
-                zmsg_send (&msg, frontend);
-        }
-        if (items [1].revents & ZMQ_POLLIN) {
-            //  Get client request, route to first available worker
-            zmsg_t *msg = zmsg_recv (frontend);
-            if (msg) {
-                zmsg_wrap (msg, (zframe_t *) zlist_pop (workers));
-                zmsg_send (&msg, backend);
-            }
-        }
-    }
-    //  When we're done, clean up properly
-    while (zlist_size (workers)) {
-        zframe_t *frame = (zframe_t *) zlist_pop (workers);
-        zframe_destroy (&frame);
-    }
-    zlist_destroy (&workers);
-    zctx_destroy (&ctx);
-    return 0;
-    //  .until
-}
+~~~ {caption="spqueue: 単純な海賊ブローカー"}
+include(examples/EXAMPLE_LANG/spqueue.EXAMPLE_EXT)
 ~~~
 
 ;Here is the worker, which takes the Lazy Pirate server and adapts it for the load balancing pattern (using the REQ "ready" signaling):
@@ -425,64 +247,14 @@ int main (void)
 こちらがワーカーのコードです。
 ものぐさ海賊パターンのサーバーと同じような仕組みを負荷分散ブローカーに組み込んでいます。
 
-~~~ {caption="spworker: Simple Pirate worker in C"}
-//  Simple Pirate worker
-//  Connects REQ socket to tcp://*:5556
-//  Implements worker part of load-balancing
-
-#include "czmq.h"
-#define WORKER_READY   "\001"      //  Signals worker is ready
-
-int main (void)
-{
-    zctx_t *ctx = zctx_new ();
-    void *worker = zsocket_new (ctx, ZMQ_REQ);
-
-    //  Set random identity to make tracing easier
-    srandom ((unsigned) time (NULL));
-    char identity [10];
-    sprintf (identity, "%04X-%04X", randof (0x10000), randof (0x10000));
-    zmq_setsockopt (worker, ZMQ_IDENTITY, identity, strlen (identity));
-    zsocket_connect (worker, "tcp://localhost:5556");
-
-    //  Tell broker we're ready for work
-    printf ("I: (%s) worker ready\n", identity);
-    zframe_t *frame = zframe_new (WORKER_READY, 1);
-    zframe_send (&frame, worker, 0);
-
-    int cycles = 0;
-    while (true) {
-        zmsg_t *msg = zmsg_recv (worker);
-        if (!msg)
-            break;              //  Interrupted
-
-        //  Simulate various problems, after a few cycles
-        cycles++;
-        if (cycles > 3 && randof (5) == 0) {
-            printf ("I: (%s) simulating a crash\n", identity);
-            zmsg_destroy (&msg);
-            break;
-        }
-        else
-        if (cycles > 3 && randof (5) == 0) {
-            printf ("I: (%s) simulating CPU overload\n", identity);
-            sleep (3);
-            if (zctx_interrupted)
-                break;
-        }
-        printf ("I: (%s) normal reply\n", identity);
-        sleep (1);              //  Do some heavy work
-        zmsg_send (&msg, worker);
-    }
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="spworker: 単純な海賊ワーカー"}
+include(examples/EXAMPLE_LANG/spworker.EXAMPLE_EXT)
 ~~~
 
 ;To test this, start a handful of workers, a Lazy Pirate client, and the queue, in any order. You'll see that the workers eventually all crash and burn, and the client retries and then gives up. The queue never stops, and you can restart workers and clients ad nauseam. This model works with any number of clients and workers.
 
-これをテストするには幾つかのワーカーとものぐさ海賊クライアント、およびキュープロキシーを起動してやります。順序はなんでも構いません。
-そうするとワーカーがクラッシュしたり固まったりするでしょうが、キュープロキシーは機能を停止することなく動作し続けます。
+これをテストするには幾つかのワーカーとものぐさ海賊クライアント、およびキュープロキシを起動してやります。順序はなんでも構いません。
+そうするとワーカーがクラッシュしたり固まったりするでしょうが、キュープロキシは機能を停止することなく動作し続けます。
 このモデルはクライアントやワーカーの数が幾つでも問題なく動作します。
 
 ## 頑丈なキューイング (神経質な海賊パターン)
@@ -496,8 +268,8 @@ int main (void)
 ;* It's not robust in the face of a queue crash and restart. The client will recover, but the workers won't. While ØMQ will reconnect workers' sockets automatically, as far as the newly started queue is concerned, the workers haven't signaled ready, so don't exist. To fix this, we have to do heartbeating from queue to worker so that the worker can detect when the queue has gone away.
 ;* The queue does not detect worker failure, so if a worker dies while idle, the queue can't remove it from its worker queue until the queue sends it a request. The client waits and retries for nothing. It's not a critical problem, but it's not nice. To make this work properly, we do heartbeating from worker to queue, so that the queue can detect a lost worker at any stage.
 
-* キューの再起動やクラッシュに対して堅牢ではありません。またクライアントは自動的に復旧しますがワーカーはそうではありません。ワーカーのØMQソケットは自動的に再接続を行ってくれますが、準備完了メッセージを送信していませんのでメッセージが送られてきません。これを修正するにはキュープロキシーからワーカーに対してハートビートを送って、ワーカーの存在を確認する必要があります。
-* キュープロキシーはワーカーの障害を検知できないため、待機中のワーカーが落ちてしまった場合にワーカーキューから該当のワーカーを削除することが出来ません。存在しないワーカーに対してメッセージを送信すると、クライアントは待たされてしまうでしょう。これは致命的な問題ではありませんが良くもありません。これを上手く動作させるには、ワーカーからキューに対してハートビートを送るワーカーの障害をキューがワーが検知できるようにするよ良いでしょう。
+* キューの再起動やクラッシュに対して堅牢ではありません。またクライアントは自動的に復旧しますがワーカーはそうではありません。ワーカーのØMQソケットは自動的に再接続を行ってくれますが、準備完了メッセージを送信していませんのでメッセージが送られてきません。これを修正するにはキュープロキシからワーカーに対してハートビートを送って、ワーカーの存在を確認する必要があります。
+* キュープロキシはワーカーの障害を検知できないため、待機中のワーカーが落ちてしまった場合にワーカーキューから該当のワーカーを削除することが出来ません。存在しないワーカーに対してメッセージを送信すると、クライアントは待たされてしまうでしょう。これは致命的な問題ではありませんが良くもありません。これを上手く動作させるには、ワーカーからキューに対してハートビートを送るワーカーの障害をキューがワーが検知できるようにするよ良いでしょう。
 
 ;We'll fix these in a properly pedantic Paranoid Pirate Pattern.
 
@@ -513,342 +285,23 @@ int main (void)
 ;We're still using the Lazy Pirate client. Here is the Paranoid Pirate queue proxy:
 
 今回もまたものぐさ海賊パターンのクライアントを使いまわします。
-こちらは神経質な海賊キュープロキシーです。
+こちらは神経質な海賊キュープロキシです。
 
-~~~ {caption="ppqueue: Paranoid Pirate queue in C"}
-//  Paranoid Pirate queue
-
-#include "czmq.h"
-#define HEARTBEAT_LIVENESS  3       //  3-5 is reasonable
-#define HEARTBEAT_INTERVAL  1000    //  msecs
-
-//  Paranoid Pirate Protocol constants
-#define PPP_READY       "\001"      //  Signals worker is ready
-#define PPP_HEARTBEAT   "\002"      //  Signals worker heartbeat
-
-//  .split worker class structure
-//  Here we define the worker class; a structure and a set of functions that
-//  act as constructor, destructor, and methods on worker objects:
-
-typedef struct {
-    zframe_t *identity;         //  Identity of worker
-    char *id_string;            //  Printable identity
-    int64_t expiry;             //  Expires at this time
-} worker_t;
-
-//  Construct new worker
-static worker_t *
-s_worker_new (zframe_t *identity)
-{
-    worker_t *self = (worker_t *) zmalloc (sizeof (worker_t));
-    self->identity = identity;
-    self->id_string = zframe_strhex (identity);
-    self->expiry = zclock_time ()
-                 + HEARTBEAT_INTERVAL * HEARTBEAT_LIVENESS;
-    return self;
-}
-
-//  Destroy specified worker object, including identity frame.
-static void
-s_worker_destroy (worker_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        worker_t *self = *self_p;
-        zframe_destroy (&self->identity);
-        free (self->id_string);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  .split worker ready method
-//  The ready method puts a worker to the end of the ready list:
-
-static void
-s_worker_ready (worker_t *self, zlist_t *workers)
-{
-    worker_t *worker = (worker_t *) zlist_first (workers);
-    while (worker) {
-        if (streq (self->id_string, worker->id_string)) {
-            zlist_remove (workers, worker);
-            s_worker_destroy (&worker);
-            break;
-        }
-        worker = (worker_t *) zlist_next (workers);
-    }
-    zlist_append (workers, self);
-}
-
-//  .split get next available worker
-//  The next method returns the next available worker identity:
-
-static zframe_t *
-s_workers_next (zlist_t *workers)
-{
-    worker_t *worker = zlist_pop (workers);
-    assert (worker);
-    zframe_t *frame = worker->identity;
-    worker->identity = NULL;
-    s_worker_destroy (&worker);
-    return frame;
-}
-
-//  .split purge expired workers
-//  The purge method looks for and kills expired workers. We hold workers
-//  from oldest to most recent, so we stop at the first alive worker:
-
-static void
-s_workers_purge (zlist_t *workers)
-{
-    worker_t *worker = (worker_t *) zlist_first (workers);
-    while (worker) {
-        if (zclock_time () < worker->expiry)
-            break;              //  Worker is alive, we're done here
-
-        zlist_remove (workers, worker);
-        s_worker_destroy (&worker);
-        worker = (worker_t *) zlist_first (workers);
-    }
-}
-
-//  .split main task
-//  The main task is a load-balancer with heartbeating on workers so we
-//  can detect crashed or blocked worker tasks:
-
-int main (void)
-{
-    zctx_t *ctx = zctx_new ();
-    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
-    void *backend = zsocket_new (ctx, ZMQ_ROUTER);
-    zsocket_bind (frontend, "tcp://*:5555");    //  For clients
-    zsocket_bind (backend,  "tcp://*:5556");    //  For workers
-
-    //  List of available workers
-    zlist_t *workers = zlist_new ();
-
-    //  Send out heartbeats at regular intervals
-    uint64_t heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
-
-    while (true) {
-        zmq_pollitem_t items [] = {
-            { backend,  0, ZMQ_POLLIN, 0 },
-            { frontend, 0, ZMQ_POLLIN, 0 }
-        };
-        //  Poll frontend only if we have available workers
-        int rc = zmq_poll (items, zlist_size (workers)? 2: 1,
-            HEARTBEAT_INTERVAL * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;              //  Interrupted
-
-        //  Handle worker activity on backend
-        if (items [0].revents & ZMQ_POLLIN) {
-            //  Use worker identity for load-balancing
-            zmsg_t *msg = zmsg_recv (backend);
-            if (!msg)
-                break;          //  Interrupted
-
-            //  Any sign of life from worker means it's ready
-            zframe_t *identity = zmsg_unwrap (msg);
-            worker_t *worker = s_worker_new (identity);
-            s_worker_ready (worker, workers);
-
-            //  Validate control message, or return reply to client
-            if (zmsg_size (msg) == 1) {
-                zframe_t *frame = zmsg_first (msg);
-                if (memcmp (zframe_data (frame), PPP_READY, 1)
-                &&  memcmp (zframe_data (frame), PPP_HEARTBEAT, 1)) {
-                    printf ("E: invalid message from worker");
-                    zmsg_dump (msg);
-                }
-                zmsg_destroy (&msg);
-            }
-            else
-                zmsg_send (&msg, frontend);
-        }
-        if (items [1].revents & ZMQ_POLLIN) {
-            //  Now get next client request, route to next worker
-            zmsg_t *msg = zmsg_recv (frontend);
-            if (!msg)
-                break;          //  Interrupted
-            zmsg_push (msg, s_workers_next (workers));
-            zmsg_send (&msg, backend);
-        }
-        //  .split handle heartbeating
-        //  We handle heartbeating after any socket activity. First, we send
-        //  heartbeats to any idle workers if it's time. Then, we purge any
-        //  dead workers:
-        if (zclock_time () >= heartbeat_at) {
-            worker_t *worker = (worker_t *) zlist_first (workers);
-            while (worker) {
-                zframe_send (&worker->identity, backend,
-                             ZFRAME_REUSE + ZFRAME_MORE);
-                zframe_t *frame = zframe_new (PPP_HEARTBEAT, 1);
-                zframe_send (&frame, backend, 0);
-                worker = (worker_t *) zlist_next (workers);
-            }
-            heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
-        }
-        s_workers_purge (workers);
-    }
-    //  When we're done, clean up properly
-    while (zlist_size (workers)) {
-        worker_t *worker = (worker_t *) zlist_pop (workers);
-        s_worker_destroy (&worker);
-    }
-    zlist_destroy (&workers);
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="ppqueue: 神経質な海賊キュー"}
+include(examples/EXAMPLE_LANG/ppqueue.EXAMPLE_EXT)
 ~~~
 
 ;The queue extends the load balancing pattern with heartbeating of workers. Heartbeating is one of those "simple" things that can be difficult to get right. I'll explain more about that in a second.
 
-このキュープロキシーは負荷分散パターンを拡張してワーカーに対してハートビートを送信しています。
+このキュープロキシは負荷分散パターンを拡張してワーカーに対してハートビートを送信しています。
 ハートビートは単純な機能ですが、正しくこれを行うのは難しいので後ほど詳しく説明します。
 
 ;Here is the Paranoid Pirate worker:
 
 以下は神経質な海賊パターンのワーカーです。
 
-~~~ {caption="ppworker: Paranoid Pirate worker in C"}
-//  Paranoid Pirate worker
-
-#include "czmq.h"
-#define HEARTBEAT_LIVENESS  3       //  3-5 is reasonable
-#define HEARTBEAT_INTERVAL  1000    //  msecs
-#define INTERVAL_INIT       1000    //  Initial reconnect
-#define INTERVAL_MAX       32000    //  After exponential backoff
-
-//  Paranoid Pirate Protocol constants
-#define PPP_READY       "\001"      //  Signals worker is ready
-#define PPP_HEARTBEAT   "\002"      //  Signals worker heartbeat
-
-//  Helper function that returns a new configured socket
-//  connected to the Paranoid Pirate queue
-
-static void *
-s_worker_socket (zctx_t *ctx) {
-    void *worker = zsocket_new (ctx, ZMQ_DEALER);
-    zsocket_connect (worker, "tcp://localhost:5556");
-
-    //  Tell queue we're ready for work
-    printf ("I: worker ready\n");
-    zframe_t *frame = zframe_new (PPP_READY, 1);
-    zframe_send (&frame, worker, 0);
-
-    return worker;
-}
-
-//  .split main task
-//  We have a single task that implements the worker side of the
-//  Paranoid Pirate Protocol (PPP). The interesting parts here are
-//  the heartbeating, which lets the worker detect if the queue has
-//  died, and vice versa:
-
-int main (void)
-{
-    zctx_t *ctx = zctx_new ();
-    void *worker = s_worker_socket (ctx);
-
-    //  If liveness hits zero, queue is considered disconnected
-    size_t liveness = HEARTBEAT_LIVENESS;
-    size_t interval = INTERVAL_INIT;
-
-    //  Send out heartbeats at regular intervals
-    uint64_t heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
-
-    srandom ((unsigned) time (NULL));
-    int cycles = 0;
-    while (true) {
-        zmq_pollitem_t items [] = { { worker,  0, ZMQ_POLLIN, 0 } };
-        int rc = zmq_poll (items, 1, HEARTBEAT_INTERVAL * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;              //  Interrupted
-
-        if (items [0].revents & ZMQ_POLLIN) {
-            //  Get message
-            //  - 3-part envelope + content -> request
-            //  - 1-part HEARTBEAT -> heartbeat
-            zmsg_t *msg = zmsg_recv (worker);
-            if (!msg)
-                break;          //  Interrupted
-
-            //  .split simulating problems
-            //  To test the robustness of the queue implementation we 
-            //  simulate various typical problems, such as the worker
-            //  crashing or running very slowly. We do this after a few
-            //  cycles so that the architecture can get up and running
-            //  first:
-            if (zmsg_size (msg) == 3) {
-                cycles++;
-                if (cycles > 3 && randof (5) == 0) {
-                    printf ("I: simulating a crash\n");
-                    zmsg_destroy (&msg);
-                    break;
-                }
-                else
-                if (cycles > 3 && randof (5) == 0) {
-                    printf ("I: simulating CPU overload\n");
-                    sleep (3);
-                    if (zctx_interrupted)
-                        break;
-                }
-                printf ("I: normal reply\n");
-                zmsg_send (&msg, worker);
-                liveness = HEARTBEAT_LIVENESS;
-                sleep (1);              //  Do some heavy work
-                if (zctx_interrupted)
-                    break;
-            }
-            else
-            //  .split handle heartbeats
-            //  When we get a heartbeat message from the queue, it means the
-            //  queue was (recently) alive, so we must reset our liveness
-            //  indicator:
-            if (zmsg_size (msg) == 1) {
-                zframe_t *frame = zmsg_first (msg);
-                if (memcmp (zframe_data (frame), PPP_HEARTBEAT, 1) == 0)
-                    liveness = HEARTBEAT_LIVENESS;
-                else {
-                    printf ("E: invalid message\n");
-                    zmsg_dump (msg);
-                }
-                zmsg_destroy (&msg);
-            }
-            else {
-                printf ("E: invalid message\n");
-                zmsg_dump (msg);
-            }
-            interval = INTERVAL_INIT;
-        }
-        else
-        //  .split detecting a dead queue
-        //  If the queue hasn't sent us heartbeats in a while, destroy the
-        //  socket and reconnect. This is the simplest most brutal way of
-        //  discarding any messages we might have sent in the meantime:
-        if (--liveness == 0) {
-            printf ("W: heartbeat failure, can't reach queue\n");
-            printf ("W: reconnecting in %zd msec...\n", interval);
-            zclock_sleep (interval);
-
-            if (interval < INTERVAL_MAX)
-                interval *= 2;
-            zsocket_destroy (ctx, worker);
-            worker = s_worker_socket (ctx);
-            liveness = HEARTBEAT_LIVENESS;
-        }
-        //  Send heartbeat to queue if it's time
-        if (zclock_time () > heartbeat_at) {
-            heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
-            printf ("I: worker heartbeat\n");
-            zframe_t *frame = zframe_new (PPP_HEARTBEAT, 1);
-            zframe_send (&frame, worker, 0);
-        }
-    }
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="ppworker: 神経質な海賊ワーカー"}
+include(examples/EXAMPLE_LANG/ppworker.EXAMPLE_EXT)
 ~~~
 
 ;Some comments about this example:
@@ -877,7 +330,7 @@ lpclient &
 ;You should see the workers die one-by-one as they simulate a crash, and the client eventually give up. You can stop and restart the queue and both client and workers will reconnect and carry on. And no matter what you do to queues and workers, the client will never get an out-of-order reply: the whole chain either works, or the client abandons.
 
 これを実行すると、ワーカーがひとつずつクラッシュして終了していくことを確認できるでしょう。
-キュープロキシーを再起動した場合でもワーカーは再接続して動作を継続し、ワーカーが1つでも動いていればクライアントは正しい応答を受け取る事が出来るでしょう。
+キュープロキシを再起動した場合でもワーカーは再接続して動作を継続し、ワーカーが1つでも動いていればクライアントは正しい応答を受け取る事が出来るでしょう。
 
 ## ハートビート
 ;Heartbeating solves the problem of knowing whether a peer is alive or dead. This is not an issue specific to ØMQ. TCP has a long timeout (30 minutes or so), that means that it can be impossible to know whether a peer has died, been disconnected, or gone on a weekend to Prague with a case of vodka, a redhead, and a large expense account.
@@ -1133,68 +586,25 @@ Majordomoプロトコルを実装するには、クライアントとワーカ�
 
 ;Majordomo has two halves, a client side and a worker side. Because we'll write both client and worker applications, we will need two APIs. Here is a sketch for the client API, using a simple object-oriented approach:
 
-Majordomoプロトコルははクライアント側とワーカー側の2種類に分かれますので2つのAPIが必要です。
+Majordomoプロトコルはクライアント側とワーカー側の2種類に分かれますので2つのAPIが必要です。
 こちらは単純なオブジェクト指向を利用して設計したクライアント側のAPIです。
 
 ~~~
-// Majordomo Protocol client example
-// Uses the mdcli API to hide all MDP aspects
-
-// Lets us build this source without creating a library
-#include "mdcliapi.c"
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
-
-    int count;
-    for (count = 0; count < 100000; count++) {
-        zmsg_t *request = zmsg_new ();
-        zmsg_pushstr (request, "Hello world");
-        zmsg_t *reply = mdcli_send (session, "echo", &request);
-        if (reply)
-            zmsg_destroy (&reply);
-        else
-            break; // Interrupt or failure
-    }
-    printf ("%d requests/replies processed\n", count);
-    mdcli_destroy (&session);
-    return 0;
-}
+mdcli_t *mdcli_new     (char *broker);
+void     mdcli_destroy (mdcli_t **self_p);
+zmsg_t  *mdcli_send    (mdcli_t *self, char *service, zmsg_t **request_p);
 ~~~
 
 ;That's it. We open a session to the broker, send a request message, get a reply message back, and eventually close the connection. Here's a sketch for the worker API:
 
 これだけです。
 ブローカとのセッションを張り、リクエストを送信して応答を受け取って接続を切っています。
-今度はワーカー側のAPIです。
+こちらはワーカー側のAPIです。
 
 ~~~
-
-
-// Majordomo Protocol worker example
-// Uses the mdwrk API to hide all MDP aspects
-
-// Lets us build this source without creating a library
-#include "mdwrkapi.c"
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-    mdwrk_t *session = mdwrk_new (
-        "tcp://localhost:5555", "echo", verbose);
-
-    zmsg_t *reply = NULL;
-    while (true) {
-        zmsg_t *request = mdwrk_recv (session, &reply);
-        if (request == NULL)
-            break; // Worker was interrupted
-        reply = request; // Echo is complex… :-)
-    }
-    mdwrk_destroy (&session);
-    return 0;
-}
+mdwrk_t *mdwrk_new     (char *broker,char *service);
+void     mdwrk_destroy (mdwrk_t **self_p);
+zmsg_t  *mdwrk_recv    (mdwrk_t *self, zmsg_t *reply);
 ~~~
 
 ;It's more or less symmetrical, but the worker dialog is a little different. The first time a worker does a recv(), it passes a null reply. Thereafter, it passes the current reply, and gets a new request.
@@ -1205,171 +615,8 @@ int main (int argc, char *argv [])
 The client and worker APIs were fairly simple to construct because they're heavily based on the Paranoid Pirate code we already developed. Here is the client API:
 クライアントとワーカーは既に実装済みの神経質な海賊パターンのコードを流用する事で、今回のAPIはとても簡単に設計することができました。
 
-~~~ {caption="mdcliapi: Majordomo client API in C"}
-//  mdcliapi class - Majordomo Protocol Client API
-//  Implements the MDP/Worker spec at http://rfc.zeromq.org/spec:7.
-
-#include "mdcliapi.h"
-
-//  Structure of our class
-//  We access these properties only via class methods
-
-struct _mdcli_t {
-    zctx_t *ctx;                //  Our context
-    char *broker;
-    void *client;               //  Socket to broker
-    int verbose;                //  Print activity to stdout
-    int timeout;                //  Request timeout
-    int retries;                //  Request retries
-};
-
-//  Connect or reconnect to broker
-
-void s_mdcli_connect_to_broker (mdcli_t *self)
-{
-    if (self->client)
-        zsocket_destroy (self->ctx, self->client);
-    self->client = zsocket_new (self->ctx, ZMQ_REQ);
-    zmq_connect (self->client, self->broker);
-    if (self->verbose)
-        zclock_log ("I: connecting to broker at %s...", self->broker);
-}
-
-//  .split constructor and destructor
-//  Here we have the constructor and destructor for our class:
-
-//  Constructor
-
-mdcli_t *
-mdcli_new (char *broker, int verbose)
-{
-    assert (broker);
-
-    mdcli_t *self = (mdcli_t *) zmalloc (sizeof (mdcli_t));
-    self->ctx = zctx_new ();
-    self->broker = strdup (broker);
-    self->verbose = verbose;
-    self->timeout = 2500;           //  msecs
-    self->retries = 3;              //  Before we abandon
-
-    s_mdcli_connect_to_broker (self);
-    return self;
-}
-
-//  Destructor
-
-void
-mdcli_destroy (mdcli_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        mdcli_t *self = *self_p;
-        zctx_destroy (&self->ctx);
-        free (self->broker);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  .split configure retry behavior
-//  These are the class methods. We can set the request timeout and number
-//  of retry attempts before sending requests:
-
-//  Set request timeout
-
-void
-mdcli_set_timeout (mdcli_t *self, int timeout)
-{
-    assert (self);
-    self->timeout = timeout;
-}
-
-//  Set request retries
-
-void
-mdcli_set_retries (mdcli_t *self, int retries)
-{
-    assert (self);
-    self->retries = retries;
-}
-
-//  .split send request and wait for reply
-//  Here is the {{send}} method. It sends a request to the broker and gets
-//  a reply even if it has to retry several times. It takes ownership of 
-//  the request message, and destroys it when sent. It returns the reply
-//  message, or NULL if there was no reply after multiple attempts:
-
-zmsg_t *
-mdcli_send (mdcli_t *self, char *service, zmsg_t **request_p)
-{
-    assert (self);
-    assert (request_p);
-    zmsg_t *request = *request_p;
-
-    //  Prefix request with protocol frames
-    //  Frame 1: "MDPCxy" (six bytes, MDP/Client x.y)
-    //  Frame 2: Service name (printable string)
-    zmsg_pushstr (request, service);
-    zmsg_pushstr (request, MDPC_CLIENT);
-    if (self->verbose) {
-        zclock_log ("I: send request to '%s' service:", service);
-        zmsg_dump (request);
-    }
-    int retries_left = self->retries;
-    while (retries_left && !zctx_interrupted) {
-        zmsg_t *msg = zmsg_dup (request);
-        zmsg_send (&msg, self->client);
-
-        zmq_pollitem_t items [] = {
-            { self->client, 0, ZMQ_POLLIN, 0 }
-        };
-        //  .split body of send 
-        //  On any blocking call, {{libzmq}} will return -1 if there was
-        //  an error; we could in theory check for different error codes,
-        //  but in practice it's OK to assume it was {{EINTR}} (Ctrl-C):
-        
-        int rc = zmq_poll (items, 1, self->timeout * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;          //  Interrupted
-
-        //  If we got a reply, process it
-        if (items [0].revents & ZMQ_POLLIN) {
-            zmsg_t *msg = zmsg_recv (self->client);
-            if (self->verbose) {
-                zclock_log ("I: received reply:");
-                zmsg_dump (msg);
-            }
-            //  We would handle malformed replies better in real code
-            assert (zmsg_size (msg) >= 3);
-
-            zframe_t *header = zmsg_pop (msg);
-            assert (zframe_streq (header, MDPC_CLIENT));
-            zframe_destroy (&header);
-
-            zframe_t *reply_service = zmsg_pop (msg);
-            assert (zframe_streq (reply_service, service));
-            zframe_destroy (&reply_service);
-
-            zmsg_destroy (&request);
-            return msg;     //  Success
-        }
-        else
-        if (--retries_left) {
-            if (self->verbose)
-                zclock_log ("W: no reply, reconnecting...");
-            s_mdcli_connect_to_broker (self);
-        }
-        else {
-            if (self->verbose)
-                zclock_log ("W: permanent error, abandoning");
-            break;          //  Give up
-        }
-    }
-    if (zctx_interrupted)
-        printf ("W: interrupt received, killing client...\n");
-    zmsg_destroy (&request);
-    return NULL;
-}
+~~~ {caption="mdcliapi: MajordomoクライアントAPI"}
+include(examples/EXAMPLE_LANG/mdcliapi.EXAMPLE_EXT)
 ~~~
 
 ;Let's see how the client API looks in action, with an example test program that does 100K request-reply cycles:
@@ -1377,299 +624,25 @@ mdcli_send (mdcli_t *self, char *service, zmsg_t **request_p)
 それではクライアントAPIを動かしてみましょう。
 こちらは10万回のリクエスト・応答のサイクルを実行するテストコードです。
 
-~~~{caption="mdclient: Majordomo client application in C"}
-//  Majordomo Protocol client example
-//  Uses the mdcli API to hide all MDP aspects
-
-//  Lets us build this source without creating a library
-#include "mdcliapi.c"
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
-
-    int count;
-    for (count = 0; count < 100000; count++) {
-        zmsg_t *request = zmsg_new ();
-        zmsg_pushstr (request, "Hello world");
-        zmsg_t *reply = mdcli_send (session, "echo", &request);
-        if (reply)
-            zmsg_destroy (&reply);
-        else
-            break;              //  Interrupt or failure
-    }
-    printf ("%d requests/replies processed\n", count);
-    mdcli_destroy (&session);
-    return 0;
-}
+~~~ {caption="mdclient: Majordomoクライアントアプリケーション"}
+include(examples/EXAMPLE_LANG/mdclient.EXAMPLE_EXT)
 ~~~
 
 ;And here is the worker API:
 
 そしてこちらはワーカーのAPIです。
 
-~~~ {caption="mdwrkapi: Majordomo worker API in C"}
-//  mdwrkapi class - Majordomo Protocol Worker API
-//  Implements the MDP/Worker spec at http://rfc.zeromq.org/spec:7.
-
-#include "mdwrkapi.h"
-
-//  Reliability parameters
-#define HEARTBEAT_LIVENESS  3       //  3-5 is reasonable
-
-//  .split worker class structure
-//  This is the structure of a worker API instance. We use a pseudo-OO
-//  approach in a lot of the C examples, as well as the CZMQ binding:
-
-//  Structure of our class
-//  We access these properties only via class methods
-
-struct _mdwrk_t {
-    zctx_t *ctx;                //  Our context
-    char *broker;
-    char *service;
-    void *worker;               //  Socket to broker
-    int verbose;                //  Print activity to stdout
-
-    //  Heartbeat management
-    uint64_t heartbeat_at;      //  When to send HEARTBEAT
-    size_t liveness;            //  How many attempts left
-    int heartbeat;              //  Heartbeat delay, msecs
-    int reconnect;              //  Reconnect delay, msecs
-
-    int expect_reply;           //  Zero only at start
-    zframe_t *reply_to;         //  Return identity, if any
-};
-
-//  .split utility functions
-//  We have two utility functions; to send a message to the broker and
-//  to (re)connect to the broker:
-
-//  Send message to broker
-//  If no msg is provided, creates one internally
-
-static void
-s_mdwrk_send_to_broker (mdwrk_t *self, char *command, char *option,
-                        zmsg_t *msg)
-{
-    msg = msg? zmsg_dup (msg): zmsg_new ();
-
-    //  Stack protocol envelope to start of message
-    if (option)
-        zmsg_pushstr (msg, option);
-    zmsg_pushstr (msg, command);
-    zmsg_pushstr (msg, MDPW_WORKER);
-    zmsg_pushstr (msg, "");
-
-    if (self->verbose) {
-        zclock_log ("I: sending %s to broker",
-            mdps_commands [(int) *command]);
-        zmsg_dump (msg);
-    }
-    zmsg_send (&msg, self->worker);
-}
-
-//  Connect or reconnect to broker
-
-void s_mdwrk_connect_to_broker (mdwrk_t *self)
-{
-    if (self->worker)
-        zsocket_destroy (self->ctx, self->worker);
-    self->worker = zsocket_new (self->ctx, ZMQ_DEALER);
-    zmq_connect (self->worker, self->broker);
-    if (self->verbose)
-        zclock_log ("I: connecting to broker at %s...", self->broker);
-
-    //  Register service with broker
-    s_mdwrk_send_to_broker (self, MDPW_READY, self->service, NULL);
-
-    //  If liveness hits zero, queue is considered disconnected
-    self->liveness = HEARTBEAT_LIVENESS;
-    self->heartbeat_at = zclock_time () + self->heartbeat;
-}
-
-//  .split constructor and destructor
-//  Here we have the constructor and destructor for our mdwrk class:
-
-//  Constructor
-
-mdwrk_t *
-mdwrk_new (char *broker,char *service, int verbose)
-{
-    assert (broker);
-    assert (service);
-
-    mdwrk_t *self = (mdwrk_t *) zmalloc (sizeof (mdwrk_t));
-    self->ctx = zctx_new ();
-    self->broker = strdup (broker);
-    self->service = strdup (service);
-    self->verbose = verbose;
-    self->heartbeat = 2500;     //  msecs
-    self->reconnect = 2500;     //  msecs
-
-    s_mdwrk_connect_to_broker (self);
-    return self;
-}
-
-//  Destructor
-
-void
-mdwrk_destroy (mdwrk_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        mdwrk_t *self = *self_p;
-        zctx_destroy (&self->ctx);
-        free (self->broker);
-        free (self->service);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  .split configure worker
-//  We provide two methods to configure the worker API. You can set the
-//  heartbeat interval and retries to match the expected network performance.
-
-//  Set heartbeat delay
-
-void
-mdwrk_set_heartbeat (mdwrk_t *self, int heartbeat)
-{
-    self->heartbeat = heartbeat;
-}
-
-//  Set reconnect delay
-
-void
-mdwrk_set_reconnect (mdwrk_t *self, int reconnect)
-{
-    self->reconnect = reconnect;
-}
-
-//  .split recv method
-//  This is the {{recv}} method; it's a little misnamed because it first sends
-//  any reply and then waits for a new request. If you have a better name
-//  for this, let me know.
-
-//  Send reply, if any, to broker and wait for next request.
-
-zmsg_t *
-mdwrk_recv (mdwrk_t *self, zmsg_t **reply_p)
-{
-    //  Format and send the reply if we were provided one
-    assert (reply_p);
-    zmsg_t *reply = *reply_p;
-    assert (reply || !self->expect_reply);
-    if (reply) {
-        assert (self->reply_to);
-        zmsg_wrap (reply, self->reply_to);
-        s_mdwrk_send_to_broker (self, MDPW_REPLY, NULL, reply);
-        zmsg_destroy (reply_p);
-    }
-    self->expect_reply = 1;
-
-    while (true) {
-        zmq_pollitem_t items [] = {
-            { self->worker,  0, ZMQ_POLLIN, 0 } };
-        int rc = zmq_poll (items, 1, self->heartbeat * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;              //  Interrupted
-
-        if (items [0].revents & ZMQ_POLLIN) {
-            zmsg_t *msg = zmsg_recv (self->worker);
-            if (!msg)
-                break;          //  Interrupted
-            if (self->verbose) {
-                zclock_log ("I: received message from broker:");
-                zmsg_dump (msg);
-            }
-            self->liveness = HEARTBEAT_LIVENESS;
-
-            //  Don't try to handle errors, just assert noisily
-            assert (zmsg_size (msg) >= 3);
-
-            zframe_t *empty = zmsg_pop (msg);
-            assert (zframe_streq (empty, ""));
-            zframe_destroy (&empty);
-
-            zframe_t *header = zmsg_pop (msg);
-            assert (zframe_streq (header, MDPW_WORKER));
-            zframe_destroy (&header);
-
-            zframe_t *command = zmsg_pop (msg);
-            if (zframe_streq (command, MDPW_REQUEST)) {
-                //  We should pop and save as many addresses as there are
-                //  up to a null part, but for now, just save one...
-                self->reply_to = zmsg_unwrap (msg);
-                zframe_destroy (&command);
-                //  .split process message
-                //  Here is where we actually have a message to process; we
-                //  return it to the caller application:
-                
-                return msg;     //  We have a request to process
-            }
-            else
-            if (zframe_streq (command, MDPW_HEARTBEAT))
-                ;               //  Do nothing for heartbeats
-            else
-            if (zframe_streq (command, MDPW_DISCONNECT))
-                s_mdwrk_connect_to_broker (self);
-            else {
-                zclock_log ("E: invalid input message");
-                zmsg_dump (msg);
-            }
-            zframe_destroy (&command);
-            zmsg_destroy (&msg);
-        }
-        else
-        if (--self->liveness == 0) {
-            if (self->verbose)
-                zclock_log ("W: disconnected from broker - retrying...");
-            zclock_sleep (self->reconnect);
-            s_mdwrk_connect_to_broker (self);
-        }
-        //  Send HEARTBEAT if it's time
-        if (zclock_time () > self->heartbeat_at) {
-            s_mdwrk_send_to_broker (self, MDPW_HEARTBEAT, NULL, NULL);
-            self->heartbeat_at = zclock_time () + self->heartbeat;
-        }
-    }
-    if (zctx_interrupted)
-        printf ("W: interrupt received, killing worker...\n");
-    return NULL;
-}
+~~~ {caption="mdwrkapi: MajordomoワーカーAPI"}
+include(examples/EXAMPLE_LANG/mdwrkapi.EXAMPLE_EXT)
 ~~~
 
 ;Let's see how the worker API looks in action, with an example test program that implements an echo service:
 
 
-ワーカーのAPIを用いてechoサービスを実装するテストコードを見て行きましょう。
+ワーカーのAPIを用いてechoサービスを実装するテストコードを見て見ましょう。
 
-~~~ {caption="mdworker: Majordomo worker application in C"}
-//  Majordomo Protocol worker example
-//  Uses the mdwrk API to hide all MDP aspects
-
-//  Lets us build this source without creating a library
-#include "mdwrkapi.c"
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-    mdwrk_t *session = mdwrk_new (
-        "tcp://localhost:5555", "echo", verbose);
-
-    zmsg_t *reply = NULL;
-    while (true) {
-        zmsg_t *request = mdwrk_recv (session, &reply);
-        if (request == NULL)
-            break;              //  Worker was interrupted
-        reply = request;        //  Echo is complex... :-)
-    }
-    mdwrk_destroy (&session);
-    return 0;
-}
+~~~ {caption="mdworker: Majordomoワーカーアプリケーション"}
+include(examples/EXAMPLE_LANG/mdworker.EXAMPLE_EXT)
 ~~~
 
 ;Here are some things to note about the worker API code:
@@ -1680,13 +653,18 @@ int main (int argc, char *argv [])
 ;* The worker API doesn't do an exponential back-off; it's not worth the extra complexity.
 ;* The APIs don't do any error reporting. If something isn't as expected, they raise an assertion (or exception depending on the language). This is ideal for a reference implementation, so any protocol errors show immediately. For real applications, the API should be robust against invalid messages.
 
-* このAPIはシングルスレッドで動作します。例えばバックグラウンドスレッドでハートビートを送信しないでください。
+* このAPIはシングルスレッドで動作します。つまりバックグラウンドスレッドでハートビートを送信するような事はしていません。
 * このAPIは指数的な間隔で再試行を行いません。
 * このAPIはエラー報告を行いません。必要に応じてアサーションや例外を投げたりすると良いでしょう。これは仮の参照実装ですので実際のアプリケーションでは不正なメッセージに対して堅牢でなくてはなりません。
 
 ;You might wonder why the worker API is manually closing its socket and opening a new one, when ØMQ will automatically reconnect a socket if the peer disappears and comes back. Look back at the Simple Pirate and Paranoid Pirate workers to understand. Although ØMQ will automatically reconnect workers if the broker dies and comes back up, this isn't sufficient to re-register the workers with the broker. I know of at least two solutions. The simplest, which we use here, is for the worker to monitor the connection using heartbeats, and if it decides the broker is dead, to close its socket and start afresh with a new socket. The alternative is for the broker to challenge unknown workers when it gets a heartbeat from the worker and ask them to re-register. That would require protocol support.
 
-;[TODO]
+ØMQは通信相手が落ちた場合に自動的に再接続を行うにも関わらず、ワーカーAPIでソケットを手動で閉じて再接続している事を不思議に思うかもしれません。
+単純な海賊パターンや神経質な海賊ワーカーを振り返って見てもらえると解ると思いますが、ワーカーはブローカーが落ちた際に再接続を行いますがこれだけでは十分ではありません。
+これには2つの解決方法があります。
+ワーカーはハートビートを利用してブローカーが落ちたことを検知すると、ソケットを閉じて新しいソケットで再接続を行います。
+もうひとつの方法は、未知のブローカーからハートビートを受け取った場合に再登録を行うようにする事です。
+すなわちプロトコルでの対応が必要になります。
 
 ;Now let's design the Majordomo broker. Its core structure is a set of queues, one per service. We will create these queues as workers appear (we could delete them as workers disappear, but forget that for now because it gets complex). Additionally, we keep a queue of workers per service.
 
@@ -1697,498 +675,8 @@ int main (int argc, char *argv [])
 
 こちらがブローカーのコードです。
 
-~~~{caption="mdbroker: Majordomo broker in C"}
-//  Majordomo Protocol broker
-//  A minimal C implementation of the Majordomo Protocol as defined in
-//  http://rfc.zeromq.org/spec:7 and http://rfc.zeromq.org/spec:8.
-
-#include "czmq.h"
-#include "mdp.h"
-
-//  We'd normally pull these from config data
-
-#define HEARTBEAT_LIVENESS  3       //  3-5 is reasonable
-#define HEARTBEAT_INTERVAL  2500    //  msecs
-#define HEARTBEAT_EXPIRY    HEARTBEAT_INTERVAL * HEARTBEAT_LIVENESS
-
-//  .split broker class structure
-//  The broker class defines a single broker instance:
-
-typedef struct {
-    zctx_t *ctx;                //  Our context
-    void *socket;               //  Socket for clients & workers
-    int verbose;                //  Print activity to stdout
-    char *endpoint;             //  Broker binds to this endpoint
-    zhash_t *services;          //  Hash of known services
-    zhash_t *workers;           //  Hash of known workers
-    zlist_t *waiting;           //  List of waiting workers
-    uint64_t heartbeat_at;      //  When to send HEARTBEAT
-} broker_t;
-
-static broker_t *
-    s_broker_new (int verbose);
-static void
-    s_broker_destroy (broker_t **self_p);
-static void
-    s_broker_bind (broker_t *self, char *endpoint);
-static void
-    s_broker_worker_msg (broker_t *self, zframe_t *sender, zmsg_t *msg);
-static void
-    s_broker_client_msg (broker_t *self, zframe_t *sender, zmsg_t *msg);
-static void
-    s_broker_purge (broker_t *self);
-
-//  .split service class structure
-//  The service class defines a single service instance:
-
-typedef struct {
-    broker_t *broker;           //  Broker instance
-    char *name;                 //  Service name
-    zlist_t *requests;          //  List of client requests
-    zlist_t *waiting;           //  List of waiting workers
-    size_t workers;             //  How many workers we have
-} service_t;
-
-static service_t *
-    s_service_require (broker_t *self, zframe_t *service_frame);
-static void
-    s_service_destroy (void *argument);
-static void
-    s_service_dispatch (service_t *service, zmsg_t *msg);
-
-//  .split worker class structure
-//  The worker class defines a single worker, idle or active:
-
-typedef struct {
-    broker_t *broker;           //  Broker instance
-    char *id_string;            //  Identity of worker as string
-    zframe_t *identity;         //  Identity frame for routing
-    service_t *service;         //  Owning service, if known
-    int64_t expiry;             //  When worker expires, if no heartbeat
-} worker_t;
-
-static worker_t *
-    s_worker_require (broker_t *self, zframe_t *identity);
-static void
-    s_worker_delete (worker_t *self, int disconnect);
-static void
-    s_worker_destroy (void *argument);
-static void
-    s_worker_send (worker_t *self, char *command, char *option,
-                   zmsg_t *msg);
-static void
-    s_worker_waiting (worker_t *self);
-
-//  .split broker constructor and destructor
-//  Here are the constructor and destructor for the broker:
-
-static broker_t *
-s_broker_new (int verbose)
-{
-    broker_t *self = (broker_t *) zmalloc (sizeof (broker_t));
-
-    //  Initialize broker state
-    self->ctx = zctx_new ();
-    self->socket = zsocket_new (self->ctx, ZMQ_ROUTER);
-    self->verbose = verbose;
-    self->services = zhash_new ();
-    self->workers = zhash_new ();
-    self->waiting = zlist_new ();
-    self->heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
-    return self;
-}
-
-static void
-s_broker_destroy (broker_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        broker_t *self = *self_p;
-        zctx_destroy (&self->ctx);
-        zhash_destroy (&self->services);
-        zhash_destroy (&self->workers);
-        zlist_destroy (&self->waiting);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  .split broker bind method
-//  This method binds the broker instance to an endpoint. We can call
-//  this multiple times. Note that MDP uses a single socket for both clients 
-//  and workers:
-
-void
-s_broker_bind (broker_t *self, char *endpoint)
-{
-    zsocket_bind (self->socket, endpoint);
-    zclock_log ("I: MDP broker/0.2.0 is active at %s", endpoint);
-}
-
-//  .split broker worker_msg method
-//  This method processes one READY, REPLY, HEARTBEAT, or
-//  DISCONNECT message sent to the broker by a worker:
-
-static void
-s_broker_worker_msg (broker_t *self, zframe_t *sender, zmsg_t *msg)
-{
-    assert (zmsg_size (msg) >= 1);     //  At least, command
-
-    zframe_t *command = zmsg_pop (msg);
-    char *id_string = zframe_strhex (sender);
-    int worker_ready = (zhash_lookup (self->workers, id_string) != NULL);
-    free (id_string);
-    worker_t *worker = s_worker_require (self, sender);
-
-    if (zframe_streq (command, MDPW_READY)) {
-        if (worker_ready)               //  Not first command in session
-            s_worker_delete (worker, 1);
-        else
-        if (zframe_size (sender) >= 4  //  Reserved service name
-        &&  memcmp (zframe_data (sender), "mmi.", 4) == 0)
-            s_worker_delete (worker, 1);
-        else {
-            //  Attach worker to service and mark as idle
-            zframe_t *service_frame = zmsg_pop (msg);
-            worker->service = s_service_require (self, service_frame);
-            worker->service->workers++;
-            s_worker_waiting (worker);
-            zframe_destroy (&service_frame);
-        }
-    }
-    else
-    if (zframe_streq (command, MDPW_REPLY)) {
-        if (worker_ready) {
-            //  Remove and save client return envelope and insert the
-            //  protocol header and service name, then rewrap envelope.
-            zframe_t *client = zmsg_unwrap (msg);
-            zmsg_pushstr (msg, worker->service->name);
-            zmsg_pushstr (msg, MDPC_CLIENT);
-            zmsg_wrap (msg, client);
-            zmsg_send (&msg, self->socket);
-            s_worker_waiting (worker);
-        }
-        else
-            s_worker_delete (worker, 1);
-    }
-    else
-    if (zframe_streq (command, MDPW_HEARTBEAT)) {
-        if (worker_ready)
-            worker->expiry = zclock_time () + HEARTBEAT_EXPIRY;
-        else
-            s_worker_delete (worker, 1);
-    }
-    else
-    if (zframe_streq (command, MDPW_DISCONNECT))
-        s_worker_delete (worker, 0);
-    else {
-        zclock_log ("E: invalid input message");
-        zmsg_dump (msg);
-    }
-    free (command);
-    zmsg_destroy (&msg);
-}
-
-//  .split broker client_msg method
-//  Process a request coming from a client. We implement MMI requests
-//  directly here (at present, we implement only the mmi.service request):
-
-static void
-s_broker_client_msg (broker_t *self, zframe_t *sender, zmsg_t *msg)
-{
-    assert (zmsg_size (msg) >= 2);     //  Service name + body
-
-    zframe_t *service_frame = zmsg_pop (msg);
-    service_t *service = s_service_require (self, service_frame);
-
-    //  Set reply return identity to client sender
-    zmsg_wrap (msg, zframe_dup (sender));
-
-    //  If we got a MMI service request, process that internally
-    if (zframe_size (service_frame) >= 4
-    &&  memcmp (zframe_data (service_frame), "mmi.", 4) == 0) {
-        char *return_code;
-        if (zframe_streq (service_frame, "mmi.service")) {
-            char *name = zframe_strdup (zmsg_last (msg));
-            service_t *service =
-                (service_t *) zhash_lookup (self->services, name);
-            return_code = service && service->workers? "200": "404";
-            free (name);
-        }
-        else
-            return_code = "501";
-
-        zframe_reset (zmsg_last (msg), return_code, strlen (return_code));
-
-        //  Remove & save client return envelope and insert the
-        //  protocol header and service name, then rewrap envelope.
-        zframe_t *client = zmsg_unwrap (msg);
-        zmsg_push (msg, zframe_dup (service_frame));
-        zmsg_pushstr (msg, MDPC_CLIENT);
-        zmsg_wrap (msg, client);
-        zmsg_send (&msg, self->socket);
-    }
-    else
-        //  Else dispatch the message to the requested service
-        s_service_dispatch (service, msg);
-    zframe_destroy (&service_frame);
-}
-
-//  .split broker purge method
-//  This method deletes any idle workers that haven't pinged us in a
-//  while. We hold workers from oldest to most recent so we can stop
-//  scanning whenever we find a live worker. This means we'll mainly stop
-//  at the first worker, which is essential when we have large numbers of
-//  workers (we call this method in our critical path):
-
-static void
-s_broker_purge (broker_t *self)
-{
-    worker_t *worker = (worker_t *) zlist_first (self->waiting);
-    while (worker) {
-        if (zclock_time () < worker->expiry)
-            break;                  //  Worker is alive, we're done here
-        if (self->verbose)
-            zclock_log ("I: deleting expired worker: %s",
-                        worker->id_string);
-
-        s_worker_delete (worker, 0);
-        worker = (worker_t *) zlist_first (self->waiting);
-    }
-}
-
-//  .split service methods
-//  Here is the implementation of the methods that work on a service:
-
-//  Lazy constructor that locates a service by name or creates a new
-//  service if there is no service already with that name.
-
-static service_t *
-s_service_require (broker_t *self, zframe_t *service_frame)
-{
-    assert (service_frame);
-    char *name = zframe_strdup (service_frame);
-
-    service_t *service =
-        (service_t *) zhash_lookup (self->services, name);
-    if (service == NULL) {
-        service = (service_t *) zmalloc (sizeof (service_t));
-        service->broker = self;
-        service->name = name;
-        service->requests = zlist_new ();
-        service->waiting = zlist_new ();
-        zhash_insert (self->services, name, service);
-        zhash_freefn (self->services, name, s_service_destroy);
-        if (self->verbose)
-            zclock_log ("I: added service: %s", name);
-    }
-    else
-        free (name);
-
-    return service;
-}
-
-//  Service destructor is called automatically whenever the service is
-//  removed from broker->services.
-
-static void
-s_service_destroy (void *argument)
-{
-    service_t *service = (service_t *) argument;
-    while (zlist_size (service->requests)) {
-        zmsg_t *msg = zlist_pop (service->requests);
-        zmsg_destroy (&msg);
-    }
-    zlist_destroy (&service->requests);
-    zlist_destroy (&service->waiting);
-    free (service->name);
-    free (service);
-}
-
-//  .split service dispatch method
-//  This method sends requests to waiting workers:
-
-static void
-s_service_dispatch (service_t *self, zmsg_t *msg)
-{
-    assert (self);
-    if (msg)                    //  Queue message if any
-        zlist_append (self->requests, msg);
-
-    s_broker_purge (self->broker);
-    while (zlist_size (self->waiting) && zlist_size (self->requests)) {
-        worker_t *worker = zlist_pop (self->waiting);
-        zlist_remove (self->broker->waiting, worker);
-        zmsg_t *msg = zlist_pop (self->requests);
-        s_worker_send (worker, MDPW_REQUEST, NULL, msg);
-        zmsg_destroy (&msg);
-    }
-}
-
-//  .split worker methods
-//  Here is the implementation of the methods that work on a worker:
-
-//  Lazy constructor that locates a worker by identity, or creates a new
-//  worker if there is no worker already with that identity.
-
-static worker_t *
-s_worker_require (broker_t *self, zframe_t *identity)
-{
-    assert (identity);
-
-    //  self->workers is keyed off worker identity
-    char *id_string = zframe_strhex (identity);
-    worker_t *worker =
-        (worker_t *) zhash_lookup (self->workers, id_string);
-
-    if (worker == NULL) {
-        worker = (worker_t *) zmalloc (sizeof (worker_t));
-        worker->broker = self;
-        worker->id_string = id_string;
-        worker->identity = zframe_dup (identity);
-        zhash_insert (self->workers, id_string, worker);
-        zhash_freefn (self->workers, id_string, s_worker_destroy);
-        if (self->verbose)
-            zclock_log ("I: registering new worker: %s", id_string);
-    }
-    else
-        free (id_string);
-    return worker;
-}
-
-//  This method deletes the current worker.
-
-static void
-s_worker_delete (worker_t *self, int disconnect)
-{
-    assert (self);
-    if (disconnect)
-        s_worker_send (self, MDPW_DISCONNECT, NULL, NULL);
-
-    if (self->service) {
-        zlist_remove (self->service->waiting, self);
-        self->service->workers--;
-    }
-    zlist_remove (self->broker->waiting, self);
-    //  This implicitly calls s_worker_destroy
-    zhash_delete (self->broker->workers, self->id_string);
-}
-
-//  Worker destructor is called automatically whenever the worker is
-//  removed from broker->workers.
-
-static void
-s_worker_destroy (void *argument)
-{
-    worker_t *self = (worker_t *) argument;
-    zframe_destroy (&self->identity);
-    free (self->id_string);
-    free (self);
-}
-
-//  .split worker send method
-//  This method formats and sends a command to a worker. The caller may
-//  also provide a command option, and a message payload:
-
-static void
-s_worker_send (worker_t *self, char *command, char *option, zmsg_t *msg)
-{
-    msg = msg? zmsg_dup (msg): zmsg_new ();
-
-    //  Stack protocol envelope to start of message
-    if (option)
-        zmsg_pushstr (msg, option);
-    zmsg_pushstr (msg, command);
-    zmsg_pushstr (msg, MDPW_WORKER);
-
-    //  Stack routing envelope to start of message
-    zmsg_wrap (msg, zframe_dup (self->identity));
-
-    if (self->broker->verbose) {
-        zclock_log ("I: sending %s to worker",
-            mdps_commands [(int) *command]);
-        zmsg_dump (msg);
-    }
-    zmsg_send (&msg, self->broker->socket);
-}
-
-//  This worker is now waiting for work
-
-static void
-s_worker_waiting (worker_t *self)
-{
-    //  Queue to broker and service waiting lists
-    assert (self->broker);
-    zlist_append (self->broker->waiting, self);
-    zlist_append (self->service->waiting, self);
-    self->expiry = zclock_time () + HEARTBEAT_EXPIRY;
-    s_service_dispatch (self->service, NULL);
-}
-
-//  .split main task
-//  Finally, here is the main task. We create a new broker instance and
-//  then process messages on the broker socket:
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-
-    broker_t *self = s_broker_new (verbose);
-    s_broker_bind (self, "tcp://*:5555");
-
-    //  Get and process messages forever or until interrupted
-    while (true) {
-        zmq_pollitem_t items [] = {
-            { self->socket,  0, ZMQ_POLLIN, 0 } };
-        int rc = zmq_poll (items, 1, HEARTBEAT_INTERVAL * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;              //  Interrupted
-
-        //  Process next input message, if any
-        if (items [0].revents & ZMQ_POLLIN) {
-            zmsg_t *msg = zmsg_recv (self->socket);
-            if (!msg)
-                break;          //  Interrupted
-            if (self->verbose) {
-                zclock_log ("I: received message:");
-                zmsg_dump (msg);
-            }
-            zframe_t *sender = zmsg_pop (msg);
-            zframe_t *empty  = zmsg_pop (msg);
-            zframe_t *header = zmsg_pop (msg);
-
-            if (zframe_streq (header, MDPC_CLIENT))
-                s_broker_client_msg (self, sender, msg);
-            else
-            if (zframe_streq (header, MDPW_WORKER))
-                s_broker_worker_msg (self, sender, msg);
-            else {
-                zclock_log ("E: invalid message:");
-                zmsg_dump (msg);
-                zmsg_destroy (&msg);
-            }
-            zframe_destroy (&sender);
-            zframe_destroy (&empty);
-            zframe_destroy (&header);
-        }
-        //  Disconnect and delete any expired workers
-        //  Send heartbeats to idle workers if needed
-        if (zclock_time () > self->heartbeat_at) {
-            s_broker_purge (self);
-            worker_t *worker = (worker_t *) zlist_first (self->waiting);
-            while (worker) {
-                s_worker_send (worker, MDPW_HEARTBEAT, NULL, NULL);
-                worker = (worker_t *) zlist_next (self->waiting);
-            }
-            self->heartbeat_at = zclock_time () + HEARTBEAT_INTERVAL;
-        }
-    }
-    if (zctx_interrupted)
-        printf ("W: interrupt received, shutting down...\n");
-
-    s_broker_destroy (&self);
-    return 0;
-}
+~~~{caption="mdbroker: Majordomoブローカー"}
+include(examples/EXAMPLE_LANG/mdbroker.EXAMPLE_EXT)
 ~~~
 
 ;This is by far the most complex example we've seen. It's almost 500 lines of code. To write this and make it somewhat robust took two days. However, this is still a short piece of code for a full service-oriented broker.
@@ -2235,104 +723,8 @@ int main (int argc, char *argv [])
 両方のテストは同じことを行っていますが、異なるテスト結果が得られるでしょう。
 テストコードは以下の通りです。
 
-~~~ {caption="tripping: Round-trip demonstrator in C"}
-//  Round-trip demonstrator
-//  While this example runs in a single process, that is just to make
-//  it easier to start and stop the example. The client task signals to
-//  main when it's ready.
-
-#include "czmq.h"
-
-static void
-client_task (void *args, zctx_t *ctx, void *pipe)
-{
-    void *client = zsocket_new (ctx, ZMQ_DEALER);
-    zsocket_connect (client, "tcp://localhost:5555");
-    printf ("Setting up test...\n");
-    zclock_sleep (100);
-
-    int requests;
-    int64_t start;
-
-    printf ("Synchronous round-trip test...\n");
-    start = zclock_time ();
-    for (requests = 0; requests < 10000; requests++) {
-        zstr_send (client, "hello");
-        char *reply = zstr_recv (client);
-        free (reply);
-    }
-    printf (" %d calls/second\n",
-        (1000 * 10000) / (int) (zclock_time () - start));
-
-    printf ("Asynchronous round-trip test...\n");
-    start = zclock_time ();
-    for (requests = 0; requests < 100000; requests++)
-        zstr_send (client, "hello");
-    for (requests = 0; requests < 100000; requests++) {
-        char *reply = zstr_recv (client);
-        free (reply);
-    }
-    printf (" %d calls/second\n",
-        (1000 * 100000) / (int) (zclock_time () - start));
-    zstr_send (pipe, "done");
-}
-
-//  .split worker task
-//  Here is the worker task. All it does is receive a message, and
-//  bounce it back the way it came:
-
-static void *
-worker_task (void *args)
-{
-    zctx_t *ctx = zctx_new ();
-    void *worker = zsocket_new (ctx, ZMQ_DEALER);
-    zsocket_connect (worker, "tcp://localhost:5556");
-    
-    while (true) {
-        zmsg_t *msg = zmsg_recv (worker);
-        zmsg_send (&msg, worker);
-    }
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-//  .split broker task
-//  Here is the broker task. It uses the {{zmq_proxy}} function to switch
-//  messages between frontend and backend:
-
-static void *
-broker_task (void *args)
-{
-    //  Prepare our context and sockets
-    zctx_t *ctx = zctx_new ();
-    void *frontend = zsocket_new (ctx, ZMQ_DEALER);
-    zsocket_bind (frontend, "tcp://*:5555");
-    void *backend = zsocket_new (ctx, ZMQ_DEALER);
-    zsocket_bind (backend, "tcp://*:5556");
-    zmq_proxy (frontend, backend, NULL);
-    zctx_destroy (&ctx);
-    return NULL;
-}
-
-//  .split main task
-//  Finally, here's the main task, which starts the client, worker, and
-//  broker, and then runs until the client signals it to stop:
-
-int main (void)
-{
-    //  Create threads
-    zctx_t *ctx = zctx_new ();
-    void *client = zthread_fork (ctx, client_task, NULL);
-    zthread_new (worker_task, NULL);
-    zthread_new (broker_task, NULL);
-
-    //  Wait for signal on client pipe
-    char *signal = zstr_recv (client);
-    free (signal);
-
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="tripping: ラウンド・トリップの計測"}
+include(examples/EXAMPLE_LANG/tripping.EXAMPLE_EXT)
 ~~~
 
 ;On my development box, this program says:
@@ -2372,163 +764,10 @@ zmsg_t *mdcli_recv (mdcli_t *self);
 
 ;It's literally a few minutes' work to refactor the synchronous client API to become asynchronous:
 
-同期式クライアントを非同期に書き換えるのはほんの数分の手間です。
+ほんの数分の手間で同期式クライアントを非同期に書き換えることが出来ました。
 
-~~~{caption="mdcliapi2: Majordomo asynchronous client API in C"}
-//  mdcliapi2 class - Majordomo Protocol Client API
-//  Implements the MDP/Worker spec at http://rfc.zeromq.org/spec:7.
-
-#include "mdcliapi2.h"
-
-//  Structure of our class
-//  We access these properties only via class methods
-
-struct _mdcli_t {
-    zctx_t *ctx;                //  Our context
-    char *broker;
-    void *client;               //  Socket to broker
-    int verbose;                //  Print activity to stdout
-    int timeout;                //  Request timeout
-};
-
-//  Connect or reconnect to broker. In this asynchronous class we use a
-//  DEALER socket instead of a REQ socket; this lets us send any number
-//  of requests without waiting for a reply.
-
-void s_mdcli_connect_to_broker (mdcli_t *self)
-{
-    if (self->client)
-        zsocket_destroy (self->ctx, self->client);
-    self->client = zsocket_new (self->ctx, ZMQ_DEALER);
-    zmq_connect (self->client, self->broker);
-    if (self->verbose)
-        zclock_log ("I: connecting to broker at %s...", self->broker);
-}
-
-//  The constructor and destructor are the same as in mdcliapi, except
-//  we don't do retries, so there's no retries property.
-//  .skip
-//  ---------------------------------------------------------------------
-//  Constructor
-
-mdcli_t *
-mdcli_new (char *broker, int verbose)
-{
-    assert (broker);
-
-    mdcli_t *self = (mdcli_t *) zmalloc (sizeof (mdcli_t));
-    self->ctx = zctx_new ();
-    self->broker = strdup (broker);
-    self->verbose = verbose;
-    self->timeout = 2500;           //  msecs
-
-    s_mdcli_connect_to_broker (self);
-    return self;
-}
-
-//  Destructor
-
-void
-mdcli_destroy (mdcli_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        mdcli_t *self = *self_p;
-        zctx_destroy (&self->ctx);
-        free (self->broker);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  Set request timeout
-
-void
-mdcli_set_timeout (mdcli_t *self, int timeout)
-{
-    assert (self);
-    self->timeout = timeout;
-}
-
-//  .until
-//  .skip
-//  The send method now just sends one message, without waiting for a
-//  reply. Since we're using a DEALER socket we have to send an empty
-//  frame at the start, to create the same envelope that the REQ socket
-//  would normally make for us:
-
-int
-mdcli_send (mdcli_t *self, char *service, zmsg_t **request_p)
-{
-    assert (self);
-    assert (request_p);
-    zmsg_t *request = *request_p;
-
-    //  Prefix request with protocol frames
-    //  Frame 0: empty (REQ emulation)
-    //  Frame 1: "MDPCxy" (six bytes, MDP/Client x.y)
-    //  Frame 2: Service name (printable string)
-    zmsg_pushstr (request, service);
-    zmsg_pushstr (request, MDPC_CLIENT);
-    zmsg_pushstr (request, "");
-    if (self->verbose) {
-        zclock_log ("I: send request to '%s' service:", service);
-        zmsg_dump (request);
-    }
-    zmsg_send (&request, self->client);
-    return 0;
-}
-
-//  .skip
-//  The recv method waits for a reply message and returns that to the 
-//  caller.
-//  ---------------------------------------------------------------------
-//  Returns the reply message or NULL if there was no reply. Does not
-//  attempt to recover from a broker failure, this is not possible
-//  without storing all unanswered requests and resending them all...
-
-zmsg_t *
-mdcli_recv (mdcli_t *self)
-{
-    assert (self);
-
-    //  Poll socket for a reply, with timeout
-    zmq_pollitem_t items [] = { { self->client, 0, ZMQ_POLLIN, 0 } };
-    int rc = zmq_poll (items, 1, self->timeout * ZMQ_POLL_MSEC);
-    if (rc == -1)
-        return NULL;            //  Interrupted
-
-    //  If we got a reply, process it
-    if (items [0].revents & ZMQ_POLLIN) {
-        zmsg_t *msg = zmsg_recv (self->client);
-        if (self->verbose) {
-            zclock_log ("I: received reply:");
-            zmsg_dump (msg);
-        }
-        //  Don't try to handle errors, just assert noisily
-        assert (zmsg_size (msg) >= 4);
-
-        zframe_t *empty = zmsg_pop (msg);
-        assert (zframe_streq (empty, ""));
-        zframe_destroy (&empty);
-
-        zframe_t *header = zmsg_pop (msg);
-        assert (zframe_streq (header, MDPC_CLIENT));
-        zframe_destroy (&header);
-
-        zframe_t *service = zmsg_pop (msg);
-        zframe_destroy (&service);
-
-        return msg;     //  Success
-    }
-    if (zctx_interrupted)
-        printf ("W: interrupt received, killing client...\n");
-    else
-    if (self->verbose)
-        zclock_log ("W: permanent error, abandoning request");
-
-    return NULL;
-}
+~~~{caption="mdcliapi2: Majordomo非同期クライアントAPI"}
+include(examples/EXAMPLE_LANG/mdcliapi2.EXAMPLE_EXT)
 ~~~
 
 ;The differences are:
@@ -2551,35 +790,8 @@ mdcli_recv (mdcli_t *self)
 
 そして10万メッセージを送信した後に10万メッセージを受信するテストプログラムをこのAPIを使って書き直すと以下のようになります。
 
-~~~{caption="mdclient2: Majordomo client application in C"}
-//  Majordomo Protocol client example - asynchronous
-//  Uses the mdcli API to hide all MDP aspects
-
-//  Lets us build this source without creating a library
-#include "mdcliapi2.c"
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
-
-    int count;
-    for (count = 0; count < 100000; count++) {
-        zmsg_t *request = zmsg_new ();
-        zmsg_pushstr (request, "Hello world");
-        mdcli_send (session, "echo", &request);
-    }
-    for (count = 0; count < 100000; count++) {
-        zmsg_t *reply = mdcli_recv (session);
-        if (reply)
-            zmsg_destroy (&reply);
-        else
-            break;              //  Interrupted by Ctrl-C
-    }
-    printf ("%d replies received\n", count);
-    mdcli_destroy (&session);
-    return 0;
-}
+~~~{caption="mdclient2: Majordomo非同期クライアントアプリケーション"}
+include(examples/EXAMPLE_LANG/mdclient2.EXAMPLE_EXT)
 ~~~
 
 ;The broker and worker are unchanged because we've not modified the protocol at all. We see an immediate improvement in performance. Here's the synchronous client chugging through 100K request-reply cycles:
@@ -2693,36 +905,8 @@ mdcliapi2のコードを読むと再接続を行っていない事が分かる�
 
 以下はアプリケーションの中でサービスディスカバリーを使用する方法です。
 
-~~~{caption="mmiecho: Service discovery over Majordomo in C"}
-//  MMI echo query example
-
-//  Lets us build this source without creating a library
-#include "mdcliapi.c"
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
-
-    //  This is the service we want to look up
-    zmsg_t *request = zmsg_new ();
-    zmsg_addstr (request, "echo");
-
-    //  This is the service we send our request to
-    zmsg_t *reply = mdcli_send (session, "mmi.service", &request);
-
-    if (reply) {
-        char *reply_code = zframe_strdup (zmsg_first (reply));
-        printf ("Lookup echo service: %s\n", reply_code);
-        free (reply_code);
-        zmsg_destroy (&reply);
-    }
-    else
-        printf ("E: no response from broker, make sure it's running\n");
-
-    mdcli_destroy (&session);
-    return 0;
-}
+~~~{caption="mmiecho: Majordomoでのサービスディスカバリー"}
+include(examples/EXAMPLE_LANG/mmiecho.EXAMPLE_EXT)
 ~~~
 
 ;Try this with and without a worker running, and you should see the little program report "200" or "404" accordingly. The implementation of MMI in our example broker is flimsy. For example, if a worker disappears, services remain "present". In practice, a broker should remove services that have no workers after some configurable timeout.
@@ -2793,7 +977,7 @@ Majordomoが信頼性のあるメッセージブローカーとして機能す�
 ;* As you've seen, the Lazy Pirate client performs surprisingly well. It works across a whole range of architectures, from direct client-to-server to distributed queue proxies. It does tend to assume that workers are stateless and idempotent. But we can work around that limitation without resorting to rust.
 ;* Rust brings a whole set of problems, from slow performance to additional pieces that you have to manage, repair, and handle 6 a.m. panics from, as they inevitably break at the start of daily operations. The beauty of the Pirate patterns in general is their simplicity. They won't crash. And if you're still worried about the hardware, you can move to a peer-to-peer pattern that has no broker at all. I'll explain later in this chapter.
 
-* これまで見てきたように、ものぐさ海賊パターンはとてもうまく機能します。異なるアーキテクチャに跨がった分散キュープロキシーとして機能し、ワーカーはステートレスで冪等性があるとみなすことができましたが、永続化を行った場合はこうは行きません。
+* これまで見てきたように、ものぐさ海賊パターンはとてもうまく機能します。異なるアーキテクチャに跨がった分散キュープロキシとして機能し、ワーカーはステートレスで冪等性があるとみなすことができましたが、永続化を行った場合はこうは行きません。
 * 永続化はパフォーマンスを低下させ、管理しなければならない新たな部品を増やし、障害が発生すると業務に支障が出ないように朝の6時までに修理しなければなりません。海賊パターンの美しい所は単純な所です。このパターンはクラッシュが発生しません。
 もしハードウェア障害を心配しているのであればP2Pパターンに移行してブローカーを無くせば良いでしょう。これについては次の章で説明します。
 
@@ -2838,9 +1022,9 @@ Majordomoが信頼性のあるメッセージブローカーとして機能す�
 ;* Client: Do you have a reply for me? Titanic: Yes, here it is. Or, no, not yet.
 ;* Client: OK, you can wipe that request now, I'm happy. Titanic: OK, done.
 
-* クライアント「このリクエストを受け付けてくれる?」タイタニック「OK」
-* クライアント「こちら宛の応答を送ってくれる?」タイタニック「はい、これね」もしくは「そんなの無いよ」
-* クライアント「さっき送信したリクエストを削除してもらえるかな」タイタニック「OK」
+* クライアント「このリクエストを受け付けてくれる?」タイタニック「OK、完了」
+* クライアント「それじゃあ応答を送ってくれる?」タイタニック「はい、これが応答ね」もしくは「そんなの無いよ」
+* クライアント「さっき送信したリクエストを削除してもらえる?」タイタニック「OK、完了」
 
 ;Whereas the dialog between Titanic and broker and worker goes like this:
 
@@ -2905,103 +1089,16 @@ Majordomoが信頼性のあるメッセージブローカーとして機能す�
 ;We'll just make a multithreaded worker, which as we've seen from our multithreading experience with ØMQ, is trivial. However, let's first sketch what Titanic would look like in terms of ØMQ messages and frames. This gives us the Titanic Service Protocol (TSP).
 
 ここでは、単純にマルチスレッドワーカーを作成して3つのサービスを提供します。
-まずは、タイタニックがやりとりするメッセージフレームをを設計してみましょう。
+まずはタイタニックがやりとりするメッセージフレームを設計してみましょう。
 これをタイタニック・サービス・プロトコル(以下TSP)と呼びます。
 
 ;Using TSP is clearly more work for client applications than accessing a service directly via MDP. Here's the shortest robust "echo" client example:
 
-はMDPと直接やり取りするのと比べて、TSPは明らかにクライアントの作業量が多くなります。
+MDPの場合と比較して、TSPは明らかにクライアントの作業量が多くなります。
 以下に短くて堅牢な「echoクライアント」のサンプルコードを示します。
 
-~~~ {caption="ticlient: Titanic client example in C"}
-//  Titanic client example
-//  Implements client side of http://rfc.zeromq.org/spec:9
-
-//  Lets build this source without creating a library
-#include "mdcliapi.c"
-
-//  Calls a TSP service
-//  Returns response if successful (status code 200 OK), else NULL
-//
-static zmsg_t *
-s_service_call (mdcli_t *session, char *service, zmsg_t **request_p)
-{
-    zmsg_t *reply = mdcli_send (session, service, request_p);
-    if (reply) {
-        zframe_t *status = zmsg_pop (reply);
-        if (zframe_streq (status, "200")) {
-            zframe_destroy (&status);
-            return reply;
-        }
-        else
-        if (zframe_streq (status, "400")) {
-            printf ("E: client fatal error, aborting\n");
-            exit (EXIT_FAILURE);
-        }
-        else
-        if (zframe_streq (status, "500")) {
-            printf ("E: server fatal error, aborting\n");
-            exit (EXIT_FAILURE);
-        }
-    }
-    else
-        exit (EXIT_SUCCESS);    //  Interrupted or failed
-
-    zmsg_destroy (&reply);
-    return NULL;        //  Didn't succeed; don't care why not
-}
-
-//  .split main task
-//  The main task tests our service call by sending an echo request:
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-    mdcli_t *session = mdcli_new ("tcp://localhost:5555", verbose);
-
-    //  1. Send 'echo' request to Titanic
-    zmsg_t *request = zmsg_new ();
-    zmsg_addstr (request, "echo");
-    zmsg_addstr (request, "Hello world");
-    zmsg_t *reply = s_service_call (
-        session, "titanic.request", &request);
-
-    zframe_t *uuid = NULL;
-    if (reply) {
-        uuid = zmsg_pop (reply);
-        zmsg_destroy (&reply);
-        zframe_print (uuid, "I: request UUID ");
-    }
-    //  2. Wait until we get a reply
-    while (!zctx_interrupted) {
-        zclock_sleep (100);
-        request = zmsg_new ();
-        zmsg_add (request, zframe_dup (uuid));
-        zmsg_t *reply = s_service_call (
-            session, "titanic.reply", &request);
-
-        if (reply) {
-            char *reply_string = zframe_strdup (zmsg_last (reply));
-            printf ("Reply: %s\n", reply_string);
-            free (reply_string);
-            zmsg_destroy (&reply);
-
-            //  3. Close request
-            request = zmsg_new ();
-            zmsg_add (request, zframe_dup (uuid));
-            reply = s_service_call (session, "titanic.close", &request);
-            zmsg_destroy (&reply);
-            break;
-        }
-        else {
-            printf ("I: no reply yet, trying again...\n");
-            zclock_sleep (5000);     //  Try again in 5 seconds
-        }
-    }
-    zframe_destroy (&uuid);
-    mdcli_destroy (&session);
-    return 0;
-}
+~~~ {caption="ticlient: タイタニッククライアント"}
+include(examples/EXAMPLE_LANG/ticlient.EXAMPLE_EXT)
 ~~~
 
 ;Of course this can be, and should be, wrapped up in some kind of framework or API. It's not healthy to ask average application developers to learn the full details of messaging: it hurts their brains, costs time, and offers too many ways to make buggy complexity. Additionally, it makes it hard to add intelligence.
@@ -3023,304 +1120,8 @@ Majordomoの時に行ったように、うまくAPIで隠蔽化してやれば�
 そしてメッセージ1つにつき1ファイルという最も単純かつ最も荒っぽい構成でディスクへの永続化を行います。
 唯一複雑な部分は、ディレクトリを何度も走査をするのを避けるために、全てのリクエストを別のキューで保持している所です。
 
-~~~ {caption="titanic: Titanic broker example in C"}
-//  Titanic service
-//  Implements server side of http://rfc.zeromq.org/spec:9
-
-//  Lets us build this source without creating a library
-#include "mdwrkapi.c"
-#include "mdcliapi.c"
-
-#include "zfile.h"
-#include <uuid/uuid.h>
-
-//  Return a new UUID as a printable character string
-//  Caller must free returned string when finished with it
-
-static char *
-s_generate_uuid (void)
-{
-    char hex_char [] = "0123456789ABCDEF";
-    char *uuidstr = zmalloc (sizeof (uuid_t) * 2 + 1);
-    uuid_t uuid;
-    uuid_generate (uuid);
-    int byte_nbr;
-    for (byte_nbr = 0; byte_nbr < sizeof (uuid_t); byte_nbr++) {
-        uuidstr [byte_nbr * 2 + 0] = hex_char [uuid [byte_nbr] >> 4];
-        uuidstr [byte_nbr * 2 + 1] = hex_char [uuid [byte_nbr] & 15];
-    }
-    return uuidstr;
-}
-
-//  Returns freshly allocated request filename for given UUID
-
-#define TITANIC_DIR ".titanic"
-
-static char *
-s_request_filename (char *uuid) {
-    char *filename = malloc (256);
-    snprintf (filename, 256, TITANIC_DIR "/%s.req", uuid);
-    return filename;
-}
-
-//  Returns freshly allocated reply filename for given UUID
-
-static char *
-s_reply_filename (char *uuid) {
-    char *filename = malloc (256);
-    snprintf (filename, 256, TITANIC_DIR "/%s.rep", uuid);
-    return filename;
-}
-
-//  .split Titanic request service
-//  The {{titanic.request}} task waits for requests to this service. It writes
-//  each request to disk and returns a UUID to the client. The client picks
-//  up the reply asynchronously using the {{titanic.reply}} service:
-
-static void
-titanic_request (void *args, zctx_t *ctx, void *pipe)
-{
-    mdwrk_t *worker = mdwrk_new (
-        "tcp://localhost:5555", "titanic.request", 0);
-    zmsg_t *reply = NULL;
-
-    while (true) {
-        //  Send reply if it's not null
-        //  And then get next request from broker
-        zmsg_t *request = mdwrk_recv (worker, &reply);
-        if (!request)
-            break;      //  Interrupted, exit
-
-        //  Ensure message directory exists
-        zfile_mkdir (TITANIC_DIR);
-
-        //  Generate UUID and save message to disk
-        char *uuid = s_generate_uuid ();
-        char *filename = s_request_filename (uuid);
-        FILE *file = fopen (filename, "w");
-        assert (file);
-        zmsg_save (request, file);
-        fclose (file);
-        free (filename);
-        zmsg_destroy (&request);
-
-        //  Send UUID through to message queue
-        reply = zmsg_new ();
-        zmsg_addstr (reply, uuid);
-        zmsg_send (&reply, pipe);
-
-        //  Now send UUID back to client
-        //  Done by the mdwrk_recv() at the top of the loop
-        reply = zmsg_new ();
-        zmsg_addstr (reply, "200");
-        zmsg_addstr (reply, uuid);
-        free (uuid);
-    }
-    mdwrk_destroy (&worker);
-}
-
-//  .split Titanic reply service
-//  The {{titanic.reply}} task checks if there's a reply for the specified
-//  request (by UUID), and returns a 200 (OK), 300 (Pending), or 400
-//  (Unknown) accordingly:
-
-static void *
-titanic_reply (void *context)
-{
-    mdwrk_t *worker = mdwrk_new (
-        "tcp://localhost:5555", "titanic.reply", 0);
-    zmsg_t *reply = NULL;
-
-    while (true) {
-        zmsg_t *request = mdwrk_recv (worker, &reply);
-        if (!request)
-            break;      //  Interrupted, exit
-
-        char *uuid = zmsg_popstr (request);
-        char *req_filename = s_request_filename (uuid);
-        char *rep_filename = s_reply_filename (uuid);
-        if (zfile_exists (rep_filename)) {
-            FILE *file = fopen (rep_filename, "r");
-            assert (file);
-            reply = zmsg_load (NULL, file);
-            zmsg_pushstr (reply, "200");
-            fclose (file);
-        }
-        else {
-            reply = zmsg_new ();
-            if (zfile_exists (req_filename))
-                zmsg_pushstr (reply, "300"); //Pending
-            else
-                zmsg_pushstr (reply, "400"); //Unknown
-        }
-        zmsg_destroy (&request);
-        free (uuid);
-        free (req_filename);
-        free (rep_filename);
-    }
-    mdwrk_destroy (&worker);
-    return 0;
-}
-
-//  .split Titanic close task
-//  The {{titanic.close}} task removes any waiting replies for the request
-//  (specified by UUID). It's idempotent, so it is safe to call more than
-//  once in a row:
-
-static void *
-titanic_close (void *context)
-{
-    mdwrk_t *worker = mdwrk_new (
-        "tcp://localhost:5555", "titanic.close", 0);
-    zmsg_t *reply = NULL;
-
-    while (true) {
-        zmsg_t *request = mdwrk_recv (worker, &reply);
-        if (!request)
-            break;      //  Interrupted, exit
-
-        char *uuid = zmsg_popstr (request);
-        char *req_filename = s_request_filename (uuid);
-        char *rep_filename = s_reply_filename (uuid);
-        zfile_delete (req_filename);
-        zfile_delete (rep_filename);
-        free (uuid);
-        free (req_filename);
-        free (rep_filename);
-
-        zmsg_destroy (&request);
-        reply = zmsg_new ();
-        zmsg_addstr (reply, "200");
-    }
-    mdwrk_destroy (&worker);
-    return 0;
-}
-
-//  .split worker task
-//  This is the main thread for the Titanic worker. It starts three child
-//  threads; for the request, reply, and close services. It then dispatches
-//  requests to workers using a simple brute force disk queue. It receives
-//  request UUIDs from the {{titanic.request}} service, saves these to a disk
-//  file, and then throws each request at MDP workers until it gets a
-//  response.
-
-static int s_service_success (char *uuid);
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-    zctx_t *ctx = zctx_new ();
-
-    void *request_pipe = zthread_fork (ctx, titanic_request, NULL);
-    zthread_new (titanic_reply, NULL);
-    zthread_new (titanic_close, NULL);
-
-    //  Main dispatcher loop
-    while (true) {
-        //  We'll dispatch once per second, if there's no activity
-        zmq_pollitem_t items [] = { { request_pipe, 0, ZMQ_POLLIN, 0 } };
-        int rc = zmq_poll (items, 1, 1000 * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;              //  Interrupted
-        if (items [0].revents & ZMQ_POLLIN) {
-            //  Ensure message directory exists
-            zfile_mkdir (TITANIC_DIR);
-
-            //  Append UUID to queue, prefixed with '-' for pending
-            zmsg_t *msg = zmsg_recv (request_pipe);
-            if (!msg)
-                break;          //  Interrupted
-            FILE *file = fopen (TITANIC_DIR "/queue", "a");
-            char *uuid = zmsg_popstr (msg);
-            fprintf (file, "-%s\n", uuid);
-            fclose (file);
-            free (uuid);
-            zmsg_destroy (&msg);
-        }
-        //  Brute force dispatcher
-        char entry [] = "?.......:.......:.......:.......:";
-        FILE *file = fopen (TITANIC_DIR "/queue", "r+");
-        while (file && fread (entry, 33, 1, file) == 1) {
-            //  UUID is prefixed with '-' if still waiting
-            if (entry [0] == '-') {
-                if (verbose)
-                    printf ("I: processing request %s\n", entry + 1);
-                if (s_service_success (entry + 1)) {
-                    //  Mark queue entry as processed
-                    fseek (file, -33, SEEK_CUR);
-                    fwrite ("+", 1, 1, file);
-                    fseek (file, 32, SEEK_CUR);
-                }
-            }
-            //  Skip end of line, LF or CRLF
-            if (fgetc (file) == '\r')
-                fgetc (file);
-            if (zctx_interrupted)
-                break;
-        }
-        if (file)
-            fclose (file);
-    }
-    return 0;
-}
-
-//  .split try to call a service
-//  Here, we first check if the requested MDP service is defined or not,
-//  using a MMI lookup to the Majordomo broker. If the service exists,
-//  we send a request and wait for a reply using the conventional MDP
-//  client API. This is not meant to be fast, just very simple:
-
-static int
-s_service_success (char *uuid)
-{
-    //  Load request message, service will be first frame
-    char *filename = s_request_filename (uuid);
-    FILE *file = fopen (filename, "r");
-    free (filename);
-
-    //  If the client already closed request, treat as successful
-    if (!file)
-        return 1;
-
-    zmsg_t *request = zmsg_load (NULL, file);
-    fclose (file);
-    zframe_t *service = zmsg_pop (request);
-    char *service_name = zframe_strdup (service);
-
-    //  Create MDP client session with short timeout
-    mdcli_t *client = mdcli_new ("tcp://localhost:5555", false);
-    mdcli_set_timeout (client, 1000);  //  1 sec
-    mdcli_set_retries (client, 1);     //  only 1 retry
-
-    //  Use MMI protocol to check if service is available
-    zmsg_t *mmi_request = zmsg_new ();
-    zmsg_add (mmi_request, service);
-    zmsg_t *mmi_reply = mdcli_send (client, "mmi.service", &mmi_request);
-    int service_ok = (mmi_reply
-        && zframe_streq (zmsg_first (mmi_reply), "200"));
-    zmsg_destroy (&mmi_reply);
-
-    int result = 0;
-    if (service_ok) {
-        zmsg_t *reply = mdcli_send (client, service_name, &request);
-        if (reply) {
-            filename = s_reply_filename (uuid);
-            FILE *file = fopen (filename, "w");
-            assert (file);
-            zmsg_save (reply, file);
-            fclose (file);
-            free (filename);
-            result = 1;
-        }
-        zmsg_destroy (&reply);
-    }
-    else
-        zmsg_destroy (&request);
-
-    mdcli_destroy (&client);
-    free (service_name);
-    return result;
-}
+~~~ {caption="titanic: タイタニックブローカー"}
+include(examples/EXAMPLE_LANG/ticlient.EXAMPLE_EXT)
 ~~~
 
 ;To test this, start mdbroker and titanic, and then run ticlient. Now start mdworker arbitrarily, and you should see the client getting a response and exiting happily.
@@ -3629,295 +1430,16 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 前置きはこれくらいにしおいて、実際に動作するバイナリー・スターサーバーの実装を見て行きましょう。
 プライマリーとバックアップの役割は実行時に指定しますので、コード自体は同じものです。
 
-~~~ {caption="bstarsrv: Binary Star server in C"}
-//  Binary Star server proof-of-concept implementation. This server does no
-//  real work; it just demonstrates the Binary Star failover model.
-
-#include "czmq.h"
-
-//  States we can be in at any point in time
-typedef enum {
-    STATE_PRIMARY = 1,          //  Primary, waiting for peer to connect
-    STATE_BACKUP = 2,           //  Backup, waiting for peer to connect
-    STATE_ACTIVE = 3,           //  Active - accepting connections
-    STATE_PASSIVE = 4           //  Passive - not accepting connections
-} state_t;
-
-//  Events, which start with the states our peer can be in
-typedef enum {
-    PEER_PRIMARY = 1,           //  HA peer is pending primary
-    PEER_BACKUP = 2,            //  HA peer is pending backup
-    PEER_ACTIVE = 3,            //  HA peer is active
-    PEER_PASSIVE = 4,           //  HA peer is passive
-    CLIENT_REQUEST = 5          //  Client makes request
-} event_t;
-
-//  Our finite state machine
-typedef struct {
-    state_t state;              //  Current state
-    event_t event;              //  Current event
-    int64_t peer_expiry;        //  When peer is considered 'dead'
-} bstar_t;
-
-//  We send state information this often
-//  If peer doesn't respond in two heartbeats, it is 'dead'
-#define HEARTBEAT 1000          //  In msecs
-
-//  .split Binary Star state machine
-//  The heart of the Binary Star design is its finite-state machine (FSM).
-//  The FSM runs one event at a time. We apply an event to the current state,
-//  which checks if the event is accepted, and if so, sets a new state:
-
-static bool
-s_state_machine (bstar_t *fsm)
-{
-    bool exception = false;
-    
-    //  These are the PRIMARY and BACKUP states; we're waiting to become
-    //  ACTIVE or PASSIVE depending on events we get from our peer:
-    if (fsm->state == STATE_PRIMARY) {
-        if (fsm->event == PEER_BACKUP) {
-            printf ("I: connected to backup (passive), ready active\n");
-            fsm->state = STATE_ACTIVE;
-        }
-        else
-        if (fsm->event == PEER_ACTIVE) {
-            printf ("I: connected to backup (active), ready passive\n");
-            fsm->state = STATE_PASSIVE;
-        }
-        //  Accept client connections
-    }
-    else
-    if (fsm->state == STATE_BACKUP) {
-        if (fsm->event == PEER_ACTIVE) {
-            printf ("I: connected to primary (active), ready passive\n");
-            fsm->state = STATE_PASSIVE;
-        }
-        else
-        //  Reject client connections when acting as backup
-        if (fsm->event == CLIENT_REQUEST)
-            exception = true;
-    }
-    else
-    //  .split active and passive states
-    //  These are the ACTIVE and PASSIVE states:
-
-    if (fsm->state == STATE_ACTIVE) {
-        if (fsm->event == PEER_ACTIVE) {
-            //  Two actives would mean split-brain
-            printf ("E: fatal error - dual actives, aborting\n");
-            exception = true;
-        }
-    }
-    else
-    //  Server is passive
-    //  CLIENT_REQUEST events can trigger failover if peer looks dead
-    if (fsm->state == STATE_PASSIVE) {
-        if (fsm->event == PEER_PRIMARY) {
-            //  Peer is restarting - become active, peer will go passive
-            printf ("I: primary (passive) is restarting, ready active\n");
-            fsm->state = STATE_ACTIVE;
-        }
-        else
-        if (fsm->event == PEER_BACKUP) {
-            //  Peer is restarting - become active, peer will go passive
-            printf ("I: backup (passive) is restarting, ready active\n");
-            fsm->state = STATE_ACTIVE;
-        }
-        else
-        if (fsm->event == PEER_PASSIVE) {
-            //  Two passives would mean cluster would be non-responsive
-            printf ("E: fatal error - dual passives, aborting\n");
-            exception = true;
-        }
-        else
-        if (fsm->event == CLIENT_REQUEST) {
-            //  Peer becomes active if timeout has passed
-            //  It's the client request that triggers the failover
-            assert (fsm->peer_expiry > 0);
-            if (zclock_time () >= fsm->peer_expiry) {
-                //  If peer is dead, switch to the active state
-                printf ("I: failover successful, ready active\n");
-                fsm->state = STATE_ACTIVE;
-            }
-            else
-                //  If peer is alive, reject connections
-                exception = true;
-        }
-    }
-    return exception;
-}
-
-//  .split main task
-//  This is our main task. First we bind/connect our sockets with our
-//  peer and make sure we will get state messages correctly. We use
-//  three sockets; one to publish state, one to subscribe to state, and
-//  one for client requests/replies:
-
-int main (int argc, char *argv [])
-{
-    //  Arguments can be either of:
-    //      -p  primary server, at tcp://localhost:5001
-    //      -b  backup server, at tcp://localhost:5002
-    zctx_t *ctx = zctx_new ();
-    void *statepub = zsocket_new (ctx, ZMQ_PUB);
-    void *statesub = zsocket_new (ctx, ZMQ_SUB);
-    zsocket_set_subscribe (statesub, "");
-    void *frontend = zsocket_new (ctx, ZMQ_ROUTER);
-    bstar_t fsm = { 0 };
-
-    if (argc == 2 && streq (argv [1], "-p")) {
-        printf ("I: Primary active, waiting for backup (passive)\n");
-        zsocket_bind (frontend, "tcp://*:5001");
-        zsocket_bind (statepub, "tcp://*:5003");
-        zsocket_connect (statesub, "tcp://localhost:5004");
-        fsm.state = STATE_PRIMARY;
-    }
-    else
-    if (argc == 2 && streq (argv [1], "-b")) {
-        printf ("I: Backup passive, waiting for primary (active)\n");
-        zsocket_bind (frontend, "tcp://*:5002");
-        zsocket_bind (statepub, "tcp://*:5004");
-        zsocket_connect (statesub, "tcp://localhost:5003");
-        fsm.state = STATE_BACKUP;
-    }
-    else {
-        printf ("Usage: bstarsrv { -p | -b }\n");
-        zctx_destroy (&ctx);
-        exit (0);
-    }
-    //  .split handling socket input
-    //  We now process events on our two input sockets, and process these
-    //  events one at a time via our finite-state machine. Our "work" for
-    //  a client request is simply to echo it back:
-
-    //  Set timer for next outgoing state message
-    int64_t send_state_at = zclock_time () + HEARTBEAT;
-    while (!zctx_interrupted) {
-        zmq_pollitem_t items [] = {
-            { frontend, 0, ZMQ_POLLIN, 0 },
-            { statesub, 0, ZMQ_POLLIN, 0 }
-        };
-        int time_left = (int) ((send_state_at - zclock_time ()));
-        if (time_left < 0)
-            time_left = 0;
-        int rc = zmq_poll (items, 2, time_left * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;              //  Context has been shut down
-
-        if (items [0].revents & ZMQ_POLLIN) {
-            //  Have a client request
-            zmsg_t *msg = zmsg_recv (frontend);
-            fsm.event = CLIENT_REQUEST;
-            if (s_state_machine (&fsm) == false)
-                //  Answer client by echoing request back
-                zmsg_send (&msg, frontend);
-            else
-                zmsg_destroy (&msg);
-        }
-        if (items [1].revents & ZMQ_POLLIN) {
-            //  Have state from our peer, execute as event
-            char *message = zstr_recv (statesub);
-            fsm.event = atoi (message);
-            free (message);
-            if (s_state_machine (&fsm))
-                break;          //  Error, so exit
-            fsm.peer_expiry = zclock_time () + 2 * HEARTBEAT;
-        }
-        //  If we timed out, send state to peer
-        if (zclock_time () >= send_state_at) {
-            char message [2];
-            sprintf (message, "%d", fsm.state);
-            zstr_send (statepub, message);
-            send_state_at = zclock_time () + HEARTBEAT;
-        }
-    }
-    if (zctx_interrupted)
-        printf ("W: interrupted\n");
-
-    //  Shutdown sockets and context
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="bstarsrv: バイナリー・スター サーバー"}
+include(examples/EXAMPLE_LANG/bstarsrv.EXAMPLE_EXT)
 ~~~
 
 ;And here is the client:
 
 そしてこちらがクライアントのコードです。
 
-~~~ {caption="bstarcli: Binary Star client in C"}
-//  Binary Star client proof-of-concept implementation. This client does no
-//  real work; it just demonstrates the Binary Star failover model.
-
-#include "czmq.h"
-#define REQUEST_TIMEOUT     1000    //  msecs
-#define SETTLE_DELAY        2000    //  Before failing over
-
-int main (void)
-{
-    zctx_t *ctx = zctx_new ();
-
-    char *server [] = { "tcp://localhost:5001", "tcp://localhost:5002" };
-    uint server_nbr = 0;
-
-    printf ("I: connecting to server at %s...\n", server [server_nbr]);
-    void *client = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (client, server [server_nbr]);
-
-    int sequence = 0;
-    while (!zctx_interrupted) {
-        //  We send a request, then we work to get a reply
-        char request [10];
-        sprintf (request, "%d", ++sequence);
-        zstr_send (client, request);
-
-        int expect_reply = 1;
-        while (expect_reply) {
-            //  Poll socket for a reply, with timeout
-            zmq_pollitem_t items [] = { { client, 0, ZMQ_POLLIN, 0 } };
-            int rc = zmq_poll (items, 1, REQUEST_TIMEOUT * ZMQ_POLL_MSEC);
-            if (rc == -1)
-                break;          //  Interrupted
-
-            //  .split main body of client
-            //  We use a Lazy Pirate strategy in the client. If there's no
-            //  reply within our timeout, we close the socket and try again.
-            //  In Binary Star, it's the client vote that decides which
-            //  server is primary; the client must therefore try to connect
-            //  to each server in turn:
-            
-            if (items [0].revents & ZMQ_POLLIN) {
-                //  We got a reply from the server, must match sequence
-                char *reply = zstr_recv (client);
-                if (atoi (reply) == sequence) {
-                    printf ("I: server replied OK (%s)\n", reply);
-                    expect_reply = 0;
-                    sleep (1);  //  One request per second
-                }
-                else
-                    printf ("E: bad reply from server: %s\n", reply);
-                free (reply);
-            }
-            else {
-                printf ("W: no response from server, failing over\n");
-                
-                //  Old socket is confused; close it and open a new one
-                zsocket_destroy (ctx, client);
-                server_nbr = (server_nbr + 1) % 2;
-                zclock_sleep (SETTLE_DELAY);
-                printf ("I: connecting to server at %s...\n",
-                        server [server_nbr]);
-                client = zsocket_new (ctx, ZMQ_REQ);
-                zsocket_connect (client, server [server_nbr]);
-
-                //  Send request again, on new socket
-                zstr_send (client, request);
-            }
-        }
-    }
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="bstarcli: バイナリー・スター クライアント"}
+include(examples/EXAMPLE_LANG/bstarcli.EXAMPLE_EXT)
 ~~~
 
 ;To test Binary Star, start the servers and client in any order:
@@ -3968,372 +1490,16 @@ zloopにはソケットやタイマーイベントに反応するハンドラー
 バイナリー・スターの場合、アクティブから非アクティブへの遷移などの状態の変更に関するハンドラを登録します。
 こちらがbstarクラスの実装です。
 
-~~~ {caption="bstar: Binary Star reactor"}
-//  bstar class - Binary Star reactor
-
-#include "bstar.h"
-
-//  States we can be in at any point in time
-typedef enum {
-    STATE_PRIMARY = 1,          //  Primary, waiting for peer to connect
-    STATE_BACKUP = 2,           //  Backup, waiting for peer to connect
-    STATE_ACTIVE = 3,           //  Active - accepting connections
-    STATE_PASSIVE = 4           //  Passive - not accepting connections
-} state_t;
-
-//  Events, which start with the states our peer can be in
-typedef enum {
-    PEER_PRIMARY = 1,           //  HA peer is pending primary
-    PEER_BACKUP = 2,            //  HA peer is pending backup
-    PEER_ACTIVE = 3,            //  HA peer is active
-    PEER_PASSIVE = 4,           //  HA peer is passive
-    CLIENT_REQUEST = 5          //  Client makes request
-} event_t;
-
-//  Structure of our class
-
-struct _bstar_t {
-    zctx_t *ctx;                //  Our private context
-    zloop_t *loop;              //  Reactor loop
-    void *statepub;             //  State publisher
-    void *statesub;             //  State subscriber
-    state_t state;              //  Current state
-    event_t event;              //  Current event
-    int64_t peer_expiry;        //  When peer is considered 'dead'
-    zloop_fn *voter_fn;         //  Voting socket handler
-    void *voter_arg;            //  Arguments for voting handler
-    zloop_fn *active_fn;        //  Call when become active
-    void *active_arg;           //  Arguments for handler
-    zloop_fn *passive_fn;         //  Call when become passive
-    void *passive_arg;            //  Arguments for handler
-};
-
-//  The finite-state machine is the same as in the proof-of-concept server.
-//  To understand this reactor in detail, first read the CZMQ zloop class.
-//  .skip
-
-//  We send state information every this often
-//  If peer doesn't respond in two heartbeats, it is 'dead'
-#define BSTAR_HEARTBEAT     1000        //  In msecs
-
-//  Binary Star finite state machine (applies event to state)
-//  Returns -1 if there was an exception, 0 if event was valid.
-
-static int
-s_execute_fsm (bstar_t *self)
-{
-    int rc = 0;
-    //  Primary server is waiting for peer to connect
-    //  Accepts CLIENT_REQUEST events in this state
-    if (self->state == STATE_PRIMARY) {
-        if (self->event == PEER_BACKUP) {
-            zclock_log ("I: connected to backup (passive), ready as active");
-            self->state = STATE_ACTIVE;
-            if (self->active_fn)
-                (self->active_fn) (self->loop, NULL, self->active_arg);
-        }
-        else
-        if (self->event == PEER_ACTIVE) {
-            zclock_log ("I: connected to backup (active), ready as passive");
-            self->state = STATE_PASSIVE;
-            if (self->passive_fn)
-                (self->passive_fn) (self->loop, NULL, self->passive_arg);
-        }
-        else
-        if (self->event == CLIENT_REQUEST) {
-            // Allow client requests to turn us into the active if we've
-            // waited sufficiently long to believe the backup is not
-            // currently acting as active (i.e., after a failover)
-            assert (self->peer_expiry > 0);
-            if (zclock_time () >= self->peer_expiry) {
-                zclock_log ("I: request from client, ready as active");
-                self->state = STATE_ACTIVE;
-                if (self->active_fn)
-                    (self->active_fn) (self->loop, NULL, self->active_arg);
-            } else
-                // Don't respond to clients yet - it's possible we're
-                // performing a failback and the backup is currently active
-                rc = -1;
-        }
-    }
-    else
-    //  Backup server is waiting for peer to connect
-    //  Rejects CLIENT_REQUEST events in this state
-    if (self->state == STATE_BACKUP) {
-        if (self->event == PEER_ACTIVE) {
-            zclock_log ("I: connected to primary (active), ready as passive");
-            self->state = STATE_PASSIVE;
-            if (self->passive_fn)
-                (self->passive_fn) (self->loop, NULL, self->passive_arg);
-        }
-        else
-        if (self->event == CLIENT_REQUEST)
-            rc = -1;
-    }
-    else
-    //  Server is active
-    //  Accepts CLIENT_REQUEST events in this state
-    //  The only way out of ACTIVE is death
-    if (self->state == STATE_ACTIVE) {
-        if (self->event == PEER_ACTIVE) {
-            //  Two actives would mean split-brain
-            zclock_log ("E: fatal error - dual actives, aborting");
-            rc = -1;
-        }
-    }
-    else
-    //  Server is passive
-    //  CLIENT_REQUEST events can trigger failover if peer looks dead
-    if (self->state == STATE_PASSIVE) {
-        if (self->event == PEER_PRIMARY) {
-            //  Peer is restarting - become active, peer will go passive
-            zclock_log ("I: primary (passive) is restarting, ready as active");
-            self->state = STATE_ACTIVE;
-        }
-        else
-        if (self->event == PEER_BACKUP) {
-            //  Peer is restarting - become active, peer will go passive
-            zclock_log ("I: backup (passive) is restarting, ready as active");
-            self->state = STATE_ACTIVE;
-        }
-        else
-        if (self->event == PEER_PASSIVE) {
-            //  Two passives would mean cluster would be non-responsive
-            zclock_log ("E: fatal error - dual passives, aborting");
-            rc = -1;
-        }
-        else
-        if (self->event == CLIENT_REQUEST) {
-            //  Peer becomes active if timeout has passed
-            //  It's the client request that triggers the failover
-            assert (self->peer_expiry > 0);
-            if (zclock_time () >= self->peer_expiry) {
-                //  If peer is dead, switch to the active state
-                zclock_log ("I: failover successful, ready as active");
-                self->state = STATE_ACTIVE;
-            }
-            else
-                //  If peer is alive, reject connections
-                rc = -1;
-        }
-        //  Call state change handler if necessary
-        if (self->state == STATE_ACTIVE && self->active_fn)
-            (self->active_fn) (self->loop, NULL, self->active_arg);
-    }
-    return rc;
-}
-
-static void
-s_update_peer_expiry (bstar_t *self)
-{
-    self->peer_expiry = zclock_time () + 2 * BSTAR_HEARTBEAT;
-}
-
-//  Reactor event handlers...
-
-//  Publish our state to peer
-int s_send_state (zloop_t *loop, zmq_pollitem_t *poller, void *arg)
-{
-    bstar_t *self = (bstar_t *) arg;
-    zstr_send (self->statepub, "%d", self->state);
-    return 0;
-}
-
-//  Receive state from peer, execute finite state machine
-int s_recv_state (zloop_t *loop, zmq_pollitem_t *poller, void *arg)
-{
-    bstar_t *self = (bstar_t *) arg;
-    char *state = zstr_recv (poller->socket);
-    if (state) {
-        self->event = atoi (state);
-        s_update_peer_expiry (self);
-        free (state);
-    }
-    return s_execute_fsm (self);
-}
-
-//  Application wants to speak to us, see if it's possible
-int s_voter_ready (zloop_t *loop, zmq_pollitem_t *poller, void *arg)
-{
-    bstar_t *self = (bstar_t *) arg;
-    //  If server can accept input now, call appl handler
-    self->event = CLIENT_REQUEST;
-    if (s_execute_fsm (self) == 0)
-        (self->voter_fn) (self->loop, poller, self->voter_arg);
-    else {
-        //  Destroy waiting message, no-one to read it
-        zmsg_t *msg = zmsg_recv (poller->socket);
-        zmsg_destroy (&msg);
-    }
-    return 0;
-}
-
-//  .until
-//  .split constructor
-//  This is the constructor for our {{bstar}} class. We have to tell it 
-//  whether we're primary or backup server, as well as our local and 
-//  remote endpoints to bind and connect to:
-
-bstar_t *
-bstar_new (int primary, char *local, char *remote)
-{
-    bstar_t
-        *self;
-
-    self = (bstar_t *) zmalloc (sizeof (bstar_t));
-
-    //  Initialize the Binary Star
-    self->ctx = zctx_new ();
-    self->loop = zloop_new ();
-    self->state = primary? STATE_PRIMARY: STATE_BACKUP;
-
-    //  Create publisher for state going to peer
-    self->statepub = zsocket_new (self->ctx, ZMQ_PUB);
-    zsocket_bind (self->statepub, local);
-
-    //  Create subscriber for state coming from peer
-    self->statesub = zsocket_new (self->ctx, ZMQ_SUB);
-    zsocket_set_subscribe (self->statesub, "");
-    zsocket_connect (self->statesub, remote);
-
-    //  Set-up basic reactor events
-    zloop_timer (self->loop, BSTAR_HEARTBEAT, 0, s_send_state, self);
-    zmq_pollitem_t poller = { self->statesub, 0, ZMQ_POLLIN };
-    zloop_poller (self->loop, &poller, s_recv_state, self);
-    return self;
-}
-
-//  .split destructor
-//  The destructor shuts down the bstar reactor:
-
-void
-bstar_destroy (bstar_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        bstar_t *self = *self_p;
-        zloop_destroy (&self->loop);
-        zctx_destroy (&self->ctx);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  .split zloop method
-//  This method returns the underlying zloop reactor, so we can add
-//  additional timers and readers:
-
-zloop_t *
-bstar_zloop (bstar_t *self)
-{
-    return self->loop;
-}
-
-//  .split voter method
-//  This method registers a client voter socket. Messages received
-//  on this socket provide the CLIENT_REQUEST events for the Binary Star
-//  FSM and are passed to the provided application handler. We require
-//  exactly one voter per {{bstar}} instance:
-
-int
-bstar_voter (bstar_t *self, char *endpoint, int type, zloop_fn handler,
-             void *arg)
-{
-    //  Hold actual handler+arg so we can call this later
-    void *socket = zsocket_new (self->ctx, type);
-    zsocket_bind (socket, endpoint);
-    assert (!self->voter_fn);
-    self->voter_fn = handler;
-    self->voter_arg = arg;
-    zmq_pollitem_t poller = { socket, 0, ZMQ_POLLIN };
-    return zloop_poller (self->loop, &poller, s_voter_ready, self);
-}
-
-//  .split register state-change handlers
-//  Register handlers to be called each time there's a state change:
-
-void
-bstar_new_active (bstar_t *self, zloop_fn handler, void *arg)
-{
-    assert (!self->active_fn);
-    self->active_fn = handler;
-    self->active_arg = arg;
-}
-
-void
-bstar_new_passive (bstar_t *self, zloop_fn handler, void *arg)
-{
-    assert (!self->passive_fn);
-    self->passive_fn = handler;
-    self->passive_arg = arg;
-}
-
-//  .split enable/disable tracing
-//  Enable/disable verbose tracing, for debugging:
-
-void bstar_set_verbose (bstar_t *self, bool verbose)
-{
-    zloop_set_verbose (self->loop, verbose);
-}
-
-//  .split start the reactor
-//  Finally, start the configured reactor. It will end if any handler
-//  returns -1 to the reactor, or if the process receives SIGINT or SIGTERM:
-
-int
-bstar_start (bstar_t *self)
-{
-    assert (self->voter_fn);
-    s_update_peer_expiry (self);
-    return zloop_start (self->loop);
-}
+~~~ {caption="bstar: バイナリー・スター リアクター"}
+include(examples/EXAMPLE_LANG/bstar.EXAMPLE_EXT)
 ~~~
 
 ;This gives us the following short main program for the server:
 
 これを利用することでサーバーのメインプログラムはこんなにも短くなります。
 
-~~~ {caption="bstarsrv2: Binary Star server using core class in C"}
-//  Binary Star server, using bstar reactor
-
-//  Lets us build this source without creating a library
-#include "bstar.c"
-
-//  Echo service
-int s_echo (zloop_t *loop, zmq_pollitem_t *poller, void *arg)
-{
-    zmsg_t *msg = zmsg_recv (poller->socket);
-    zmsg_send (&msg, poller->socket);
-    return 0;
-}
-
-int main (int argc, char *argv [])
-{
-    //  Arguments can be either of:
-    //      -p  primary server, at tcp://localhost:5001
-    //      -b  backup server, at tcp://localhost:5002
-    bstar_t *bstar;
-    if (argc == 2 && streq (argv [1], "-p")) {
-        printf ("I: Primary active, waiting for backup (passive)\n");
-        bstar = bstar_new (BSTAR_PRIMARY,
-            "tcp://*:5003", "tcp://localhost:5004");
-        bstar_voter (bstar, "tcp://*:5001", ZMQ_ROUTER, s_echo, NULL);
-    }
-    else
-    if (argc == 2 && streq (argv [1], "-b")) {
-        printf ("I: Backup passive, waiting for primary (active)\n");
-        bstar = bstar_new (BSTAR_BACKUP,
-            "tcp://*:5004", "tcp://localhost:5003");
-        bstar_voter (bstar, "tcp://*:5002", ZMQ_ROUTER, s_echo, NULL);
-    }
-    else {
-        printf ("Usage: bstarsrvs { -p | -b }\n");
-        exit (0);
-    }
-    bstar_start (bstar);
-    bstar_destroy (&bstar);
-    return 0;
-}
+~~~ {caption="bstarsrv2: リアクタークラスを利用したバイナリー・スター サーバー"}
+include(examples/EXAMPLE_LANG/bstarsrv2.EXAMPLE_EXT)
 ~~~
 
 ## ブローカー不在の信頼性(フリーランスパターン)
@@ -4348,7 +1514,7 @@ int main (int argc, char *argv [])
 
 ;This is why ØMQ does not impose a broker-centric architecture, though it does give you the tools to build brokers, aka proxies, and we've built a dozen or so different ones so far, just for practice.
 
-これが、ØMQはブローカー中心のアーキテクチャを強制しないのにも関わらず、ブローカーやプロキシーなどの例を多く説明してきた理由です。
+これが、ØMQはブローカー中心のアーキテクチャを強制しないのにも関わらず、ブローカーやプロキシなどの例を多く説明してきた理由です。
 
 ;So we'll end this chapter by deconstructing the broker-based reliability we've built so far, and turning it back into a distributed peer-to-peer architecture I call the Freelance pattern. Our use case will be a name resolution service. This is a common problem with ØMQ architectures: how do we know the endpoint to connect to? Hard-coding TCP/IP addresses in code is insanely fragile. Using configuration files creates an administration nightmare. Imagine if you had to hand-configure your web browser, on every PC or mobile phone you used, to realize that "google.com" was "74.125.230.82".
 
@@ -4406,123 +1572,23 @@ IPアドレスをハードコードなんてしたくは無いでしょうし、
 
 私達の目の前には3種類の選択肢が提示されています。
 単純な方法か、荒っぽいやり方か、複雑で面倒な方法です。
-それではまずねじれを解いた単純な方法で実装してみましょう。
+まずひねくれてない単純な方法で実装してみましょう。
 というわけでものぐさ海賊パターンを複数のサーバーに対応するように書きなおします。
 
 ;Start one or several servers first, specifying a bind endpoint as the argument:
 
 まず、引き数にエンドポイント名を指定して、1つ以上のサーバーを起動して下さい。
 
-~~~ {caption="flserver1: Freelance server Model One in C"}
-//  Freelance server - Model 1
-//  Trivial echo service
-
-#include "czmq.h"
-
-int main (int argc, char *argv [])
-{
-    if (argc < 2) {
-        printf ("I: syntax: %s <endpoint>\n", argv [0]);
-        return 0;
-    }
-    zctx_t *ctx = zctx_new ();
-    void *server = zsocket_new (ctx, ZMQ_REP);
-    zsocket_bind (server, argv [1]);
-
-    printf ("I: echo service is ready at %s\n", argv [1]);
-    while (true) {
-        zmsg_t *msg = zmsg_recv (server);
-        if (!msg)
-            break;          //  Interrupted
-        zmsg_send (&msg, server);
-    }
-    if (zctx_interrupted)
-        printf ("W: interrupted\n");
-
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="flserver1: フリーランスサーバー モデル1"}
+include(examples/EXAMPLE_LANG/flserver1.EXAMPLE_EXT)
 ~~~
 
 ;Then start the client, specifying one or more connect endpoints as arguments:
 
-続いて1つ以上のエンドポイントを指定してクライアントを起動します。
+続いて、1つ以上のエンドポイントを指定してクライアントを起動します。
 
-~~~ {caption="flclient1: フリーランスクライアント モデル1(C言語)"}
-//  Freelance client - Model 1
-//  Uses REQ socket to query one or more services
-
-#include "czmq.h"
-#define REQUEST_TIMEOUT     1000
-#define MAX_RETRIES         3       //  Before we abandon
-
-static zmsg_t *
-s_try_request (zctx_t *ctx, char *endpoint, zmsg_t *request)
-{
-    printf ("I: trying echo service at %s...\n", endpoint);
-    void *client = zsocket_new (ctx, ZMQ_REQ);
-    zsocket_connect (client, endpoint);
-
-    //  Send request, wait safely for reply
-    zmsg_t *msg = zmsg_dup (request);
-    zmsg_send (&msg, client);
-    zmq_pollitem_t items [] = { { client, 0, ZMQ_POLLIN, 0 } };
-    zmq_poll (items, 1, REQUEST_TIMEOUT * ZMQ_POLL_MSEC);
-    zmsg_t *reply = NULL;
-    if (items [0].revents & ZMQ_POLLIN)
-        reply = zmsg_recv (client);
-
-    //  Close socket in any case, we're done with it now
-    zsocket_destroy (ctx, client);
-    return reply;
-}
-
-//  .split client task
-//  The client uses a Lazy Pirate strategy if it only has one server to talk
-//  to. If it has two or more servers to talk to, it will try each server just
-//  once:
-
-int main (int argc, char *argv [])
-{
-    zctx_t *ctx = zctx_new ();
-    zmsg_t *request = zmsg_new ();
-    zmsg_addstr (request, "Hello world");
-    zmsg_t *reply = NULL;
-
-    int endpoints = argc - 1;
-    if (endpoints == 0)
-        printf ("I: syntax: %s <endpoint> ...\n", argv [0]);
-    else
-    if (endpoints == 1) {
-        //  For one endpoint, we retry N times
-        int retries;
-        for (retries = 0; retries < MAX_RETRIES; retries++) {
-            char *endpoint = argv [1];
-            reply = s_try_request (ctx, endpoint, request);
-            if (reply)
-                break;          //  Successful
-            printf ("W: no response from %s, retrying...\n", endpoint);
-        }
-    }
-    else {
-        //  For multiple endpoints, try each at most once
-        int endpoint_nbr;
-        for (endpoint_nbr = 0; endpoint_nbr < endpoints; endpoint_nbr++) {
-            char *endpoint = argv [endpoint_nbr + 1];
-            reply = s_try_request (ctx, endpoint, request);
-            if (reply)
-                break;          //  Successful
-            printf ("W: no response from %s\n", endpoint);
-        }
-    }
-    if (reply)
-        printf ("Service is running OK\n");
-
-    zmsg_destroy (&request);
-    zmsg_destroy (&reply);
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="flclient1: フリーランスクライアント モデル1"}
+include(examples/EXAMPLE_LANG/flclient1.EXAMPLE_EXT)
 ~~~
 
 ;A sample run is:
@@ -4568,7 +1634,7 @@ flclient1 tcp://localhost:5555 tcp://localhost:5556
 ;* We ignore any other replies.
 
 * 全てのサーバーに接続します。
-* リクエストを行う際はサーバーに対して陸ストを何度も投げ続けます。
+* リクエストを行う際はサーバーに対してリクエストを何度も投げ続けます。
 * 最初の応答が得られたらこれを読みます。
 * 残りの応答は全て無視します。
 
@@ -4587,214 +1653,23 @@ flclient1 tcp://localhost:5555 tcp://localhost:5556
 
 従って、クライアントは要求番号と一致しない応答を全て無視する必要があります。
 echoサーバーではこのモデルの題材にふさわしくありませんので、違う動作を行うサーバーを実装してみます。
-ここでは、応答のメッセージを読み込み、要求番号と一致している事と「OK」というメッセージの本文を確認します。
+モデル2のサーバーは応答のメッセージを読み込み、要求番号と一致している事と「OK」というメッセージの本文を確認します。
 つまり、この応答メッセージは「シーケンス番号」と「本文」の2つのフレームを含んでいます。
 
 ;Start one or more servers, specifying a bind endpoint each time:
 
 バインドするエンドポイントを指定して1つ以上のサーバーを起動します。
 
-~~~ {caption="flserver2: Freelance server Model Two in C"}
-//  Freelance server - Model 2
-//  Does some work, replies OK, with message sequencing
-
-#include "czmq.h"
-
-int main (int argc, char *argv [])
-{
-    if (argc < 2) {
-        printf ("I: syntax: %s <endpoint>\n", argv [0]);
-        return 0;
-    }
-    zctx_t *ctx = zctx_new ();
-    void *server = zsocket_new (ctx, ZMQ_REP);
-    zsocket_bind (server, argv [1]);
-
-    printf ("I: service is ready at %s\n", argv [1]);
-    while (true) {
-        zmsg_t *request = zmsg_recv (server);
-        if (!request)
-            break;          //  Interrupted
-        //  Fail nastily if run against wrong client
-        assert (zmsg_size (request) == 2);
-
-        zframe_t *identity = zmsg_pop (request);
-        zmsg_destroy (&request);
-
-        zmsg_t *reply = zmsg_new ();
-        zmsg_add (reply, identity);
-        zmsg_addstr (reply, "OK");
-        zmsg_send (&reply, server);
-    }
-    if (zctx_interrupted)
-        printf ("W: interrupted\n");
-
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="flserver2: フリーランスサーバー モデル2"}
+include(examples/EXAMPLE_LANG/flserver2.EXAMPLE_EXT)
 ~~~
 
 ;Then start the client, specifying the connect endpoints as arguments:
 
 そして、接続するエンドポイントを引き数に指定してクライアントを起動します。
 
-~~~ {caption="flclient2: フリーランスクライアント モデル2(C言語)"}
-//  Freelance client - Model 2
-//  Uses DEALER socket to blast one or more services
-
-#include "czmq.h"
-
-//  We design our client API as a class, using the CZMQ style
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef struct _flclient_t flclient_t;
-flclient_t *flclient_new (void);
-void        flclient_destroy (flclient_t **self_p);
-void        flclient_connect (flclient_t *self, char *endpoint);
-zmsg_t     *flclient_request (flclient_t *self, zmsg_t **request_p);
-
-#ifdef __cplusplus
-}
-#endif
-
-//  If not a single service replies within this time, give up
-#define GLOBAL_TIMEOUT 2500
-
-int main (int argc, char *argv [])
-{
-    if (argc == 1) {
-        printf ("I: syntax: %s <endpoint> ...\n", argv [0]);
-        return 0;
-    }
-    //  Create new freelance client object
-    flclient_t *client = flclient_new ();
-
-    //  Connect to each endpoint
-    int argn;
-    for (argn = 1; argn < argc; argn++)
-        flclient_connect (client, argv [argn]);
-
-    //  Send a bunch of name resolution 'requests', measure time
-    int requests = 10000;
-    uint64_t start = zclock_time ();
-    while (requests--) {
-        zmsg_t *request = zmsg_new ();
-        zmsg_addstr (request, "random name");
-        zmsg_t *reply = flclient_request (client, &request);
-        if (!reply) {
-            printf ("E: name service not available, aborting\n");
-            break;
-        }
-        zmsg_destroy (&reply);
-    }
-    printf ("Average round trip cost: %d usec\n",
-        (int) (zclock_time () - start) / 10);
-
-    flclient_destroy (&client);
-    return 0;
-}
-
-//  .split class implementation
-//  Here is the {{flclient}} class implementation. Each instance has a 
-//  context, a DEALER socket it uses to talk to the servers, a counter 
-//  of how many servers it's connected to, and a request sequence number:
-
-struct _flclient_t {
-    zctx_t *ctx;        //  Our context wrapper
-    void *socket;       //  DEALER socket talking to servers
-    size_t servers;     //  How many servers we have connected to
-    uint sequence;      //  Number of requests ever sent
-};
-
-//  Constructor
-
-flclient_t *
-flclient_new (void)
-{
-    flclient_t
-        *self;
-
-    self = (flclient_t *) zmalloc (sizeof (flclient_t));
-    self->ctx = zctx_new ();
-    self->socket = zsocket_new (self->ctx, ZMQ_DEALER);
-    return self;
-}
-
-//  Destructor
-
-void
-flclient_destroy (flclient_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        flclient_t *self = *self_p;
-        zctx_destroy (&self->ctx);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  Connect to new server endpoint
-
-void
-flclient_connect (flclient_t *self, char *endpoint)
-{
-    assert (self);
-    zsocket_connect (self->socket, endpoint);
-    self->servers++;
-}
-
-//  .split request method
-//  This method does the hard work. It sends a request to all
-//  connected servers in parallel (for this to work, all connections
-//  must be successful and completed by this time). It then waits
-//  for a single successful reply, and returns that to the caller.
-//  Any other replies are just dropped:
-
-zmsg_t *
-flclient_request (flclient_t *self, zmsg_t **request_p)
-{
-    assert (self);
-    assert (*request_p);
-    zmsg_t *request = *request_p;
-
-    //  Prefix request with sequence number and empty envelope
-    char sequence_text [10];
-    sprintf (sequence_text, "%u", ++self->sequence);
-    zmsg_pushstr (request, sequence_text);
-    zmsg_pushstr (request, "");
-
-    //  Blast the request to all connected servers
-    int server;
-    for (server = 0; server < self->servers; server++) {
-        zmsg_t *msg = zmsg_dup (request);
-        zmsg_send (&msg, self->socket);
-    }
-    //  Wait for a matching reply to arrive from anywhere
-    //  Since we can poll several times, calculate each one
-    zmsg_t *reply = NULL;
-    uint64_t endtime = zclock_time () + GLOBAL_TIMEOUT;
-    while (zclock_time () < endtime) {
-        zmq_pollitem_t items [] = { { self->socket, 0, ZMQ_POLLIN, 0 } };
-        zmq_poll (items, 1, (endtime - zclock_time ()) * ZMQ_POLL_MSEC);
-        if (items [0].revents & ZMQ_POLLIN) {
-            //  Reply is [empty][sequence][OK]
-            reply = zmsg_recv (self->socket);
-            assert (zmsg_size (reply) == 3);
-            free (zmsg_popstr (reply));
-            char *sequence = zmsg_popstr (reply);
-            int sequence_nbr = atoi (sequence);
-            free (sequence);
-            if (sequence_nbr == self->sequence)
-                break;
-            zmsg_destroy (&reply);
-        }
-    }
-    zmsg_destroy (request_p);
-    return reply;
-}
+~~~ {caption="flclient2: フリーランスクライアント モデル2"}
+include(examples/EXAMPLE_LANG/flclient2.EXAMPLE_EXT)
 ~~~
 
 ;Here are some things to note about the client implementation:
@@ -4830,13 +1705,13 @@ flclient_request (flclient_t *self, zmsg_t **request_p)
 * 欠点: プライマリーやセカンダリなど、サーバーの優先順位を決めることが出来ません。
 * 欠点: ひとつのリクエストに対して全てのサーバーが処理を行う必要があります。
 
-### モデル3: 複雑で面倒くさい方法
+### モデル3: 複雑で面倒な方法
 ;The shotgun approach seems too good to be true. Let's be scientific and work through all the alternatives. We're going to explore the complex/nasty option, even if it's only to finally realize that we preferred brutal. Ah, the story of my life.
 
 ショットガンをぶっ放すのがとても良い手段であることは真実です。
 しかし全ての代替案について検討してみるのが科学というものです。
 私達はこれから更に複雑で面倒な選択肢を提案しますが最終的にショットガンをぶっ放すのが望ましいと気がつくでしょう。
-これは私の人生の物語です。
+これから紹介するのは私が辿った道です。
 
 ;We can solve the main problems of the client by switching to a ROUTER socket. That lets us send requests to specific servers, avoid servers we know are dead, and in general be as smart as we want to be. We can also solve the main problem of the server (single-threadedness) by switching to a ROUTER socket.
 
@@ -4895,58 +1770,8 @@ IDとしてサーバーのエンドポイントを指定すると直ちに接続
 サーバー側の実装は短くて良い感じです。
 これをFLPプロトコルと呼んでいます。
 
-~~~ {caption="flserver3: フリーランスサーバー モデル3(C言語)"}
-//  Freelance server - Model 3
-//  Uses an ROUTER/ROUTER socket but just one thread
-
-#include "czmq.h"
-
-int main (int argc, char *argv [])
-{
-    int verbose = (argc > 1 && streq (argv [1], "-v"));
-
-    zctx_t *ctx = zctx_new ();
-
-    //  Prepare server socket with predictable identity
-    char *bind_endpoint = "tcp://*:5555";
-    char *connect_endpoint = "tcp://localhost:5555";
-    void *server = zsocket_new (ctx, ZMQ_ROUTER);
-    zmq_setsockopt (server,
-        ZMQ_IDENTITY, connect_endpoint, strlen (connect_endpoint));
-    zsocket_bind (server, bind_endpoint);
-    printf ("I: service is ready at %s\n", bind_endpoint);
-
-    while (!zctx_interrupted) {
-        zmsg_t *request = zmsg_recv (server);
-        if (verbose && request)
-            zmsg_dump (request);
-        if (!request)
-            break;          //  Interrupted
-
-        //  Frame 0: identity of client
-        //  Frame 1: PING, or client control frame
-        //  Frame 2: request body
-        zframe_t *identity = zmsg_pop (request);
-        zframe_t *control = zmsg_pop (request);
-        zmsg_t *reply = zmsg_new ();
-        if (zframe_streq (control, "PING"))
-            zmsg_addstr (reply, "PONG");
-        else {
-            zmsg_add (reply, control);
-            zmsg_addstr (reply, "OK");
-        }
-        zmsg_destroy (&request);
-        zmsg_push (reply, identity);
-        if (verbose && reply)
-            zmsg_dump (reply);
-        zmsg_send (&reply, server);
-    }
-    if (zctx_interrupted)
-        printf ("W: interrupted\n");
-
-    zctx_destroy (&ctx);
-    return 0;
-}
+~~~ {caption="flserver3: フリーランスサーバー モデル3"}
+include(examples/EXAMPLE_LANG/flserver3.EXAMPLE_EXT)
 ~~~
 
 ;The Freelance client, however, has gotten large. For clarity, it's split into an example application and a class that does the hard work. Here's the top-level application:
@@ -4954,399 +1779,16 @@ int main (int argc, char *argv [])
 こちらがフリーランスクライアントですが大きくなってしまいましたのでクラスに分離しました。
 こちらがメインプログラムです。
 
-~~~ {caption="flclient3: フリーランスサーバー モデル3(C言語)"}
-//  Freelance client - Model 3
-//  Uses flcliapi class to encapsulate Freelance pattern
-
-//  Lets us build this source without creating a library
-#include "flcliapi.c"
-
-int main (void)
-{
-    //  Create new freelance client object
-    flcliapi_t *client = flcliapi_new ();
-
-    //  Connect to several endpoints
-    flcliapi_connect (client, "tcp://localhost:5555");
-    flcliapi_connect (client, "tcp://localhost:5556");
-    flcliapi_connect (client, "tcp://localhost:5557");
-
-    //  Send a bunch of name resolution 'requests', measure time
-    int requests = 1000;
-    uint64_t start = zclock_time ();
-    while (requests--) {
-        zmsg_t *request = zmsg_new ();
-        zmsg_addstr (request, "random name");
-        zmsg_t *reply = flcliapi_request (client, &request);
-        if (!reply) {
-            printf ("E: name service not available, aborting\n");
-            break;
-        }
-        zmsg_destroy (&reply);
-    }
-    printf ("Average round trip cost: %d usec\n",
-        (int) (zclock_time () - start) / 10);
-
-    flcliapi_destroy (&client);
-    return 0;
-}
+~~~ {caption="flclient3: フリーランスクライアント モデル3"}
+include(examples/EXAMPLE_LANG/flclient3.EXAMPLE_EXT)
 ~~~
 
 ;And here, almost as complex and large as the Majordomo broker, is the client API class:
 
 そしてこちらがMajordomoブローカーと同じくらい巨大で複雑になってしまったクライアントAPIクラスのコードです。
 
-~~~ {caption="flcliapi: フリーランスクライアントAPI(C言語)"}
-//  flcliapi class - Freelance Pattern agent class
-//  Implements the Freelance Protocol at http://rfc.zeromq.org/spec:10
-
-#include "flcliapi.h"
-
-//  If no server replies within this time, abandon request
-#define GLOBAL_TIMEOUT  3000    //  msecs
-//  PING interval for servers we think are alive
-#define PING_INTERVAL   2000    //  msecs
-//  Server considered dead if silent for this long
-#define SERVER_TTL      6000    //  msecs
-
-//  .split API structure
-//  This API works in two halves, a common pattern for APIs that need to
-//  run in the background. One half is an frontend object our application
-//  creates and works with; the other half is a backend "agent" that runs
-//  in a background thread. The frontend talks to the backend over an
-//  inproc pipe socket:
-
-//  Structure of our frontend class
-
-struct _flcliapi_t {
-    zctx_t *ctx;        //  Our context wrapper
-    void *pipe;         //  Pipe through to flcliapi agent
-};
-
-//  This is the thread that handles our real flcliapi class
-static void flcliapi_agent (void *args, zctx_t *ctx, void *pipe);
-
-//  Constructor
-
-flcliapi_t *
-flcliapi_new (void)
-{
-    flcliapi_t
-        *self;
-
-    self = (flcliapi_t *) zmalloc (sizeof (flcliapi_t));
-    self->ctx = zctx_new ();
-    self->pipe = zthread_fork (self->ctx, flcliapi_agent, NULL);
-    return self;
-}
-
-//  Destructor
-
-void
-flcliapi_destroy (flcliapi_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        flcliapi_t *self = *self_p;
-        zctx_destroy (&self->ctx);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  .split connect method
-//  To implement the connect method, the frontend object sends a multipart
-//  message to the backend agent. The first part is a string "CONNECT", and
-//  the second part is the endpoint. It waits 100msec for the connection to
-//  come up, which isn't pretty, but saves us from sending all requests to a
-//  single server, at startup time:
-
-void
-flcliapi_connect (flcliapi_t *self, char *endpoint)
-{
-    assert (self);
-    assert (endpoint);
-    zmsg_t *msg = zmsg_new ();
-    zmsg_addstr (msg, "CONNECT");
-    zmsg_addstr (msg, endpoint);
-    zmsg_send (&msg, self->pipe);
-    zclock_sleep (100);      //  Allow connection to come up
-}
-
-//  .split request method
-//  To implement the request method, the frontend object sends a message
-//  to the backend, specifying a command "REQUEST" and the request message:
-
-zmsg_t *
-flcliapi_request (flcliapi_t *self, zmsg_t **request_p)
-{
-    assert (self);
-    assert (*request_p);
-
-    zmsg_pushstr (*request_p, "REQUEST");
-    zmsg_send (request_p, self->pipe);
-    zmsg_t *reply = zmsg_recv (self->pipe);
-    if (reply) {
-        char *status = zmsg_popstr (reply);
-        if (streq (status, "FAILED"))
-            zmsg_destroy (&reply);
-        free (status);
-    }
-    return reply;
-}
-
-//  .split backend agent
-//  Here we see the backend agent. It runs as an attached thread, talking
-//  to its parent over a pipe socket. It is a fairly complex piece of work
-//  so we'll break it down into pieces. First, the agent manages a set of
-//  servers, using our familiar class approach:
-
-//  Simple class for one server we talk to
-
-typedef struct {
-    char *endpoint;             //  Server identity/endpoint
-    uint alive;                 //  1 if known to be alive
-    int64_t ping_at;            //  Next ping at this time
-    int64_t expires;            //  Expires at this time
-} server_t;
-
-server_t *
-server_new (char *endpoint)
-{
-    server_t *self = (server_t *) zmalloc (sizeof (server_t));
-    self->endpoint = strdup (endpoint);
-    self->alive = 0;
-    self->ping_at = zclock_time () + PING_INTERVAL;
-    self->expires = zclock_time () + SERVER_TTL;
-    return self;
-}
-
-void
-server_destroy (server_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        server_t *self = *self_p;
-        free (self->endpoint);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-int
-server_ping (const char *key, void *server, void *socket)
-{
-    server_t *self = (server_t *) server;
-    if (zclock_time () >= self->ping_at) {
-        zmsg_t *ping = zmsg_new ();
-        zmsg_addstr (ping, self->endpoint);
-        zmsg_addstr (ping, "PING");
-        zmsg_send (&ping, socket);
-        self->ping_at = zclock_time () + PING_INTERVAL;
-    }
-    return 0;
-}
-
-int
-server_tickless (const char *key, void *server, void *arg)
-{
-    server_t *self = (server_t *) server;
-    uint64_t *tickless = (uint64_t *) arg;
-    if (*tickless > self->ping_at)
-        *tickless = self->ping_at;
-    return 0;
-}
-
-//  .split backend agent class
-//  We build the agent as a class that's capable of processing messages
-//  coming in from its various sockets:
-
-//  Simple class for one background agent
-
-typedef struct {
-    zctx_t *ctx;                //  Own context
-    void *pipe;                 //  Socket to talk back to application
-    void *router;               //  Socket to talk to servers
-    zhash_t *servers;           //  Servers we've connected to
-    zlist_t *actives;           //  Servers we know are alive
-    uint sequence;              //  Number of requests ever sent
-    zmsg_t *request;            //  Current request if any
-    zmsg_t *reply;              //  Current reply if any
-    int64_t expires;            //  Timeout for request/reply
-} agent_t;
-
-agent_t *
-agent_new (zctx_t *ctx, void *pipe)
-{
-    agent_t *self = (agent_t *) zmalloc (sizeof (agent_t));
-    self->ctx = ctx;
-    self->pipe = pipe;
-    self->router = zsocket_new (self->ctx, ZMQ_ROUTER);
-    self->servers = zhash_new ();
-    self->actives = zlist_new ();
-    return self;
-}
-
-void
-agent_destroy (agent_t **self_p)
-{
-    assert (self_p);
-    if (*self_p) {
-        agent_t *self = *self_p;
-        zhash_destroy (&self->servers);
-        zlist_destroy (&self->actives);
-        zmsg_destroy (&self->request);
-        zmsg_destroy (&self->reply);
-        free (self);
-        *self_p = NULL;
-    }
-}
-
-//  .split control messages
-//  This method processes one message from our frontend class
-//  (it's going to be CONNECT or REQUEST):
-
-//  Callback when we remove server from agent 'servers' hash table
-
-static void
-s_server_free (void *argument)
-{
-    server_t *server = (server_t *) argument;
-    server_destroy (&server);
-}
-
-void
-agent_control_message (agent_t *self)
-{
-    zmsg_t *msg = zmsg_recv (self->pipe);
-    char *command = zmsg_popstr (msg);
-
-    if (streq (command, "CONNECT")) {
-        char *endpoint = zmsg_popstr (msg);
-        printf ("I: connecting to %s...\n", endpoint);
-        int rc = zmq_connect (self->router, endpoint);
-        assert (rc == 0);
-        server_t *server = server_new (endpoint);
-        zhash_insert (self->servers, endpoint, server);
-        zhash_freefn (self->servers, endpoint, s_server_free);
-        zlist_append (self->actives, server);
-        server->ping_at = zclock_time () + PING_INTERVAL;
-        server->expires = zclock_time () + SERVER_TTL;
-        free (endpoint);
-    }
-    else
-    if (streq (command, "REQUEST")) {
-        assert (!self->request);    //  Strict request-reply cycle
-        //  Prefix request with sequence number and empty envelope
-        char sequence_text [10];
-        sprintf (sequence_text, "%u", ++self->sequence);
-        zmsg_pushstr (msg, sequence_text);
-        //  Take ownership of request message
-        self->request = msg;
-        msg = NULL;
-        //  Request expires after global timeout
-        self->expires = zclock_time () + GLOBAL_TIMEOUT;
-    }
-    free (command);
-    zmsg_destroy (&msg);
-}
-
-//  .split router messages
-//  This method processes one message from a connected
-//  server:
-
-void
-agent_router_message (agent_t *self)
-{
-    zmsg_t *reply = zmsg_recv (self->router);
-
-    //  Frame 0 is server that replied
-    char *endpoint = zmsg_popstr (reply);
-    server_t *server =
-        (server_t *) zhash_lookup (self->servers, endpoint);
-    assert (server);
-    free (endpoint);
-    if (!server->alive) {
-        zlist_append (self->actives, server);
-        server->alive = 1;
-    }
-    server->ping_at = zclock_time () + PING_INTERVAL;
-    server->expires = zclock_time () + SERVER_TTL;
-
-    //  Frame 1 may be sequence number for reply
-    char *sequence = zmsg_popstr (reply);
-    if (atoi (sequence) == self->sequence) {
-        zmsg_pushstr (reply, "OK");
-        zmsg_send (&reply, self->pipe);
-        zmsg_destroy (&self->request);
-    }
-    else
-        zmsg_destroy (&reply);
-}
-
-//  .split backend agent implementation
-//  Finally, here's the agent task itself, which polls its two sockets
-//  and processes incoming messages:
-
-static void
-flcliapi_agent (void *args, zctx_t *ctx, void *pipe)
-{
-    agent_t *self = agent_new (ctx, pipe);
-
-    zmq_pollitem_t items [] = {
-        { self->pipe, 0, ZMQ_POLLIN, 0 },
-        { self->router, 0, ZMQ_POLLIN, 0 }
-    };
-    while (!zctx_interrupted) {
-        //  Calculate tickless timer, up to 1 hour
-        uint64_t tickless = zclock_time () + 1000 * 3600;
-        if (self->request
-        &&  tickless > self->expires)
-            tickless = self->expires;
-        zhash_foreach (self->servers, server_tickless, &tickless);
-
-        int rc = zmq_poll (items, 2,
-            (tickless - zclock_time ()) * ZMQ_POLL_MSEC);
-        if (rc == -1)
-            break;              //  Context has been shut down
-
-        if (items [0].revents & ZMQ_POLLIN)
-            agent_control_message (self);
-
-        if (items [1].revents & ZMQ_POLLIN)
-            agent_router_message (self);
-
-        //  If we're processing a request, dispatch to next server
-        if (self->request) {
-            if (zclock_time () >= self->expires) {
-                //  Request expired, kill it
-                zstr_send (self->pipe, "FAILED");
-                zmsg_destroy (&self->request);
-            }
-            else {
-                //  Find server to talk to, remove any expired ones
-                while (zlist_size (self->actives)) {
-                    server_t *server =
-                        (server_t *) zlist_first (self->actives);
-                    if (zclock_time () >= server->expires) {
-                        zlist_pop (self->actives);
-                        server->alive = 0;
-                    }
-                    else {
-                        zmsg_t *request = zmsg_dup (self->request);
-                        zmsg_pushstr (request, server->endpoint);
-                        zmsg_send (&request, self->router);
-                        break;
-                    }
-                }
-            }
-        }
-        //  Disconnect and delete any expired servers
-        //  Send heartbeats to idle servers if needed
-        zhash_foreach (self->servers, server_ping, self->router);
-    }
-    agent_destroy (&self);
-}
+~~~ {caption="flcliapi: フリーランスクライアントAPI"}
+include(examples/EXAMPLE_LANG/flcliapi.EXAMPLE_EXT)
 ~~~
 
 ;This API implementation is fairly sophisticated and uses a couple of techniques that we've not seen before.
