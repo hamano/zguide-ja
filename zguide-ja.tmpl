@@ -1,18 +1,14 @@
 \documentclass[a4paper,12pt,uplatex]{jsbook}
 
+\usepackage{hamacro}
 \usepackage{float}
-\usepackage[dvipdfm]{color}
-\usepackage[dvipdfm]{graphicx}
-\usepackage[dvipdfm]{hyperref}
 \usepackage{pxjahyper}
-\usepackage{here}
+\usepackage{eso-pic}
 
-% for e-pTeX
-%\usepackage[T1]{fontenc}
-%\usepackage[utf8]{inputenc}
-%\usepackage{lmodern}
-%\usepackage{otf}
-%\inhibitxspcode`Ø=2
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{textcomp}
+\kcatcode`Ø=15
 
 \hypersetup{
   pdfstartview={FitV},
@@ -22,11 +18,6 @@
   pdfkeywords={$pdf_keywords$},
 }
 
-\usepackage{ctable}
-\usepackage{enumerate}
-\usepackage{listings, jlisting}
-\usepackage{book}
-
 \let\cleardoublepage\clearpage
 
 % title
@@ -34,29 +25,39 @@
 \author{$author$}
 \date{$date$}
 
+\newcommand\CoverPage{
+  \put(9,-12){
+    \includegraphics[width=\paperwidth,height=\paperheight]{./cover.eps}
+  }
+}
+
 % document
 \begin{document}
-%\maketitle
 \begin{titlepage}
+\begin{center}
+\AddToShipoutPicture*{\CoverPage}
+\end{center}
+\clearpage
+\thispagestyle{empty}
+
 \begin{flushright}
 {\sf 第$version$版}
 \end{flushright}
 \vspace*{3em}
 \begin{center}
-%{\Huge\bf $title$}
-\includegraphics{title.eps}
-\bigskip\\
-{\Large\bf $author$}
-\\
-{\Large\bf $date$}
+{\Huge\bf{$title$}}
+\smallskip\\
+{\huge\it{$subtitle$}}
+\vspace{8em}\\
+{\Large\bf{$author$ 著}}
+\smallskip\\
+{\Large\bf{$translator$ 訳}}
+%%\vfill
+%%{\Large\bf{$publisher$ 発行}}
 
-\vspace{8em}
-%\includegraphics{title.eps}
 \end{center}
 
 \end{titlepage}
-
-\clearpage
 
 $if(toc)$
 \setcounter{tocdepth}{$toc-depth$}
