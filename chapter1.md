@@ -19,7 +19,7 @@
 それらは唯の道具であり、作って使い捨てるものです。
 本当のソフトウェアの物理学とは人間の物理学です。
 具体的には、複雑性による私達の限界や巨大な問題を解決したいという欲求です。
-人々が簡単に理解して利用できるブロックを作り、協力して大きな問題を解決する事こそがプログラミングの理学です。
+人々が簡単に理解して利用できるブロックを作り、協調して大きな問題を解決する事こそがプログラミングの理学です。
 
 ;We live in a connected world, and modern software has to navigate this world. So the building blocks for tomorrow's very largest solutions are connected and massively parallel. It's not enough for code to be "strong and silent" any more. Code has to talk to code. Code has to be chatty, sociable, well-connected. Code has to run like the human brain, trillions of individual neurons firing off messages to each other, a massively parallel network with no central control, no single point of failure, yet able to solve immensely difficult problems. And it's no accident that the future of code looks like the human brain, because the endpoints of every network are, at some level, human brains.
 
@@ -266,7 +266,7 @@ include(examples/EXAMPLE_LANG/hwclient.EXAMPLE_EXT)
 ;If you kill the server (Ctrl-C) and restart it, the client won't recover properly. Recovering from crashing processes isn't quite that easy. Making a reliable request-reply flow is complex enough that we won't cover it until Chapter 4 - Reliable Request-Reply Patterns.
 
 サーバーをCtrl-Cで終了して再起動した場合、クライアントは適切に復旧しません。
-プロセスの異常終了からの復旧は簡単なことではありません。
+プロセスの異常終了から復旧することは簡単ではありません。
 信頼性の高いリクエスト-応答フローを構成することは十分複雑なので、これについては4章の「信頼性のあるリクエスト・応答パターン」で説明します。
 
 ;There is a lot happening behind the scenes but what matters to us programmers is how short and sweet the code is, and how often it doesn't crash, even under a heavy load. This is the request-reply pattern, probably the simplest way to use ØMQ. It maps to RPC and the classic client/server model.

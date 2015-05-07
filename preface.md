@@ -3,10 +3,9 @@
 ## 訳者より {-}
 この本はØMQというライブラリの入門書という体裁になっていますが、もっと一般的なメッセージングシステムの設計方法を学べるように書かれています。
 マルチスレッドプログラミングおよびネットワークプログラミングで起こる一般的な問題の解決方法や、分散アプリケーションの設計方法などを学ぶことが出来ます。
-たとえば、P2Pアプリケーションや分散ハッシュテーブルなどの基盤を実装したいと考えている方におすすめの本です。
+たとえば、P2Pアプリケーションや分散ハッシュテーブルなどの基盤を実装したいと考えている方にもおすすめの本です。
 
 この本の原文は全8章で構成されており、現在4章までの翻訳が完了しています。
-β版を購入された方にはご不便をお掛けしますが、続きの章については更新情報を確認して下さい。
 
 誤字・誤訳等ありましたら[\@hamano](https://twitter.com/hamano)まで連絡下さい。
 校正を手伝ってくれた亀井亜佐夫さんに感謝します。
@@ -61,3 +60,4 @@
 以下の方々の貢献に感謝します:
 
 Bill Desmarais, Brian Dorsey, Daniel Lin, Eric Desgranges, Gonzalo Diethelm, Guido Goldstein, Hunter Ford, Kamil Shakirov, Martin Sustrik, Mike Castleman, Naveen Chawla, Nicola Peduzzi, Oliver Smith, Olivier Chamoux, Peter Alexander, Pierre Rouleau, Randy Dryburgh, John Unwin, Alex Thomas, Mihail Minkov, Jeremy Avnet, Michael Compton, Kamil Kisiel, Mark Kharitonov, Guillaume Aubert, Ian Barber, Mike Sheridan, Faruk Akgul, Oleg Sidorov, Lev Givon, Allister MacLeod, Alexander D'Archangel, Andreas Hoelzlwimmer, Han Holl, Robert G. Jakabosky, Felipe Cruz, Marcus McCurdy, Mikhail Kulemin, Dr. Gergő Érdi, Pavel Zhukov, Alexander Else, Giovanni Ruggiero, Rick "Technoweenie", Daniel Lundin, Dave Hoover, Simon Jefford, Benjamin Peterson, Justin Case, Devon Weller, Richard Smith, Alexander Morland, Wadim Grasza, Michael Jakl, Uwe Dauernheim, Sebastian Nowicki, Simone Deponti, Aaron Raddon, Dan Colish, Markus Schirp, Benoit Larroque, Jonathan Palardy, Isaiah Peng, Arkadiusz Orzechowski, Umut Aydin, Matthew Horsfall, Jeremy W. Sherman, Eric Pugh, Tyler Sellon, John E. Vincent, Pavel Mitin, Min RK, Igor Wiedler, Olof Åkesson, Patrick Lucas, Heow Goodman, Senthil Palanisami, John Gallagher, Tomas Roos, Stephen McQuay, Erik Allik, Arnaud Cogoluègnes, Rob Gagnon, Dan Williams, Edward Smith, James Tucker, Kristian Kristensen, Vadim Shalts, Martin Trojer, Tom van Leeuwen, Hiten Pandya, Harm Aarts, Marc Harter, Iskren Ivov Chernev, Jay Han, Sonia Hamilton, Nathan Stocks, Naveen Palli, Zed Shaw
+
