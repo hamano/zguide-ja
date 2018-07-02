@@ -2,8 +2,8 @@ include meta.mk
 
 #LATEX=platex
 LATEX=uplatex
-#PANDOC=pandoc
-PANDOC=~/.cabal/bin/pandoc
+PANDOC=pandoc
+#PANDOC=~/.cabal/bin/pandoc
 PANDOC_OPT=--toc --toc-depth=3 --listings --chapters
 DVIPDFMX=dvipdfmx
 DVIPDFMX_OPT=-f uptex-hiragino
