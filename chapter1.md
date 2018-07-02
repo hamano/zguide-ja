@@ -98,7 +98,7 @@ SkypeやBittorrentとデータ通信を行うアプリケーションがどれ�
 サンプルコードは[GitHubの公開レポジトリ](https://github.com/imatix/zguide)から取得できます。
 全てのサンプルコードを取得する最も簡単な方法はレポジトリをcloneすることです。
 
-~~~
+~~~ {.bash}
 git clone --depth=1 git://github.com/imatix/zguide.git
 ~~~
 
@@ -117,7 +117,9 @@ git clone --depth=1 git://github.com/imatix/zguide.git
 クライアントが「Hello」をサーバーに送信したら、サーバーは「World」を応答するクライアントとサーバーを作ってみましょう。
 ここでサーバーはØMQソケットをTCPポート5555番で待ち受け、リクエストを受け取ったら「World」を応答するコードをC言語で実装しています:
 
-~~~ {caption="hwserver: Hello Worldサーバー"}
+\begin{center}hwserver.EXAMPLE_EXT: Hello Worldサーバー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/hwserver.EXAMPLE_EXT)
 ~~~
 
@@ -135,7 +137,9 @@ REQ-REPソケットペアはロックステップ方式です。
 ØMQはリファレンス言語としてC言語を採用しているので、サンプルコードでもC言語を使います。
 ここではC++のコードを見て比べてみましょう。
 
-~~~ {caption="hwserver.cpp: Hello Worldサーバー"}
+\begin{center}hwserver.cpp: Hello Worldサーバー\end{center}
+
+~~~ {.cpp}
 //
 // Hello Worldサーバー(C++版)
 // REPソケットをtcp://*:5555 でバインドします。
@@ -184,7 +188,9 @@ int main () {
 ØMQのAPIはC言語とC++でほとんど同じだという事が解ると思います。
 PHPとJavaの例も見てみましょう。
 
-~~~ {caption="hwserver.php: Hello Worldサーバー"}
+\begin{center}hwserver.php: Hello Worldサーバー\end{center}
+
+~~~ {.php}
 <?php
 /*
 * Hello Worldサーバー(PHP)
@@ -212,7 +218,9 @@ while (true) {
 }
 ~~~
 
-~~~ {caption="hwserver.java: Hello Worldサーバー"}
+\begin{center}hwserver.java: Hello Worldサーバー\end{center}
+
+~~~ {.java}
 //
 // Hello Worldサーバー(Java)
 // REPソケットをtcp://*:5555 でバインドします。
@@ -246,7 +254,9 @@ public class hwserver{
 
 以下はクライアントのコードです。
 
-~~~ {caption="hwclient: Hello Worldクライアント"}
+\begin{center}hwclient.EXAMPLE_EXT: Hello Worldクライアント\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/hwclient.EXAMPLE_EXT)
 ~~~
 
@@ -289,14 +299,18 @@ include(examples/EXAMPLE_LANG/hwclient.EXAMPLE_EXT)
 C言語や幾つかの言語では、文字列はNULL文字で終端してます。
 "HELLO"という様な文字列を送信する際、以下の様にNULL文字付きで送信出来ます。
 
-    zmq_send (requester, "Hello", 6, 0);
+~~~ {.c}
+zmq_send (requester, "Hello", 6, 0);
+~~~
 
 ;However, if you send a string from another language, it probably will not include that null byte. For example, when we send that same string in Python, we do this:
 
 しかしながらその他の言語ではNULL文字を含まない場合があります。
 例えばPythonでは、以下のようにして文字列を送信します。
 
-    socket.send ("Hello")
+~~~ {.python}
+socket.send ("Hello")
+~~~
 
 ;Then what goes onto the wire is a length (one byte for shorter strings) and the string contents as individual characters.
 
@@ -323,7 +337,7 @@ C言語で文字列を受信する際、文字列が安全にNULL終端してい
 
 以下のコードは、C言語で受け取ったØMQ文字列を適切な文字列としてアプリケーションに受け渡す為に何を行う必要があるのかを示しています。
 
-~~~
+~~~ {.c}
 // ソケットから0MQ文字列を受信してC文字列に変換する
 // 255文字より長い文字列は打ち切る
 static char *
@@ -361,7 +375,9 @@ s_recv (void *socket) {
 
 以下はそれを行う小さなプログラムです:
 
-~~~ {caption="version: ØMQのバージョン報告"}
+\begin{center}version.EXAMPLE_EXT: ØMQのバージョン報告\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/version.EXAMPLE_EXT)
 ~~~
 
@@ -376,7 +392,9 @@ include(examples/EXAMPLE_LANG/version.EXAMPLE_EXT)
 
 以下がサーバーのサンプルコードです。このアプリケーションはTCP 5556番ポートを利用します。
 
-~~~ {caption="wuserver: 気象情報更新サーバー"}
+\begin{center}wuserver.EXAMPLE_EXT: 気象情報更新サーバー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/wuserver.EXAMPLE_EXT)
 ~~~
 
@@ -388,7 +406,9 @@ include(examples/EXAMPLE_LANG/wuserver.EXAMPLE_EXT)
 
 以下のクライアントアプリケーションはストリームの配信を聞き取り、特定の郵便番号に関するデータを収集します。デフォルトではニューヨークを指定しています。なぜならそこは冒険を始めるには絶好の場所だからです。
 
-~~~ {caption="wuclient: 気象情報更新クライアント"}
+\begin{center}wuclient.EXAMPLE_EXT: 気象情報更新クライアント\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/wuclient.EXAMPLE_EXT)
 ~~~
 
@@ -517,7 +537,9 @@ sys     0m0.008s
 ベンチレーターは100のタスクを生成しワーカーに送信します。
 ワーカーは受け取った数値×ミリ秒のsleepを行います。
 
-~~~ {caption="taskvent: 並行タスクベンチレーター"}
+\begin{center}taskvent.EXAMPLE_EXT: 並行タスクベンチレーター\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/taskvent.EXAMPLE_EXT)
 ~~~
 
@@ -526,7 +548,9 @@ include(examples/EXAMPLE_LANG/taskvent.EXAMPLE_EXT)
 以下はワーカーアプリケーションです。
 受信したメッセージの秒数分sleepし、完了を通知します。
 
-~~~ {caption="taskwork: 並行タスクワーカー"}
+\begin{center}taskwork.EXAMPLE_EXT 並行タスクワーカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/taskwork.EXAMPLE_EXT)
 ~~~
 
@@ -536,7 +560,9 @@ include(examples/EXAMPLE_LANG/taskwork.EXAMPLE_EXT)
 100のタスクを収集し、処理にどれくらいの時間が掛かったかを計算します。
 この結果により、本当に並行処理が行われたどうかを確認できます。
 
-~~~ {caption="tasksink: 並行タスクシンク"}
+\begin{center}tasksink.EXAMPLE_EXT: 並行タスクシンク\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/tasksink.EXAMPLE_EXT)
 ~~~
 
@@ -928,7 +954,7 @@ PID  USER  PR  NI  VIRT  RES  SHR S %CPU %MEM   TIME+  COMMAND
 アプリケーションをv2.xとv3.2の両方で動作させたい場合があります。
 以下のCマクロ定義は、両方のバージョンで動作させる為に役立ちます。
 
-~~~
+~~~ {.c}
 #ifndef ZMQ_DONTWAIT
 # define ZMQ_DONTWAIT ZMQ_NOBLOCK
 #endif

@@ -130,7 +130,7 @@
 サーバーノードは一つのソケットに対して複数のエンドポイントをbindする事が出来ます。(複数のプロトコルやアドレスを組み合わせる事も可能)
 これは異なる通信方式のネットワークを横断して接続を待ち受けることが出来るという事です。
 
-~~~
+~~~ {.c}
 zmq_bind (socket, "tcp://*:5555");
 zmq_bind (socket, "tcp://*:9999");
 zmq_bind (socket, "inproc://somename");
@@ -256,7 +256,7 @@ Hardeep Singhさんのこの貢献により彼のØMQアプリケーションか
 一般的な経験則で言うと、一つのスレッドで1秒間に数ギガバイトのデータを扱う事ができます。
 I/Oスレッドの数を増やしたい場合、ソケットを生成する前に`zmq_ctx_set()`を呼び出します。
 
-~~~
+~~~ {.c}
 int io_threads = 4;
 void *context = zmq_ctx_new ();
 zmq_ctx_set (context, ZMQ_IO_THREADS, io_threads);
@@ -524,7 +524,9 @@ libzmqのコアライブラリは、送受信を行う2つのAPIを持ってい�
 この例では非ブロッキングで２つのソケットから読み込みを行う例を示します。
 ややこしいですが、気象情報のサブスクライバーと並行処理のワーカーの両方の機能を持ったプログラムを例に使用します。
 
-~~~ {caption="msreader: Multiple socket reader in C"}
+\begin{center}msreader.EXAMPLE_EXT: Multiple socket reader in C\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/msreader.EXAMPLE_EXT)
 ~~~
 
@@ -542,7 +544,9 @@ include(examples/EXAMPLE_LANG/msreader.EXAMPLE_EXT)
 
 さて次は、同じようなアプリケーションで`zmq_poll()`を使う例を見て行きましょう。
 
-~~~ {caption="mspoller: Multiple socket poller in C"}
+\begin{center}mspoller.EXAMPLE_EXT: Multiple socket poller in C\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mspoller.EXAMPLE_EXT)
 ~~~
 
@@ -550,7 +554,7 @@ include(examples/EXAMPLE_LANG/mspoller.EXAMPLE_EXT)
 
 `zmq_pollitem_t`構造体は４つのメンバ変数を持っています。
 
-~~~
+~~~ {.c}
 typedef struct {
     void *socket; // 監視する0MQソケット
     int fd; // もしくは、監視するファイルディスクリプタ
@@ -581,7 +585,7 @@ typedef struct {
 
 以下は、マルチパートメッセージを送信する方法です。
 
-~~~
+~~~ {.c}
 zmq_msg_send (&message, socket, ZMQ_SNDMORE);
 …
 zmq_msg_send (&message, socket, ZMQ_SNDMORE);
@@ -593,7 +597,7 @@ zmq_msg_send (&message, socket, 0);
 
 以下は、メッセージを受信し、各メッセージフレームを処理する方法です。
 
-~~~
+~~~ {.c}
 while (1) {
     zmq_msg_t message;
     zmq_msg_init (&message);
@@ -766,19 +770,25 @@ DEALERとROUTERソケットの間では、ソケットに届いたメッセー�
 ブローカーの動作を確認するために、バックエンドのワーカーの数を変更してみたくなるでしょう。
 以下はリクエストを行うクライアントのコードです。
 
-~~~ {caption="rrclient: リクエスト・応答クライアント"}
+\begin{center}rrclient.EXAMPLE_EXT: リクエスト・応答クライアント\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/rrclient.EXAMPLE_EXT)
 ~~~
 
 以下はワーカーのコードです。
 
-~~~ {caption="rrworker: リクエスト・応答ワーカー"}
+\begin{center}rrworker.EXAMPLE_EXT: リクエスト・応答ワーカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/rrworker.EXAMPLE_EXT)
 ~~~
 
 そして以下がブローカーのコードです。マルチパートメッセージも正しく処理できます。
 
-~~~ {caption="rrbroker: リクエスト・応答ブローカー"}
+\begin{center}rrbroker.EXAMPLE_EXT: リクエスト・応答ブローカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/rrbroker.EXAMPLE_EXT)
 ~~~
 
@@ -796,7 +806,7 @@ include(examples/EXAMPLE_LANG/rrbroker.EXAMPLE_EXT)
 キューを共有してpub-sub転送行う仲介者もわずかな手間で実装出来ます。
 ØMQはこの様な機能をラップした単一の関数`zmq_proxy()`を用意しています。
 
-~~~
+~~~ {.c}
 zmq_proxy (frontend, backend, capture);
 ~~~
 
@@ -806,7 +816,9 @@ zmq_proxy (frontend, backend, capture);
 `zmq_proxy()`関数を呼び出すと、まさにrrbrokerのメインループを実行します。
 それではzmq_proxyを利用して、リクエスト・応答ブローカーを書きなおしてみましょう。
 
-~~~ {caption="msgqueue: メッセージキューブローカー"}
+\begin{center}msgqueue.EXAMPLE_EXT: メッセージキューブローカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/msgqueue.EXAMPLE_EXT)
 ~~~
 
@@ -836,7 +848,9 @@ Xはその他の通信技術やメッセージングプラットフォームの�
 フロントエンドソケット(SUB)は気象情報サーバーが居る内部ネットワークに面しており、バックエンドソケット(PUB)は外部ネットワークに面しています。
 このプロキシはフロントエンドソケットで気象情報の更新を受信し、バックエンドソケットにデータを再配布します。
 
-~~~ {caption="wuproxy: 気象情報更新プロキシ"}
+\begin{center}wuproxy.EXAMPLE_EXT: 気象情報更新プロキシ\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/wuproxy.EXAMPLE_EXT)
 ~~~
 
@@ -887,7 +901,7 @@ C言語ではそれを自分でやる必要があります。
 
 例:
 
-~~~
+~~~ {.c}
 void *context = zmq_ctx_new ();
 assert (context);
 void *socket = zmq_socket (context, ZMQ_REP);
@@ -945,7 +959,7 @@ PUSH/PULLソケットは一方方向ですし、動作中の別のソケット�
 It doesn't take much new code in the sink:
 追加のコードはそれほど必要ありません。
 
-~~~
+~~~ {.c}
 void *controller = zmq_socket (context, ZMQ_PUB);
 zmq_bind (controller, "tcp://*:5559");
 …
@@ -958,7 +972,9 @@ s_send (controller, "KILL");
 この場合ワーカープロセスは2つのソケットを先ほど学んだ`zmq_poll()`を使って管理します。
 1つ目はタスクを受信を行うソケット、もうひとつはKILLメッセージなどの制御コマンドを受信するソケットです。
 
-~~~ {caption="taskwork2: 終了シグナルを受け付ける並行タスクワーカー"}
+\begin{center}taskwork2.EXAMPLE_EXT: 終了シグナルを受け付ける並行タスクワーカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/taskwork2.EXAMPLE_EXT)
 ~~~
 
@@ -967,7 +983,9 @@ include(examples/EXAMPLE_LANG/taskwork2.EXAMPLE_EXT)
 こちらは、改修を行ったシンクアプリケーションです。
 結果の収集が完了した時に終了メッセージを全てのワーカーにブロードキャストしています。
 
-~~~ {caption="tasksink2: Parallel task sink with kill signaling in C"}
+\begin{center}tasksink2.EXAMPLE_EXT: Parallel task sink with kill signaling in C\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/tasksink2.EXAMPLE_EXT)
 ~~~
 
@@ -981,7 +999,9 @@ include(examples/EXAMPLE_LANG/tasksink2.EXAMPLE_EXT)
 
 以下はシグナルを処理する方法です。
 
-~~~ {caption="interrupt: 正しくCtrl-Cを処理する方法"}
+\begin{center}interrupt.EXAMPLE_EXT: 正しくCtrl-Cを処理する方法\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/interrupt.EXAMPLE_EXT)
 ~~~
 
@@ -1009,7 +1029,7 @@ include(examples/EXAMPLE_LANG/interrupt.EXAMPLE_EXT)
 
 以下は典型的なコード片です。
 
-~~~
+~~~ {.c}
 s_catch_signals ();
 client = zmq_socket (...);
 while (!s_interrupted) {
@@ -1036,7 +1056,7 @@ C言語やC++でプログラムを書く場合はメモリ管理の責任はプ�
 
 * valgrindをインストールするには、UbuntuやDebianでは以下のコマンドを実行します。
 
-~~~
+~~~ {.bash}
 sudo apt-get install valgrind
 ~~~
 
@@ -1073,7 +1093,7 @@ sudo apt-get install valgrind
 
 * valgrindは以下のように実行して下さい。
 
-~~~
+~~~ {.bash}
 valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp someprog
 ~~~
 
@@ -1189,7 +1209,9 @@ valgrind --tool=memcheck --leak-check=full --suppressions=vg.supp someprog
 
 Hello Worldサービスのマルチスレッド版にはブローカとワーカーの機能が一つのプロセスに押し込まれています。
 
-~~~ {caption="mtserver: サービスのマルチスレッド化"}
+\begin{center}mtserver.EXAMPLE_EXT: サービスのマルチスレッド化\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mtserver.EXAMPLE_EXT)
 ~~~
 
@@ -1233,7 +1255,9 @@ POSIXライブラリにpthreadsがありますが、Windowsでは異なるAPIを
 それでは、3つのスレッドでお互いに準備完了を通知するコードを書いてみましょう。
 この例ではプロセス内通信を行うPAIRソケットを利用します。
 
-~~~ {caption="mtrelay: マルチスレッドrelay"}
+\begin{center}mtrelay.EXAMPLE_EXT: マルチスレッドrelay\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mtrelay.EXAMPLE_EXT)
 ~~~
 
@@ -1308,7 +1332,9 @@ PAIRソケットを利用したサンプルコードはこれが初めてです�
 このケースでは、サブスクライバーとパブリッシャーの同期を行うためにREQ-REPソケットを利用します。
 以下はパブリッシャーのコードです。
 
-~~~ {caption="syncpub: 同期パブリッシャー"}
+\begin{center}syncpub.EXAMPLE_EXT: 同期パブリッシャー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/syncpub.EXAMPLE_EXT)
 ~~~
 
@@ -1316,7 +1342,9 @@ include(examples/EXAMPLE_LANG/syncpub.EXAMPLE_EXT)
 
 こちらはサブスクライバーです。
 
-~~~ {caption="syncsub: 同期サブスクライバー"}
+\begin{center}syncsub.EXAMPLE_EXT: 同期サブスクライバー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/syncsub.EXAMPLE_EXT)
 ~~~
 
@@ -1324,7 +1352,7 @@ include(examples/EXAMPLE_LANG/syncsub.EXAMPLE_EXT)
 
 以下のBashスクリプトで10個のサブスクライバーとパブリッシャーを起動します。
 
-~~~
+~~~ {.bash}
 echo "Starting subscribers..."
 for ((a=0; a<10; a++)); do
     syncsub &
@@ -1382,7 +1410,7 @@ REQ/REPのやり取りが完了した時点ではSUBソケットの接続が完�
 メッセージオブジェクトを生成する際、メッセージの送信完了時にメモリを開放する為の関数も同時に渡します。
 以下はヒープ上に1,000バイトのバッファを確保する単純なサンプルコードです。
 
-~~~
+~~~ {.c}
 void my_free (void *data, void *hint) {
     free (data);
 }
@@ -1433,7 +1461,9 @@ pub-subエンベロープを利用するには、ちょっとしたコードを�
 
 エンベロープはメッセージ種別を保持しています。
 
-~~~ {caption="psenvpub: Pub-Subエンベロープパブリッシャー"}
+\begin{center}psenvpub.EXAMPLE_EXT: Pub-Subエンベロープパブリッシャー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/psenvpub.EXAMPLE_EXT)
 ~~~
 
@@ -1441,7 +1471,9 @@ include(examples/EXAMPLE_LANG/psenvpub.EXAMPLE_EXT)
 
 サブスクライバーはメッセージ種別Bのみを受信します。
 
-~~~ {caption="psenvsub: Pub-Subエンベロープサブスクライバー"}
+\begin{center}psenvsub.EXAMPLE_EXT: Pub-Subエンベロープサブスクライバー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/psenvsub.EXAMPLE_EXT)
 ~~~
 

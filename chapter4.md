@@ -135,14 +135,18 @@ REQソケットを利用して厳密に送信・受信の順序を守らなか�
 
 この問題の強引で手っ取り早い解決方法は、REQソケットでエラーが発生したら、一旦クローズして再接続する事です。
 
-~~~ {caption="lpclient: ものぐさ海賊クライアント"}
+\begin{center}lpclient.EXAMPLE_EXT: ものぐさ海賊クライアント\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/lpclient.EXAMPLE_EXT)
 ~~~
 
 ;Run this together with the matching server:
 こちらのサーバーも実行してください。
 
-~~~ {caption="lpserver: ものぐさ海賊サーバー"}
+\begin{center}lpserver.EXAMPLE_EXT: ものぐさ海賊サーバー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/lpclient.EXAMPLE_EXT)
 ~~~
 
@@ -238,7 +242,9 @@ E: server seems to be offline, abandoning
 先程のものぐさ海賊パターンと同じクライアントを利用します。
 こちらが負荷分散ブローカーと同等の機能を持ったキュープロキシのコードです。
 
-~~~ {caption="spqueue: 単純な海賊ブローカー"}
+\begin{center}spqueue.EXAMPLE_EXT: 単純な海賊ブローカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/spqueue.EXAMPLE_EXT)
 ~~~
 
@@ -247,7 +253,9 @@ include(examples/EXAMPLE_LANG/spqueue.EXAMPLE_EXT)
 こちらがワーカーのコードです。
 ものぐさ海賊パターンのサーバーと同じような仕組みを負荷分散ブローカーに組み込んでいます。
 
-~~~ {caption="spworker: 単純な海賊ワーカー"}
+\begin{center}spworker.EXAMPLE_EXT: 単純な海賊ワーカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/spworker.EXAMPLE_EXT)
 ~~~
 
@@ -287,7 +295,9 @@ include(examples/EXAMPLE_LANG/spworker.EXAMPLE_EXT)
 今回もまたものぐさ海賊パターンのクライアントを使いまわします。
 こちらは神経質な海賊キュープロキシです。
 
-~~~ {caption="ppqueue: 神経質な海賊キュー"}
+\begin{center}ppqueue.EXAMPLE_EXT: 神経質な海賊キュー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/ppqueue.EXAMPLE_EXT)
 ~~~
 
@@ -300,7 +310,9 @@ include(examples/EXAMPLE_LANG/ppqueue.EXAMPLE_EXT)
 
 以下は神経質な海賊パターンのワーカーです。
 
-~~~ {caption="ppworker: 神経質な海賊ワーカー"}
+\begin{center}ppworker.EXAMPLE_EXT: 神経質な海賊ワーカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/ppworker.EXAMPLE_EXT)
 ~~~
 
@@ -318,7 +330,7 @@ include(examples/EXAMPLE_LANG/ppworker.EXAMPLE_EXT)
 
 以下のスクリプトでこれらのコードを実行してみてください。
 
-~~~
+~~~ {.bash}
 ppqueue &
 for i in 1 2 3 4; do
     ppworker &
@@ -451,7 +463,7 @@ SUBソケットはPUBソケットに対して話しかけることは出来き�
 
 こちらがワーカーがハートビートを行う主要なコードです。
 
-~~~
+~~~ {.c}
 #define HEARTBEAT_LIVENESS 3 // 3-5 is reasonable
 #define HEARTBEAT_INTERVAL 1000 // msecs
 #define INTERVAL_INIT 1000 // Initial reconnect
@@ -589,7 +601,7 @@ Majordomoプロトコルを実装するには、クライアントとワーカ�
 Majordomoプロトコルはクライアント側とワーカー側の2種類に分かれますので2つのAPIが必要です。
 こちらは単純なオブジェクト指向を利用して設計したクライアント側のAPIです。
 
-~~~
+~~~ {.c}
 mdcli_t *mdcli_new     (char *broker);
 void     mdcli_destroy (mdcli_t **self_p);
 zmsg_t  *mdcli_send    (mdcli_t *self, char *service, zmsg_t **request_p);
@@ -601,7 +613,7 @@ zmsg_t  *mdcli_send    (mdcli_t *self, char *service, zmsg_t **request_p);
 ブローカとのセッションを張り、リクエストを送信して応答を受け取って接続を切っています。
 こちらはワーカー側のAPIです。
 
-~~~
+~~~ {.c}
 mdwrk_t *mdwrk_new     (char *broker,char *service);
 void     mdwrk_destroy (mdwrk_t **self_p);
 zmsg_t  *mdwrk_recv    (mdwrk_t *self, zmsg_t *reply);
@@ -615,7 +627,9 @@ zmsg_t  *mdwrk_recv    (mdwrk_t *self, zmsg_t *reply);
 The client and worker APIs were fairly simple to construct because they're heavily based on the Paranoid Pirate code we already developed. Here is the client API:
 クライアントとワーカーは既に実装済みの神経質な海賊パターンのコードを流用する事で、今回のAPIはとても簡単に設計することができました。
 
-~~~ {caption="mdcliapi: MajordomoクライアントAPI"}
+\begin{center}mdcliapi.EXAMPLE_EXT: MajordomoクライアントAPI\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mdcliapi.EXAMPLE_EXT)
 ~~~
 
@@ -624,7 +638,9 @@ include(examples/EXAMPLE_LANG/mdcliapi.EXAMPLE_EXT)
 それではクライアントAPIを動かしてみましょう。
 こちらは10万回のリクエスト・応答のサイクルを実行するテストコードです。
 
-~~~ {caption="mdclient: Majordomoクライアントアプリケーション"}
+\begin{center}mdclient.EXAMPLE_EXT: Majordomoクライアントアプリケーション\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mdclient.EXAMPLE_EXT)
 ~~~
 
@@ -632,16 +648,19 @@ include(examples/EXAMPLE_LANG/mdclient.EXAMPLE_EXT)
 
 そしてこちらはワーカーのAPIです。
 
-~~~ {caption="mdwrkapi: MajordomoワーカーAPI"}
+\begin{center}mdwrkapi.EXAMPLE_EXT: MajordomoワーカーAPI\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mdwrkapi.EXAMPLE_EXT)
 ~~~
 
 ;Let's see how the worker API looks in action, with an example test program that implements an echo service:
 
-
 ワーカーのAPIを用いてechoサービスを実装するテストコードを見て見ましょう。
 
-~~~ {caption="mdworker: Majordomoワーカーアプリケーション"}
+\begin{center}mdworker.EXAMPLE_EXT: Majordomoワーカーアプリケーション\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mdworker.EXAMPLE_EXT)
 ~~~
 
@@ -675,7 +694,9 @@ include(examples/EXAMPLE_LANG/mdworker.EXAMPLE_EXT)
 
 こちらがブローカーのコードです。
 
-~~~{caption="mdbroker: Majordomoブローカー"}
+\begin{center}mdbroker.EXAMPLE_EXT: Majordomoブローカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mdbroker.EXAMPLE_EXT)
 ~~~
 
@@ -723,7 +744,9 @@ include(examples/EXAMPLE_LANG/mdbroker.EXAMPLE_EXT)
 両方のテストは同じことを行っていますが、異なるテスト結果が得られるでしょう。
 テストコードは以下の通りです。
 
-~~~ {caption="tripping: ラウンド・トリップの計測"}
+\begin{center}tripping.EXAMPLE_EXT: ラウンド・トリップの計測\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/tripping.EXAMPLE_EXT)
 ~~~
 
@@ -755,7 +778,7 @@ Asynchronous round-trip test...
 
 まず、APIを送信と受信の2つの関数に別けます。
 
-~~~
+~~~ {.c}
 mdcli_t *mdcli_new (char *broker);
 void mdcli_destroy (mdcli_t **self_p);
 int mdcli_send (mdcli_t *self, char *service, zmsg_t **request_p);
@@ -766,7 +789,9 @@ zmsg_t *mdcli_recv (mdcli_t *self);
 
 ほんの数分の手間で同期式クライアントを非同期に書き換えることが出来ました。
 
-~~~{caption="mdcliapi2: Majordomo非同期クライアントAPI"}
+\begin{center}mdcliapi2.EXAMPLE_EXT: Majordomo非同期クライアントAPI\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mdcliapi2.EXAMPLE_EXT)
 ~~~
 
@@ -790,7 +815,9 @@ include(examples/EXAMPLE_LANG/mdcliapi2.EXAMPLE_EXT)
 
 そして10万メッセージを送信した後に10万メッセージを受信するテストプログラムをこのAPIを使って書き直すと以下のようになります。
 
-~~~{caption="mdclient2: Majordomo非同期クライアントアプリケーション"}
+\begin{center}mdclient2.EXAMPLE_EXT: Majordomo非同期クライアントアプリケーション\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mdclient2.EXAMPLE_EXT)
 ~~~
 
@@ -905,7 +932,9 @@ mdcliapi2のコードを読むと再接続を行っていない事が分かる�
 
 以下はアプリケーションの中でサービスディスカバリーを使用する方法です。
 
-~~~{caption="mmiecho: Majordomoでのサービスディスカバリー"}
+\begin{center}mmiecho.EXAMPLE_EXT: Majordomoでのサービスディスカバリー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/mmiecho.EXAMPLE_EXT)
 ~~~
 
@@ -1097,7 +1126,9 @@ Majordomoが信頼性のあるメッセージブローカーとして機能す�
 MDPの場合と比較して、TSPは明らかにクライアントの作業量が多くなります。
 以下に短くて堅牢な「echoクライアント」のサンプルコードを示します。
 
-~~~ {caption="ticlient: タイタニッククライアント"}
+\begin{center}ticlient.EXAMPLE_EXT: タイタニッククライアント\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/ticlient.EXAMPLE_EXT)
 ~~~
 
@@ -1120,7 +1151,9 @@ Majordomoの時に行ったように、うまくAPIで隠蔽化してやれば�
 そしてメッセージ1つにつき1ファイルという最も単純かつ最も荒っぽい構成でディスクへの永続化を行います。
 唯一複雑な部分は、ディレクトリを何度も走査をするのを避けるために、全てのリクエストを別のキューで保持している所です。
 
-~~~ {caption="titanic: タイタニックブローカー"}
+\begin{center}titanic.EXAMPLE_EXT: タイタニックブローカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/ticlient.EXAMPLE_EXT)
 ~~~
 
@@ -1430,7 +1463,9 @@ mdbrokerとtitanicを起動し、続いて、ticlientとechoサービスのmdwor
 前置きはこれくらいにしおいて、実際に動作するバイナリー・スターサーバーの実装を見て行きましょう。
 プライマリーとバックアップの役割は実行時に指定しますので、コード自体は同じものです。
 
-~~~ {caption="bstarsrv: バイナリー・スター サーバー"}
+\begin{center}bstarsrv.EXAMPLE_EXT: バイナリー・スター サーバー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/bstarsrv.EXAMPLE_EXT)
 ~~~
 
@@ -1438,7 +1473,9 @@ include(examples/EXAMPLE_LANG/bstarsrv.EXAMPLE_EXT)
 
 そしてこちらがクライアントのコードです。
 
-~~~ {caption="bstarcli: バイナリー・スター クライアント"}
+\begin{center}bstarcli.EXAMPLE_EXT: バイナリー・スター クライアント\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/bstarcli.EXAMPLE_EXT)
 ~~~
 
@@ -1490,7 +1527,9 @@ zloopにはソケットやタイマーイベントに反応するハンドラー
 バイナリー・スターの場合、アクティブから非アクティブへの遷移などの状態の変更に関するハンドラを登録します。
 こちらがbstarクラスの実装です。
 
-~~~ {caption="bstar: バイナリー・スター リアクター"}
+\begin{center}bstar.EXAMPLE_EXT: バイナリー・スター リアクター\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/bstar.EXAMPLE_EXT)
 ~~~
 
@@ -1498,7 +1537,9 @@ include(examples/EXAMPLE_LANG/bstar.EXAMPLE_EXT)
 
 これを利用することでサーバーのメインプログラムはこんなにも短くなります。
 
-~~~ {caption="bstarsrv2: リアクタークラスを利用したバイナリー・スター サーバー"}
+\begin{center}bstarsrv2.EXAMPLE_EXT: リアクタークラスを利用したバイナリー・スター サーバー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/bstarsrv2.EXAMPLE_EXT)
 ~~~
 
@@ -1579,7 +1620,9 @@ IPアドレスをハードコードなんてしたくは無いでしょうし、
 
 まず、引き数にエンドポイント名を指定して、1つ以上のサーバーを起動して下さい。
 
-~~~ {caption="flserver1: フリーランスサーバー モデル1"}
+\begin{center}flserver1.EXAMPLE_EXT: フリーランスサーバー モデル1\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/flserver1.EXAMPLE_EXT)
 ~~~
 
@@ -1587,7 +1630,9 @@ include(examples/EXAMPLE_LANG/flserver1.EXAMPLE_EXT)
 
 続いて、1つ以上のエンドポイントを指定してクライアントを起動します。
 
-~~~ {caption="flclient1: フリーランスクライアント モデル1"}
+\begin{center}flclient1.EXAMPLE_EXT: フリーランスクライアント モデル1\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/flclient1.EXAMPLE_EXT)
 ~~~
 
@@ -1660,7 +1705,9 @@ echoサーバーではこのモデルの題材にふさわしくありません�
 
 バインドするエンドポイントを指定して1つ以上のサーバーを起動します。
 
-~~~ {caption="flserver2: フリーランスサーバー モデル2"}
+\begin{center}flserver2.EXAMPLE_EXT: フリーランスサーバー モデル2\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/flserver2.EXAMPLE_EXT)
 ~~~
 
@@ -1668,7 +1715,9 @@ include(examples/EXAMPLE_LANG/flserver2.EXAMPLE_EXT)
 
 そして、接続するエンドポイントを引き数に指定してクライアントを起動します。
 
-~~~ {caption="flclient2: フリーランスクライアント モデル2"}
+\begin{center}flclient2.EXAMPLE_EXT: フリーランスクライアント モデル2\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/flclient2.EXAMPLE_EXT)
 ~~~
 
@@ -1770,7 +1819,9 @@ IDとしてサーバーのエンドポイントを指定すると直ちに接続
 サーバー側の実装は短くて良い感じです。
 これをFLPプロトコルと呼んでいます。
 
-~~~ {caption="flserver3: フリーランスサーバー モデル3"}
+\begin{center}flserver3.EXAMPLE_EXT: フリーランスサーバー モデル3\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/flserver3.EXAMPLE_EXT)
 ~~~
 
@@ -1779,7 +1830,9 @@ include(examples/EXAMPLE_LANG/flserver3.EXAMPLE_EXT)
 こちらがフリーランスクライアントですが大きくなってしまいましたのでクラスに分離しました。
 こちらがメインプログラムです。
 
-~~~ {caption="flclient3: フリーランスクライアント モデル3"}
+\begin{center}flclient3.EXAMPLE_EXT: フリーランスクライアント モデル3\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/flclient3.EXAMPLE_EXT)
 ~~~
 
@@ -1787,7 +1840,9 @@ include(examples/EXAMPLE_LANG/flclient3.EXAMPLE_EXT)
 
 そしてこちらがMajordomoブローカーと同じくらい巨大で複雑になってしまったクライアントAPIクラスのコードです。
 
-~~~ {caption="flcliapi: フリーランスクライアントAPI"}
+\begin{center}flcliapi.EXAMPLE_EXT: フリーランスクライアントAPI\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/flcliapi.EXAMPLE_EXT)
 ~~~
 

@@ -89,7 +89,7 @@ hwclientとhwserverの間を流れるネットワークデータを監視して�
 
 プロキシは擬似コードで以下の様に動作します。
 
-~~~
+~~~ {.python}
 prepare context, frontend and backend sockets
 while true:
     poll on both sockets
@@ -420,7 +420,9 @@ zmq_setsockoptのmanページではこれを「ソケットIDの設定」と呼�
 
 以下のサンプルコードは、2つのソケットでルーターソケットに対して接続を行い、片方のソケットに「PEER2」という論理アドレスを設定する単純な例です。
 
-~~~ {caption="identity: IDチェック"}
+\begin{center}identity.EXAMPLE_EXT: IDチェック\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/identity.EXAMPLE_EXT)
 ~~~
 
@@ -512,7 +514,9 @@ PUSHとDEALERソケットがこの様な単純な方式を利用するのは単�
 
 これはROUTERブローカーを利用してREQワーカー群と通信を行う負荷分散パターンのサンプルコードです。
 
-~~~ {caption="rtreq: ROUTERソケット対REQソケット"}
+\begin{center}rtreq.EXAMPLE_EXT: ROUTERソケット対REQソケット\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/rtreq.EXAMPLE_EXT)
 ~~~
 
@@ -562,7 +566,9 @@ REQソケットの代わりにDEALERソケットを利用することも可能�
 
 それではREQソケットをDEALERソケットに置き換えたまったく同じ動作を行うサンプルコードを見てみましょう。
 
-~~~ {caption="rtdealer: ROUTER対DEALER"}
+\begin{center}rtdealer.EXAMPLE_EXT: ROUTER対DEALER\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/rtdealer.EXAMPLE_EXT)
 ~~~
 
@@ -613,7 +619,9 @@ include(examples/EXAMPLE_LANG/rtdealer.EXAMPLE_EXT)
 
 このサンプルコードはそこそこ長いですが、理解する価値はあるでしょう。
 
-~~~ {caption="lbbroker: 負荷分散ブローカー"}
+\begin{center}lbbroker.EXAMPLE_EXT: 負荷分散ブローカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/lbbroker.EXAMPLE_EXT)
 ~~~
 
@@ -692,7 +700,7 @@ REQソケットが空の区切りフレームを追加し、ルーターソケ�
 このまま低レベルなØMQを使ってもっと複雑なサンプルコードを書くと可読性が低下してしまうからです。
 先ほどの負荷分散ブローカーのワーカースレッドの主要な処理を見て下さい。
 
-~~~
+~~~ {.c}
 while (true) {
     // Get one address frame and empty delimiter
     char *address = s_recv (worker);
@@ -712,14 +720,12 @@ while (true) {
 }
 ~~~
 
-}
-
 ;That code isn't even reusable because it can only handle one reply address in the envelope, and it already does some wrapping around the ØMQ API. If we used the libzmq simple message API this is what we'd have to write:
 
 このコードはたった1つの応答アドレスしか読み取っていないので、再利用可能ではありません。
 そして、既にØMQ APIのヘルパー関数を利用していますが、純粋なlibzmqのAPIを利用する場合は以下のように書く必要があるでしょう。
 
-~~~
+~~~ {.c}
 while (true) {
     // Get one address frame and empty delimiter
     char address [255];
@@ -785,7 +791,7 @@ while (true) {
 文字列ヘルパー(既に出てきたs_sendやs_recvの様なもの)、フレーム(メッセージフレーム)、そしてメッセージ(1つ以上のフレームで構成される)です。
 これらの概念を利用してワーカーのコードを書き直してみます。
 
-~~~
+~~~ {.c}
 while (true) {
     zmsg_t *msg = zmsg_recv (worker);
     zframe_reset (zmsg_last (msg), "OK", 2);
@@ -827,7 +833,9 @@ CZMQはソースコードを親しみやすくする、エレガントなオブ�
 
 以下は、負荷分散ブローカーをC言語の高級API(CZMQ)で書き直したものです。
 
-~~~ {caption="lbbroker2: 高級APIを利用した負荷分散ブローカー"}
+\begin{center}lbbroker2.EXAMPLE_EXT: 高級APIを利用した負荷分散ブローカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/lbbroker2.EXAMPLE_EXT)
 ~~~
 
@@ -837,7 +845,7 @@ CZMQがやっていることのひとつはに割り込み処理があります�
 通常のØMQのブロッキングAPIは、Ctrl-Cを押した時にはerrnoにEINTRを設定して処理を中断しますが、高級APIの受信関数は単純にNULLを返します。
 ですので、この様な単純なループだけで行儀よくに終了することが出来ています。
 
-~~~
+~~~ {.c}
 while (true) {
     zstr_send (client, "Hello");
     char *reply = zstr_recv (client);
@@ -853,7 +861,7 @@ while (true) {
 
 あと、zmq_poll()を呼び出す時は返り値を確認して下さい。
 
-~~~
+~~~ {.c}
 if (zmq_poll (items, 2, 1000 * 1000) == -1)
     break; // Interrupted
 ~~~
@@ -887,7 +895,7 @@ zloopは内部的に`zmq_poll()`を利用しています。
 リアクターパターンを利用することで、ループが除去されます。
 メインループのコードはこんな風になるでしょう。
 
-~~~
+~~~ {.c}
 zloop_t *reactor = zloop_new ();
 zloop_reader (reactor, self->backend, s_handle_backend, self);
 zloop_start (reactor);
@@ -904,7 +912,9 @@ zloop_destroy (&reactor);
 ;Here is the load balancing broker rewritten once again, this time to use zloop:
 以下の負荷分散ブローカーはzloopを利用して改めて書きなおしたものです。
 
-~~~ {caption="lbbroker3: zloopを利用した負荷分散ブローカー"}
+\begin{center}lbbroker3.EXAMPLE_EXT: zloopを利用した負荷分散ブローカー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/lbbroker3.EXAMPLE_EXT)
 ~~~
 
@@ -952,7 +962,9 @@ ROUTERからDEALERに接続する例では、単一のサーバーが複数の�
 
 以下にサンプルコードを示します。
 
-~~~ {caption="asyncsrv: 非同期なクライアント・サーバー"}
+\begin{center}asyncsrv.EXAMPLE_EXT: 非同期なクライアント・サーバー\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/asyncsrv.EXAMPLE_EXT)
 ~~~
 
@@ -1289,7 +1301,9 @@ include(examples/EXAMPLE_LANG/asyncsrv.EXAMPLE_EXT)
 
 これがコードです。
 
-~~~ {caption="peering1: state flowのプロトタイプ"}
+\begin{center}peering1.EXAMPLE_EXT: state flowのプロトタイプ\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/peering1.EXAMPLE_EXT)
 ~~~
 
@@ -1386,7 +1400,9 @@ peering1 DC3 DC1 DC2  #  Start DC3 and connect to DC1 and DC2
 ここからが実際に動作するコードです。
 注目に値する部分は、「ここからが面白い」とコメントで書いてあります。
 
-~~~ {caption="peering2: localとcloud flowのプロトタイプ"}
+\begin{center}peering2.EXAMPLE_EXT: localとcloud flowのプロトタイプ\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/peering2.EXAMPLE_EXT)
 ~~~
 
@@ -1428,7 +1444,9 @@ peering2 you me
 これはクライアントとワーカーを含む負荷分散クラスターを上手くシミュレートしています。
 コードはこちらです。
 
-~~~ {caption="peering3: 完全なクラスターシミュレーション"}
+\begin{center}peering3.EXAMPLE_EXT: 完全なクラスターシミュレーション\end{center}
+
+~~~ {.EXAMPLE_LANG}
 include(examples/EXAMPLE_LANG/peering3.EXAMPLE_EXT)
 ~~~
 

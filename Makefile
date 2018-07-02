@@ -1,7 +1,7 @@
 #LATEX=platex
 LATEX=uplatex
 PANDOC=pandoc
-PANDOC_OPT=--toc --toc-depth=3 --listings --chapters
+PANDOC_OPT=--toc --toc-depth=3 --chapters
 DVIPDFMX=dvipdfmx
 DVIPDFMX_OPT=-f noto
 
@@ -47,7 +47,7 @@ $(HTML): $(MD)
 	$(PANDOC) -o $@ $<
 
 $(TEX): $(MD) $(TEMPLATE)
-	$(PANDOC) -f markdown -t latex $(PANDOC_OPT) --template=$(TEMPLATE) $< | sed -e 's/\[htbp\]/\[H\]/g' > $@
+	$(PANDOC) -f markdown -t latex $(PANDOC_OPT) --template=$(TEMPLATE) $< | sed -e 's/\\begin{figure}\(\[.*\]\)\?/\\begin{figure}\[H\]/g' > $@
 
 $(DVI): $(TEX)
 
