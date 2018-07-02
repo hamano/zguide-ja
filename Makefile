@@ -1,12 +1,9 @@
-include meta.mk
-
 #LATEX=platex
 LATEX=uplatex
 PANDOC=pandoc
-#PANDOC=~/.cabal/bin/pandoc
 PANDOC_OPT=--toc --toc-depth=3 --listings --chapters
 DVIPDFMX=dvipdfmx
-DVIPDFMX_OPT=-f uptex-hiragino
+DVIPDFMX_OPT=-f noto
 
 NAME=zguide-ja
 TEMPLATE=template.tex
@@ -50,7 +47,7 @@ $(HTML): $(MD)
 	$(PANDOC) -o $@ $<
 
 $(TEX): $(MD) $(TEMPLATE)
-	$(PANDOC) -f markdown -t latex $(PANDOC_OPT) -V pdf_title="$(PDF_TITLE)" -V pdf_subject="$(PDF_SUBJECT)" -V pdf_author="$(PDF_AUTHOR)"  -V pdf_keywords="$(PDF_KEYWORDS)" --template=$(TEMPLATE) $< | sed -e 's/\[htbp\]/\[H\]/g' > $@
+	$(PANDOC) -f markdown -t latex $(PANDOC_OPT) --template=$(TEMPLATE) $< | sed -e 's/\[htbp\]/\[H\]/g' > $@
 
 $(DVI): $(TEX)
 
