@@ -697,7 +697,7 @@ C言語では`zmq_ctx_new()`を呼び出します。
 ;Let's look at the typical problems we face when we start to connect pieces using raw TCP. Any reusable messaging layer would need to solve all or most of these:
 
 それでは生のTCPを利用して部品を接続する際に発生する典型的な問題を見て行きましょう。
-際利用可能なメッセージングレイヤを実装するにはこれらの問題を解決する必要があります。
+利用可能なメッセージングレイヤを実装するにはこれらの問題を解決する必要があります。
 
 ;* How do we handle I/O? Does our application block, or do we handle I/O in the background? This is a key design decision. Blocking I/O creates architectures that do not scale well. But background I/O can be very hard to do right.
 ;* How do we handle dynamic components, i.e., pieces that go away temporarily? Do we formally split components into "clients" and "servers" and mandate that servers cannot disappear? What then if we want to connect servers to servers? Do we try to reconnect every few seconds?
