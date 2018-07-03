@@ -1,0 +1,32 @@
+
+% TEXT, 90JIS
+uphminl-h	unicode	NotoSerifCJKjp-Light.otf
+uphminl-v	unicode	NotoSerifCJKjp-Light.otf
+uphminr-h	unicode	NotoSerifCJKjp-Medium.otf
+uphminr-v	unicode	NotoSerifCJKjp-Medium.otf
+uphminb-h	unicode	NotoSerifCJKjp-Bold.otf
+uphminb-v	unicode NotoSerifCJKjp-Bold.otf
+uphgothr-h	unicode	NotoSansCJKjp-Regular.otf
+uphgothr-v	unicode	NotoSansCJKjp-Regular.otf
+uphgothb-h	unicode	NotoSansCJKjp-Bold.otf
+uphgothb-v	unicode	NotoSansCJKjp-Bold.otf
+uphgotheb-h	unicode	NotoSansCJKjp-Black.otf
+uphgotheb-v	unicode	NotoSansCJKjp-Black.otf
+uphmgothr-h	unicode	NotoSansCJKjp-Thin.otf
+uphmgothr-v	unicode	NotoSansCJKjp-Thin.otf
+
+% TEXT, JIS04
+uphminln-h	unicode	NotoSerifCJKjp-Light.otf
+uphminln-v	unicode	NotoSerifCJKjp-Light.otf
+uphminrn-h	unicode	NotoSerifCJKjp-Medium.otf
+uphminrn-v	unicode	NotoSerifCJKjp-Medium.otf
+uphminbn-h	unicode	NotoSerifCJKjp-Bold.otf
+uphminbn-v	unicode	NotoSerifCJKjp-Bold.otf
+uphgothrn-h	unicode	NotoSansCJKjp-Regular.otf
+uphgothrn-v	unicode	NotoSansCJKjp-Regular.otf
+uphgothbn-h	unicode	NotoSansCJKjp-Bold.otf
+uphgothbn-v	unicode	NotoSansCJKjp-Bold.otf
+uphgothebn-h	unicode	NotoSansCJKjp-Black.otf
+uphgothebn-v	unicode	NotoSansCJKjp-Black.otf
+uphmgothrn-h	unicode	NotoSansCJKjp-Thin.otf
+uphmgothrn-v	unicode	NotoSansCJKjp-Thin.otf
